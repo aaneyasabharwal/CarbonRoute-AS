@@ -9,6 +9,8 @@
  * 6. Live log streaming & realized carbon accounting
  */
 
+// Never let a local .env key reach this script (dotenv does not override existing variables).
+process.env.ELECTRICITY_MAPS_API_KEY = '';
 const { CarbonService, getForecast } = require('../backend/dist/services/carbonService');
 const { UncertaintyService, calculateDeadlineRisk, calculateHorizonStdDev, erfc } = require('../backend/dist/services/uncertaintyService');
 const { SchedulerService, evaluateAllPolicies } = require('../backend/dist/services/schedulerService');
@@ -157,9 +159,11 @@ async function runVerticalSliceTests() {
       const status = K8sConnector.getExecutionStatus(baseJob.id);
       if (status && (status.status === 'completed' || status.status === 'failed')) {
         completed = true;
-        if (typeof status.realizedCarbon !== 'number') throw new Error('Realized carbon not recorded');
-        if (typeof status.carbonError !== 'number') throw new Error('Carbon error not recorded');
-        console.log(`      Execution Mode: ${status.clusterMode} | Realized Carbon: ${status.realizedCarbon} gCO2 (Error: ${status.carbonError > 0 ? '+' : ''}${status.carbonError} gCO2)`);
+        // Changed in M5 (audit C2, task M2.1): realized carbon used to be a random perturbation
+        // of the prediction. It is no longer invented; it comes only from provider observations.
+        if (status.realizedCarbon !== undefined) throw new Error('Realized carbon must not be invented by the connector');
+        if (status.carbonObservation !== 'collect-from-provider-after-window') throw new Error('Missing carbonObservation marker');
+        console.log(`      Execution Mode: ${status.clusterMode} | Realized carbon: collected from provider observations after the window`);
         break;
       }
     }

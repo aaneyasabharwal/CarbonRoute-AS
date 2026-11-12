@@ -45,7 +45,7 @@ export class UncertaintyService {
     startHour: number,
     durationHours: number,
     deadlineHours: number,
-    baseCarbonStdDev: number = 20,
+    baseCarbonStdDev: number | null = 20,
     uncertaintyMultiplier: number = 1.0
   ): DeadlineRiskResult {
     const slack = Number((deadlineHours - (startHour + durationHours)).toFixed(2));
@@ -58,6 +58,12 @@ export class UncertaintyService {
         slackHours: slack,
         zScore: -999,
       };
+    }
+
+    // No uncertainty data (e.g. Electricity Maps forecasts): no probabilistic model is applied
+    // and no uncertainty is assumed. The window either fits before the deadline or it does not.
+    if (baseCarbonStdDev === null) {
+      return { violationRisk: 0, effectiveStdDev: 0, slackHours: slack, zScore: Infinity };
     }
 
     // 1. Intrinsic duration variance (15% of duration, min 0.2h)

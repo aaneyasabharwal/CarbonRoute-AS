@@ -83,6 +83,12 @@ The Prototype Milestone implements an integrated, verifiable end-to-end software
 
 ---
 
+## 🌍 Real Carbon Data (Electricity Maps)
+
+Live mode uses the Electricity Maps API v3 for 351 grid zones: real forecasts (6–72 h), the last 24 h of history (each value labelled **measured** or **provider estimate**), latest values and power breakdown. Set `ELECTRICITY_MAPS_API_KEY` in your local `.env` (git-ignored). Each scheduling decision stores the exact forecast snapshot it used. After the scheduled window, observations are collected and compared with the forecast (measured and estimated values reported separately), and a downloadable report is generated. Verified capabilities, limitations and endpoints: [docs/ELECTRICITY_MAPS.md](docs/ELECTRICITY_MAPS.md).
+
+---
+
 ## 🧪 Automated Verification Test Suite
 
 Run the backend test suite (Vitest, no build or running server needed; see [backend/test/README.md](backend/test/README.md)):

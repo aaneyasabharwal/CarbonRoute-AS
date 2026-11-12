@@ -81,11 +81,22 @@ describe('prototype job API', () => {
 });
 
 describe('carbon data API', () => {
-  it('lists the configured regions', async () => {
-    const res = await request(app).get('/api/carbon/regions');
+  // Changed in M5 (audit: hardcoded demo regions presented as live coverage). Live mode now
+  // lists the zones the Electricity Maps key can access; the demo profiles are listed only
+  // in demo mode and labelled synthetic.
+  it('lists the synthetic demo regions in demo mode, labelled as such', async () => {
+    const res = await request(app).get('/api/carbon/regions?mode=demo');
+    expect(res.body.source).toBe('synthetic-demo-profiles');
     expect(res.body.data.map((r: { code: string }) => r.code)).toEqual(
       expect.arrayContaining(['US-CAL-CISO', 'US-TEX-ERCO', 'DE', 'IN-NO'])
     );
+  });
+
+  it('in live mode without a key reports the provider error instead of the demo list', async () => {
+    const res = await request(app).get('/api/carbon/regions');
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe('NO_API_KEY');
+    expect(res.body.data).toBeUndefined();
   });
 
   it('serves a demo forecast and refuses a live one without a key', async () => {
@@ -98,13 +109,65 @@ describe('carbon data API', () => {
   });
 });
 
+describe('M5 workflow routes', () => {
+  it('schedule -> dispatch -> observations -> report (demo data is labelled synthetic end to end)', async () => {
+    const deadlineAt = new Date(Date.now() + 10 * 3600_000).toISOString();
+    const sched = await request(app)
+      .post('/api/schedule')
+      .send({ mode: 'demo', jobData: { ...jobBody, region: 'BENCHMARK-RESEARCH', deadlineAt } });
+    expect(sched.status).toBe(200);
+    const d = sched.body.data;
+    expect(d.status).toBe('RECOMMENDED');
+    expect(d.decisionId).toMatch(/^dec-/);
+    expect(d.provenance.dataClass).toBe('synthetic');
+    expect(Date.parse(d.recommendedWindow.endUtc)).toBeLessThanOrEqual(Date.parse(deadlineAt));
+
+    const dispatch = await request(app).post(`/api/jobs/${d.job.id}/dispatch`).send({ simulatedDurationSec: 1 });
+    expect(dispatch.body.data.execution).toMatchObject({ executionMode: 'simulated-no-workload', scheduledStartUtc: d.recommendedWindow.startUtc });
+
+    const obs = await request(app).post(`/api/jobs/${d.job.id}/observations`);
+    expect(obs.body.data.collected.status).toBe('NOT_APPLICABLE_SYNTHETIC');
+
+    const report = await request(app).get(`/api/jobs/${d.job.id}/report`);
+    expect(report.body.data.dataClass).toBe('synthetic');
+    const html = await request(app).get(`/api/jobs/${d.job.id}/report?format=html`);
+    expect(html.headers['content-type']).toMatch(/text\/html/);
+    expect(html.headers['content-disposition']).toMatch(/attachment; filename="carbonroute-report-/);
+  });
+
+  it('returns an explicit INFEASIBLE decision when the deadline is too close', async () => {
+    const res = await request(app)
+      .post('/api/schedule')
+      .send({ mode: 'demo', jobData: { ...jobBody, durationHours: 3, deadlineAt: new Date(Date.now() + 3600_000).toISOString() } });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ status: 'INFEASIBLE', recommendation: null });
+  });
+
+  it('rejects invalid input with 400 and invalid zones with 422', async () => {
+    expect((await request(app).post('/api/schedule').send({ mode: 'demo', jobData: { ...jobBody, durationHours: 2.5 } })).status).toBe(400);
+    const badZone = await request(app).get('/api/carbon/latest?zone=not-a-zone!');
+    expect(badZone.status).toBe(422);
+    expect(badZone.body.code).toBe('INVALID_PARAMETER');
+  });
+
+  it('exposes provider status without the key', async () => {
+    const res = await request(app).get('/api/carbon/provider');
+    expect(res.body.data).toMatchObject({ provider: 'electricitymaps', configured: false, pastRangeAvailable: false, historyWindowHours: 24 });
+    expect(JSON.stringify(res.body)).not.toMatch(/auth-token/i);
+  });
+
+  it('report and observations for an unknown job are 404', async () => {
+    expect((await request(app).get('/api/jobs/job-nope/report')).status).toBe(404);
+    expect((await request(app).post('/api/jobs/job-nope/observations')).status).toBe(404);
+  });
+});
+
 describe('[legacy] behaviour flagged by the audit', () => {
-  // Audit C2 -> task M2.2 removes these seeded records.
-  it('GET /api/experiments starts with two pre-filled "Completed" records', async () => {
+  // Audit C2, task M2.2 (done in M5): the two pre-filled "Completed" records with invented
+  // realized-carbon values were removed. The list now starts empty.
+  it('GET /api/experiments starts empty (no pre-filled records)', async () => {
     const res = await request(app).get('/api/experiments');
-    expect(res.body.data.map((e: { id: string }) => e.id)).toEqual(
-      expect.arrayContaining(['exp-init-001', 'exp-init-002'])
-    );
+    expect(res.body.data).toEqual([]);
   });
 
   // Audit C4 -> task M1.2 adds authentication to these routes.

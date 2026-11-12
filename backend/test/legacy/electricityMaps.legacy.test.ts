@@ -17,16 +17,30 @@ import { evaluateAllPolicies, WorkloadJob } from '../../src/services/schedulerSe
 
 type MockResponse = { ok: boolean; status: number; statusText?: string; json?: () => Promise<unknown> };
 
+/**
+ * The original script's mocks were bare objects ({ ok, status, json }). Since the M5
+ * Electricity Maps client reads `text()` and `headers` like any real fetch Response, each
+ * mock is converted into a real Response with the same status and body. Only the mock
+ * harness changed; every assertion below is the original one.
+ */
 function stubFetch(impl: (url: string, init?: RequestInit) => Promise<MockResponse>) {
-  const fn = vi.fn(impl);
+  const fn = vi.fn(async (url: string, init?: RequestInit) => {
+    const m = await impl(url, init);
+    const body = m.json ? JSON.stringify(await m.json()) : null;
+    return new Response(body, { status: m.status, statusText: m.statusText });
+  });
   vi.stubGlobal('fetch', fn);
   return fn;
 }
 
 function forecastBody(values: number[]) {
+  // The original mock called Date.now() for every point, so consecutive timestamps drifted by
+  // a millisecond. Since M5 the parser rejects irregular or gapped series (audit H5), as real
+  // Electricity Maps forecasts are exactly hour-aligned; the mock now is too.
+  const start = Math.floor(Date.now() / 3600000) * 3600000;
   return {
     forecast: values.map((v, i) => ({
-      datetime: new Date(Date.now() + i * 3600000).toISOString(),
+      datetime: new Date(start + i * 3600000).toISOString(),
       carbonIntensity: v,
     })),
   };

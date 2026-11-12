@@ -25,8 +25,14 @@ export interface K8sJobExecutionRecord {
   clusterMode: 'minikube' | 'offline_fallback';
   clusterNotice: string;
   predictedCarbon: number;
+  /**
+   * Never set by the connector. Realized carbon comes only from provider observations
+   * collected after the scheduled window (POST /api/jobs/:id/observations). The earlier
+   * random "realized" values were removed (audit C2).
+   */
   realizedCarbon?: number;
   carbonError?: number;
+  carbonObservation: 'collect-from-provider-after-window';
   durationSeconds: number;
 }
 
@@ -48,7 +54,7 @@ export class K8sConnector {
       return {
         isAvailable: false,
         message:
-          'Local Minikube/Kubernetes cluster not detected or offline. Using verified Local Sandbox Runner (execute "minikube start" to activate live cluster).',
+          'Local Minikube/Kubernetes cluster not detected or offline. Jobs will be simulated (no workload process is run). Run "minikube start" to use a real cluster.',
       };
     }
   }
@@ -208,8 +214,9 @@ export class K8sConnector {
       clusterMode: clusterHealth.isAvailable ? 'minikube' : 'offline_fallback',
       clusterNotice: clusterHealth.isAvailable
         ? 'Live Kubernetes Cluster (Connected to Minikube/Local Cluster).'
-        : 'Local Sandbox Runner (Cluster offline; running in verified isolated local sandbox).',
+        : 'Simulated execution (no Kubernetes cluster available): no workload process is run.',
       predictedCarbon: carbon,
+      carbonObservation: 'collect-from-provider-after-window',
       durationSeconds: durationSec,
     };
 
@@ -291,10 +298,6 @@ spec:
               `kubectl logs job/${record.k8sJobName} -n carbonroute-jobs`
             ).catch(() => ({ stdout: '' }));
             if (logOut) record.logs.push(...logOut.split('\n'));
-            // Compute realized carbon with measured grid variance
-            const gridVariance = (Math.random() - 0.5) * 0.08;
-            record.realizedCarbon = Math.round(record.predictedCarbon * (1 + gridVariance));
-            record.carbonError = record.realizedCarbon - record.predictedCarbon;
             if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
           } else if (parsed.status?.failed) {
             clearInterval(checkInterval);
@@ -317,7 +320,7 @@ spec:
   private static executeInSandbox(record: K8sJobExecutionRecord, durationSec: number) {
     record.status = 'scheduled';
     record.logs.push(
-      `[${new Date().toISOString()}] [Local Sandbox Runner] Staging workload execution environment.`
+      `[${new Date().toISOString()}] [Simulation] Simulated execution starting (no workload process will be run).`
     );
 
     setTimeout(() => {
@@ -325,7 +328,7 @@ spec:
       const startTime = new Date();
       record.startedAt = startTime.toISOString();
       record.actualStartTime = startTime.toISOString();
-      record.logs.push(`[${startTime.toISOString()}] [Local Sandbox Runner: ${record.podName}] Process spawned.`);
+      record.logs.push(`[${startTime.toISOString()}] [Simulation: ${record.podName}] Simulated run started.`);
       record.logs.push(`[${startTime.toISOString()}] [Workload Task] Command: ${record.command}`);
 
       const totalEpochs = 5;
@@ -336,7 +339,7 @@ spec:
         currentEpoch++;
         const pct = Math.round((currentEpoch / totalEpochs) * 100);
         record.logs.push(
-          `[${new Date().toISOString()}] [Epoch ${currentEpoch}/${totalEpochs}] Processing workload tensor batch... (${pct}% complete)`
+          `[${new Date().toISOString()}] [Simulation] Step ${currentEpoch}/${totalEpochs} (${pct}% of simulated duration)`
         );
 
         if (currentEpoch >= totalEpochs) {
@@ -347,17 +350,11 @@ spec:
           record.completionTime = compTime.toISOString();
           record.exitCode = 0;
 
-          // Realized carbon accounting based on predicted + actual grid variance
-          // Stochastic difference reflects real grid conditions during the execution window
-          const gridDrift = (Math.random() - 0.48) * 0.08;
-          record.realizedCarbon = Math.round(record.predictedCarbon * (1.0 + gridDrift));
-          record.carbonError = record.realizedCarbon - record.predictedCarbon;
-
           record.logs.push(
-            `[${compTime.toISOString()}] [Workload Task] Execution finished successfully (Exit Code: 0).`
+            `[${compTime.toISOString()}] [Simulation] Simulated run finished (no workload process was executed).`
           );
           record.logs.push(
-            `[${compTime.toISOString()}] [CarbonRoute Accounting] Predicted: ${record.predictedCarbon} gCO2/kWh, Realized: ${record.realizedCarbon} gCO2/kWh (Variance: ${record.carbonError > 0 ? '+' : ''}${record.carbonError} gCO2/kWh).`
+            `[${compTime.toISOString()}] [CarbonRoute Accounting] Predicted window intensity: ${record.predictedCarbon} gCO2eq/kWh. Realized carbon is not simulated: collect provider observations after the scheduled window.`
           );
         }
       }, stepDuration);

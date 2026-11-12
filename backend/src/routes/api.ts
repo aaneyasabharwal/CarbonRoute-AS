@@ -39,6 +39,14 @@ import {
   getClusterHealth,
   recordExperiment,
   getExperiments,
+  collectJobObservations,
+  getJobObservations,
+  getJobReport,
+  getCarbonLatest,
+  getCarbonHistory,
+  getCarbonForecastSnapshot,
+  getCarbonPowerBreakdown,
+  getCarbonProviderStatus,
 } from '../controllers/prototypeController';
 import { authenticateToken, requireAdmin, requireTeamMemberOrAdmin, optionalAuth } from '../middleware/auth';
 import { uploadMiddleware } from '../middleware/upload';
@@ -116,8 +124,16 @@ router.get('/jobs/:id/status', getJobStatus);
 router.get('/jobs/:id/results', getJobResults);
 router.get('/jobs/:id/manifest', getJobManifest);
 router.post('/jobs/:id/dispatch', dispatchJobToExecution);
+router.post('/jobs/:id/observations', collectJobObservations);
+router.get('/jobs/:id/observations', getJobObservations);
+router.get('/jobs/:id/report', getJobReport);
 
 router.get('/carbon/forecast', getCarbonForecast);
+router.get('/carbon/forecast/snapshot', getCarbonForecastSnapshot);
+router.get('/carbon/latest', getCarbonLatest);
+router.get('/carbon/history', getCarbonHistory);
+router.get('/carbon/power-breakdown', getCarbonPowerBreakdown);
+router.get('/carbon/provider', getCarbonProviderStatus);
 router.get('/carbon/regions', getAvailableRegions);
 router.get('/cluster/health', getClusterHealth);
 

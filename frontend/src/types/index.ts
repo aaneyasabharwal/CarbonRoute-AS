@@ -164,7 +164,86 @@ export interface HourlyCarbonPoint {
   hour: number;
   timestamp: string;
   predictedCarbon: number;
-  stdDev: number;
+  /** Forecast uncertainty; null when the provider supplies none (Electricity Maps). */
+  stdDev: number | null;
+}
+
+export interface ForecastSnapshot {
+  provider: string;
+  dataClass: 'real' | 'synthetic';
+  zone: string;
+  issuedAt: string | null;
+  fetchedAt: string;
+  horizonHours: number;
+  granularity: string;
+  emissionFactorType: string;
+  unit: string;
+  points: { datetime: string; carbonIntensity: number }[];
+  endpoint: string;
+  rawSha256: string | null;
+}
+
+export interface ZoneOption {
+  code: string;
+  name: string;
+  countryName?: string;
+  countryCode?: string;
+  timezone?: string | null;
+  capabilities?: { latest: boolean; history: boolean; forecast: boolean; pastRange: boolean; powerBreakdown: boolean } | null;
+}
+
+export type ObservationQuality = 'measured' | 'provider-estimate';
+
+export interface ObservationPoint {
+  datetime: string;
+  carbonIntensity: number;
+  isEstimated: boolean;
+  estimationMethod: string | null;
+  quality: ObservationQuality;
+}
+
+export interface ErrorMetrics {
+  n: number;
+  mae: number;
+  rmse: number;
+  bias: number;
+  unit: string;
+}
+
+export interface JobObservationsResult {
+  collected?: ObservationSetRecord;
+  observationSet: ObservationSetRecord | null;
+  evaluation: {
+    pairs: { datetime: string; forecast: number; observed: number; error: number; quality: ObservationQuality; estimationMethod: string | null }[];
+    unmatchedIntervals: string[];
+    measured: ErrorMetrics | null;
+    providerEstimate: ErrorMetrics | null;
+  } | null;
+  realized: {
+    averageIntensity: number | null;
+    emissionsGrams: number | null;
+    quality: 'measured' | 'provider-estimate' | 'mixed' | null;
+    coverage: { observed: number; expected: number };
+    reason: string;
+  } | null;
+  observedComparison: any;
+}
+
+export interface ObservationSetRecord {
+  id: string;
+  status:
+    | 'COMPLETE'
+    | 'PARTIAL'
+    | 'PENDING_WINDOW_NOT_FINISHED'
+    | 'UNAVAILABLE_WINDOW_MISSED'
+    | 'UNAVAILABLE_PROVIDER_ERROR'
+    | 'NOT_APPLICABLE_SYNTHETIC';
+  statusDetail: string;
+  collectedAt: string;
+  window: { startUtc: string; endUtc: string };
+  intervals: string[];
+  observations: ObservationPoint[];
+  missingIntervals: string[];
 }
 
 export interface CarbonForecastData {
@@ -173,6 +252,10 @@ export interface CarbonForecastData {
   regionName: string;
   timestamp: string;
   dataMode: 'live' | 'demo';
+  dataClass?: 'real' | 'synthetic';
+  uncertaintySource?: 'synthetic-demo-model' | 'unavailable';
+  timezone?: string | null;
+  snapshot?: ForecastSnapshot;
   traceVersion: string;
   forecastHorizonHours: number;
   timeResolution: string;
@@ -198,6 +281,10 @@ export interface PolicyEvaluationResult {
   isFeasible: boolean;
   schedulerOverheadMs: number;
   rationale: string;
+  /** Wall-clock window (UTC) and real-deadline check, added by the M5 workflow. */
+  selectedStartUtc?: string;
+  selectedEndUtc?: string;
+  meetsDeadline?: boolean;
 }
 
 export interface CandidateWindowEvaluation {
@@ -207,8 +294,10 @@ export interface CandidateWindowEvaluation {
   windowLabel: string;
   predictedCarbonIntensity: number; // gCO2eq/kWh
   predictedCarbonImpactGrams: number; // estimated total grams CO2
-  stdDev: number; // forecast uncertainty sigma
+  stdDev: number | null; // forecast uncertainty sigma (null when unavailable)
   uncertaintyRange: string;
+  startUtc?: string;
+  endUtc?: string;
   deadlineRisk: number; // decimal probability
   deadlineRiskPct: string; // e.g. "4.0%"
   slackHours: number;
@@ -246,6 +335,35 @@ export interface SchedulingDecisionResponse {
     riskDifferenceVsDeterministic: number;
   };
   researchInsight?: ResearchInsightLowestVsSafest;
+  status?: 'RECOMMENDED' | 'INFEASIBLE' | 'INSUFFICIENT_FORECAST_COVERAGE';
+  reason?: string;
+  decisionId?: string;
+  snapshotId?: string | null;
+  riskModel?: 'synthetic-demo-uncertainty' | 'deterministic-no-uncertainty-data';
+  recommendedWindow?: { startUtc: string; endUtc: string };
+  timeline?: {
+    arrivalAt: string;
+    deadlineAt: string;
+    forecastStartUtc: string;
+    forecastCoverageEndUtc: string;
+    deadlineBeyondForecast: boolean;
+    timezone: string | null;
+    note: string;
+  };
+  provenance?: {
+    provider: string;
+    dataClass: 'real' | 'synthetic';
+    zone: string;
+    issuedAt: string | null;
+    fetchedAt: string;
+    horizonHours: number;
+    granularity: string;
+    emissionFactorType: string;
+    endpoint: string;
+    rawSha256: string | null;
+    uncertaintySource: string;
+  };
+  energyAssumption?: { powerKw: number; energyKwh: number; basis: string };
 }
 
 export interface K8sJobExecutionRecord {
@@ -264,9 +382,12 @@ export interface K8sJobExecutionRecord {
   clusterMode: 'minikube' | 'offline_fallback';
   clusterNotice: string;
   predictedCarbon: number;
+  /** Never set any more: realized carbon comes from provider observations. */
   realizedCarbon?: number;
   carbonError?: number;
+  carbonObservation?: string;
   durationSeconds: number;
+  execution?: { executionMode: string; scheduledStartUtc: string; scheduledEndUtc: string; note: string } | null;
 }
 
 export interface ExperimentRecord {

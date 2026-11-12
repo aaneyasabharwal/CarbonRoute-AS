@@ -15,6 +15,8 @@ import {
   SchedulingDecisionResponse,
   K8sJobExecutionRecord,
   ExperimentRecord,
+  ZoneOption,
+  JobObservationsResult,
 } from '../types';
 
 const getInitialBackendUrl = (): string => {
@@ -1256,15 +1258,36 @@ export const api = {
     }
   },
 
-  async getCarbonRegions(): Promise<ApiResponse<{ code: string; name: string }[]>> {
+  /**
+   * Live mode: every zone the backend's Electricity Maps key can access.
+   * Demo mode: the built-in synthetic profiles. A failure is returned as a failure.
+   */
+  async getCarbonRegions(mode: 'live' | 'demo' = 'live'): Promise<ApiResponse<ZoneOption[]> & { source?: string }> {
     try {
-      const res = await fetch(`${API_BASE}/carbon/regions`);
+      const res = await fetch(`${API_BASE}/carbon/regions${mode === 'demo' ? '?mode=demo' : ''}`);
       const json = await res.json().catch(() => null);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Regions query failed (${res.status})` };
     } catch (err: any) {
       return { success: false, message: err.message || 'Network error fetching regions.' };
     }
+  },
+
+  /** Collects provider observations for the job's scheduled window (never invented). */
+  async collectObservations(jobId: string): Promise<ApiResponse<JobObservationsResult>> {
+    try {
+      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/observations`, { method: 'POST' });
+      const json = await res.json().catch(() => null);
+      if (res.ok && json && json.success) return json;
+      return { success: false, message: json?.message || `Observation collection failed (${res.status})` };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error collecting observations.' };
+    }
+  },
+
+  /** Download URL for the job report (JSON or self-contained HTML). */
+  reportUrl(jobId: string, format: 'json' | 'html' = 'html'): string {
+    return `${API_BASE}/jobs/${encodeURIComponent(jobId)}/report${format === 'html' ? '?format=html' : ''}`;
   },
 
   async getClusterHealth(): Promise<ApiResponse<{ isAvailable: boolean; message: string }>> {
