@@ -1,0 +1,150 @@
+{
+ "DE": {
+  "zoneName": "Germany",
+  "zoneKey": "DE",
+  "countryCode": "DE",
+  "zoneParentKey": null,
+  "subZoneKeys": [],
+  "isCommerciallyAvailable": true,
+  "tier": "TIER_A",
+  "access": [
+   "carbon-intensity/history",
+   "price-day-ahead/history",
+   "power-breakdown/history",
+   "power-breakdown/latest",
+   "carbon-intensity/latest",
+   "price-day-ahead/latest",
+   "carbon-intensity/forecast",
+   "price-day-ahead/forecast",
+   "price-day-ahead/combined",
+   "price-day-ahead/actual",
+   "price-day-ahead/past",
+   "price-day-ahead/past-range"
+  ]
+ },
+ "GB": {
+  "zoneName": "Great Britain",
+  "zoneKey": "GB",
+  "countryCode": "GB",
+  "zoneParentKey": null,
+  "subZoneKeys": [],
+  "isCommerciallyAvailable": true,
+  "tier": "TIER_A",
+  "access": [
+   "carbon-intensity/history",
+   "price-day-ahead/history",
+   "power-breakdown/history",
+   "power-breakdown/latest",
+   "carbon-intensity/latest",
+   "price-day-ahead/latest",
+   "carbon-intensity/forecast",
+   "price-day-ahead/forecast",
+   "price-day-ahead/combined",
+   "price-day-ahead/actual",
+   "price-day-ahead/past",
+   "price-day-ahead/past-range"
+  ]
+ },
+ "IN": {
+  "zoneName": "Mainland India",
+  "countryName": "India",
+  "zoneKey": "IN",
+  "countryCode": "IN",
+  "zoneParentKey": null,
+  "subZoneKeys": [
+   "IN-EA",
+   "IN-NE",
+   "IN-NO",
+   "IN-SO",
+   "IN-WE"
+  ],
+  "isCommerciallyAvailable": true,
+  "tier": null,
+  "access": [
+   "carbon-intensity/history",
+   "price-day-ahead/history",
+   "power-breakdown/history",
+   "power-breakdown/latest",
+   "carbon-intensity/latest",
+   "price-day-ahead/latest",
+   "carbon-intensity/forecast",
+   "price-day-ahead/forecast",
+   "price-day-ahead/combined",
+   "price-day-ahead/actual",
+   "price-day-ahead/past",
+   "price-day-ahead/past-range"
+  ]
+ },
+ "IN-NO": {
+  "zoneName": "Northern India",
+  "countryName": "India",
+  "zoneKey": "IN-NO",
+  "countryCode": "IN",
+  "zoneParentKey": "IN",
+  "subZoneKeys": [],
+  "isCommerciallyAvailable": true,
+  "tier": "TIER_A",
+  "access": [
+   "carbon-intensity/history",
+   "price-day-ahead/history",
+   "power-breakdown/history",
+   "power-breakdown/latest",
+   "carbon-intensity/latest",
+   "price-day-ahead/latest",
+   "carbon-intensity/forecast",
+   "price-day-ahead/forecast",
+   "price-day-ahead/combined",
+   "price-day-ahead/actual",
+   "price-day-ahead/past",
+   "price-day-ahead/past-range"
+  ]
+ },
+ "US-CAL-CISO": {
+  "zoneName": "CAISO",
+  "displayName": "California ISO",
+  "countryName": "USA",
+  "zoneKey": "US-CAL-CISO",
+  "countryCode": "US",
+  "zoneParentKey": "US",
+  "subZoneKeys": [],
+  "isCommerciallyAvailable": true,
+  "tier": "TIER_A",
+  "access": [
+   "carbon-intensity/history",
+   "price-day-ahead/history",
+   "power-breakdown/history",
+   "power-breakdown/latest",
+   "carbon-intensity/latest",
+   "price-day-ahead/latest",
+   "carbon-intensity/forecast",
+   "price-day-ahead/forecast",
+   "price-day-ahead/combined",
+   "price-day-ahead/actual",
+   "price-day-ahead/past",
+   "price-day-ahead/past-range"
+  ]
+ },
+ "FR": {
+  "zoneName": "France",
+  "zoneKey": "FR",
+  "countryCode": "FR",
+  "zoneParentKey": null,
+  "subZoneKeys": [],
+  "isCommerciallyAvailable": true,
+  "tier": "TIER_A",
+  "access": [
+   "carbon-intensity/history",
+   "price-day-ahead/history",
+   "power-breakdown/history",
+   "power-breakdown/latest",
+   "carbon-intensity/latest",
+   "price-day-ahead/latest",
+   "carbon-intensity/forecast",
+   "price-day-ahead/forecast",
+   "price-day-ahead/combined",
+   "price-day-ahead/actual",
+   "price-day-ahead/past",
+   "price-day-ahead/past-range"
+  ]
+ }
+}
