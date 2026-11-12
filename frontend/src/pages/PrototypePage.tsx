@@ -36,8 +36,15 @@ import {
   PolicyEvaluationResult,
   SchedulingDecisionResponse,
   K8sJobExecutionRecord,
+  ZoneOption,
+  JobObservationsResult,
 } from '../types';
 import { FeasibilityDemoVisualizer } from '../components/FeasibilityDemoVisualizer';
+import { CarbonObservationPanel } from '../components/CarbonObservationPanel';
+
+/** Formats a UTC ISO time in the viewer's local time zone. */
+const formatLocal = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 
 export const PrototypePage: React.FC = () => {
   // 1. Workload Form State
@@ -50,6 +57,17 @@ export const PrototypePage: React.FC = () => {
   const [memoryMb, setMemoryMb] = useState<number>(512);
   const [region, setRegion] = useState<string>('US-CAL-CISO');
   const [riskTolerance, setRiskTolerance] = useState<number>(0.05);
+
+  // Regions: live = every zone the backend's Electricity Maps key can access; demo = synthetic profiles.
+  const [regions, setRegions] = useState<ZoneOption[]>([]);
+  const [regionFilter, setRegionFilter] = useState<string>('');
+  const [regionsError, setRegionsError] = useState<string | null>(null);
+
+  // Infeasible decisions and post-execution observations
+  const [infeasibleReason, setInfeasibleReason] = useState<string | null>(null);
+  const [observations, setObservations] = useState<JobObservationsResult | null>(null);
+  const [collecting, setCollecting] = useState<boolean>(false);
+  const [observationError, setObservationError] = useState<string | null>(null);
 
   // 2. Data & Scheduling State
   const [dataSourceMode, setDataSourceMode] = useState<'live' | 'demo'>('live');
@@ -108,21 +126,62 @@ export const PrototypePage: React.FC = () => {
     checkCluster();
   }, [region, dataSourceMode]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setRegionsError(null);
+    api.getCarbonRegions(dataSourceMode).then((res) => {
+      if (cancelled) return;
+      if (res.success && res.data) {
+        const list = dataSourceMode === 'demo'
+          ? res.data
+          : [...res.data].sort((a, b) => a.code.localeCompare(b.code));
+        setRegions(list);
+      } else {
+        setRegions([]);
+        setRegionsError(res.message || 'unknown error');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dataSourceMode]);
+
+  const visibleRegions = regionFilter.trim()
+    ? regions.filter((r) =>
+        `${r.code} ${r.name} ${r.countryName || ''}`.toLowerCase().includes(regionFilter.trim().toLowerCase())
+      )
+    : regions;
+  const selectedZone = regions.find((r) => r.code === region);
+
+  const handleCollectObservations = async () => {
+    if (!activeJobId) return;
+    setCollecting(true);
+    setObservationError(null);
+    const res = await api.collectObservations(activeJobId);
+    if (res.success && res.data) setObservations(res.data);
+    else setObservationError(res.message || 'Observation collection failed.');
+    setCollecting(false);
+  };
+
   // Execute Scheduling Evaluation
   const handleEvaluateSchedule = async (e?: React.FormEvent, overrideMode?: 'live' | 'demo') => {
     if (e) e.preventDefault();
     const mode = overrideMode || dataSourceMode;
     setLoadingSchedule(true);
     setScheduleError(null);
+    setInfeasibleReason(null);
+    setObservations(null);
+    setObservationError(null);
+    setExecutionRecord(null);
 
     try {
-      const jobData: Partial<WorkloadJob> = {
+      const jobData: Partial<WorkloadJob> & { deadlineAt: string } = {
         name: jobName,
         commandOrImage,
         isContainerImage,
         durationHours,
-        deadlineHours,
-        arrivalHour: 0,
+        // Absolute deadline (UTC) computed when the job is submitted.
+        deadlineAt: new Date(Date.now() + deadlineHours * 3600_000).toISOString(),
         cpu,
         memoryMb,
         region,
@@ -130,7 +189,11 @@ export const PrototypePage: React.FC = () => {
       };
 
       const res = await api.scheduleJob({ jobData, region, mode });
-      if (res.success && res.data) {
+      if (res.success && res.data && res.data.status && res.data.status !== 'RECOMMENDED') {
+        setDecision(null);
+        setActiveJobId(null);
+        setInfeasibleReason(res.data.reason || 'No execution window meets the deadline.');
+      } else if (res.success && res.data) {
         setDecision(res.data);
         setActiveJobId(res.data.job.id);
         if (!forecast || forecast.region !== region || forecast.dataMode !== mode) {
@@ -281,7 +344,8 @@ export const PrototypePage: React.FC = () => {
       try {
         const res = await api.getJobStatus(activeJobId);
         if (res.success && res.data) {
-          setExecutionRecord(res.data);
+          // Keep the stored execution details (scheduled window) from the dispatch response.
+          setExecutionRecord((prev) => ({ ...res.data!, execution: res.data!.execution ?? prev?.execution ?? null }));
         }
       } catch (err) {
         console.error('Error polling status:', err);
@@ -440,23 +504,38 @@ export const PrototypePage: React.FC = () => {
 
           {/* Grid Region */}
           <div className="space-y-1.5">
-            <label className="text-slate-300 font-semibold block">Target Grid Region</label>
+            <label className="text-slate-300 font-semibold block" htmlFor="region-select">Target Grid Region</label>
+            {regions.length > 1 && (
+              <input
+                type="search"
+                value={regionFilter}
+                onChange={(e) => setRegionFilter(e.target.value)}
+                placeholder={`Search ${regions.length} zones (e.g. India, DE, CAISO)`}
+                aria-label="Search grid zones"
+                className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
+              />
+            )}
             <select
+              id="region-select"
               value={region}
               onChange={(e) => setRegion(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-lg bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-emerald-500"
             >
-              {dataSourceMode === 'demo' && (
-                <option value="BENCHMARK-RESEARCH">
-                  DEMO / BENCHMARK - Controlled Uncertainty Experiment
+              {!visibleRegions.some((r) => r.code === region) && <option value={region}>{region}</option>}
+              {visibleRegions.map((r) => (
+                <option key={r.code} value={r.code}>
+                  {r.code} — {r.name}
+                  {r.countryName && r.countryName !== r.name ? ` (${r.countryName})` : ''}
                 </option>
-              )}
-              <option value="US-CAL-CISO">California (CAISO) — Solar duck-curve</option>
-              <option value="US-TEX-ERCO">Texas (ERCOT) — Overnight wind surges</option>
-              <option value="DE">Germany (Central Europe) — Mixed wind &amp; solar</option>
-              <option value="IN-NO">Northern India — High thermal baseload &amp; midday solar</option>
+              ))}
             </select>
-            <span className="text-[10px] text-slate-500 block">Queries selected region's live carbon profile</span>
+            <span className="text-[10px] text-slate-500 block">
+              {regionsError
+                ? `Zone list unavailable: ${regionsError}`
+                : dataSourceMode === 'live'
+                  ? `${regions.length} zones available from Electricity Maps${selectedZone?.timezone ? ` · local time zone ${selectedZone.timezone}` : ' · local time zone unknown (times shown in UTC)'}`
+                  : 'Synthetic demo profiles (not real data)'}
+            </span>
           </div>
 
           {/* Carbon Data Source Mode */}
@@ -518,18 +597,22 @@ export const PrototypePage: React.FC = () => {
           <div className="space-y-1.5">
             <div className="flex justify-between">
               <label className="text-slate-300 font-semibold">Completion Deadline</label>
-              <span className="text-emerald-400 font-bold">T+{deadlineHours}:00</span>
+              <span className="text-emerald-400 font-bold">in {deadlineHours} h</span>
             </div>
             <input
               type="range"
               min={durationHours}
-              max="24"
+              max="71"
               step="1"
               value={deadlineHours}
               onChange={(e) => setDeadlineHours(parseInt(e.target.value, 10))}
+              aria-label="Deadline in hours from now"
               className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
             />
-            <span className="text-[10px] text-slate-500 block">Maximum allowable finish time</span>
+            <span className="text-[10px] text-slate-500 block">
+              Must finish by {formatLocal(new Date(Date.now() + deadlineHours * 3600_000).toISOString())} (your time) ·{' '}
+              {new Date(Date.now() + deadlineHours * 3600_000).toISOString().slice(0, 16).replace('T', ' ')} UTC
+            </span>
           </div>
 
           {/* Risk Tolerance tau */}
@@ -588,6 +671,18 @@ export const PrototypePage: React.FC = () => {
             )}
           </div>
         )}
+
+        {/* Explicit infeasibility: no recommendation is invented */}
+        {infeasibleReason && (
+          <div role="alert" className="mt-4 p-4 rounded-xl bg-amber-950/50 border border-amber-700/70 text-amber-100 font-mono text-xs space-y-1">
+            <div className="flex items-center space-x-2 font-bold text-amber-300">
+              <AlertCircle className="w-4 h-4" />
+              <span>No feasible execution window</span>
+            </div>
+            <p>{infeasibleReason}</p>
+            <p className="text-amber-300/80">Extend the deadline or shorten the job, then evaluate again.</p>
+          </div>
+        )}
       </section>
 
       {/* 3. SECTION B: CARBON INTENSITY FORECAST DATA */}
@@ -601,12 +696,23 @@ export const PrototypePage: React.FC = () => {
                 </span>
                 <h2 className="text-lg font-bold text-white font-mono flex items-center space-x-2">
                   <Activity className="w-4 h-4 text-emerald-400" />
-                  <span>Carbon Forecast &amp; Uncertainty Profile: {forecast.regionName}</span>
+                  <span>Carbon Intensity Forecast: {forecast.regionName}</span>
                 </h2>
               </div>
               <p className="text-xs text-slate-400">
-                24-hour hourly lookahead intensity (gCO2eq/kWh) and horizon-dependent forecast variance ($\sigma$).
+                Hourly <strong className="text-slate-200">forecast</strong> intensity (gCO2eq/kWh), starting{' '}
+                {formatLocal(forecast.hourlyProfile[0]?.timestamp)} (your time).{' '}
+                {forecast.uncertaintySource === 'unavailable'
+                  ? 'The provider gives no forecast uncertainty, so none is shown.'
+                  : 'Uncertainty (σ) comes from the synthetic demo model.'}
               </p>
+              {forecast.snapshot && (
+                <p className="text-[10px] text-slate-500 font-mono">
+                  Issued {forecast.snapshot.issuedAt ? `${forecast.snapshot.issuedAt} UTC` : 'time not given'} · fetched{' '}
+                  {forecast.snapshot.fetchedAt} UTC · {forecast.snapshot.emissionFactorType} emission factors
+                  {forecast.timezone ? ` · zone time zone ${forecast.timezone}` : ''}
+                </p>
+              )}
             </div>
 
             <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono">
@@ -618,7 +724,7 @@ export const PrototypePage: React.FC = () => {
                   ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
                   : 'bg-amber-950 text-amber-300 border border-amber-500/40'
               }`}>
-                {forecast.dataMode === 'live' ? 'LIVE ELECTRICITY MAPS' : 'CONTROLLED RESEARCH BENCHMARK'}
+                {forecast.dataMode === 'live' ? 'REAL FORECAST · ELECTRICITY MAPS' : 'SYNTHETIC DEMO DATA (NOT REAL)'}
               </span>
             </div>
           </div>
@@ -636,7 +742,7 @@ export const PrototypePage: React.FC = () => {
                   <div
                     key={point.hour}
                     className="flex flex-col items-center justify-end h-full group relative cursor-pointer"
-                    title={`T+${point.hour}:00: ${point.predictedCarbon} gCO2eq/kWh (±${point.stdDev})`}
+                    title={`${formatLocal(point.timestamp)}: forecast ${point.predictedCarbon} gCO2eq/kWh${point.stdDev === null ? '' : ` (±${point.stdDev}, synthetic)`}`}
                   >
                     <div
                       style={{ height: `${heightPercent}%` }}
@@ -654,9 +760,11 @@ export const PrototypePage: React.FC = () => {
 
                     {/* Tooltip */}
                     <div className="absolute bottom-full mb-2 hidden group-hover:block z-30 w-36 p-2 bg-slate-900 text-[10px] font-mono text-slate-200 rounded border border-slate-700 shadow-xl pointer-events-none">
-                      <div className="text-emerald-400 font-bold">T+{point.hour}:00</div>
-                      <div>Intensity: {point.predictedCarbon} gCO2eq/kWh</div>
-                      <div className="text-slate-400">StdDev &sigma;: &plusmn;{point.stdDev}</div>
+                      <div className="text-emerald-400 font-bold">{formatLocal(point.timestamp)}</div>
+                      <div>Forecast: {point.predictedCarbon} gCO2eq/kWh</div>
+                      <div className="text-slate-400">
+                        {point.stdDev === null ? 'Uncertainty: not provided' : <>&sigma; (synthetic): &plusmn;{point.stdDev}</>}
+                      </div>
                     </div>
                   </div>
                 );
@@ -817,9 +925,12 @@ export const PrototypePage: React.FC = () => {
                             </td>
                             <td className="p-3 whitespace-nowrap text-slate-300">
                               <span className="text-slate-400">{win.uncertaintyRange}</span>{' '}
-                              <span className="text-[10px] text-slate-500">
-                                (σ={win.stdDev.toFixed(1)})
-                              </span>
+                              {win.stdDev !== null && (
+                                <span className="text-[10px] text-slate-500">(σ={win.stdDev.toFixed(1)}, synthetic)</span>
+                              )}
+                              {win.startUtc && (
+                                <span className="block text-[10px] text-slate-500">{formatLocal(win.startUtc)}</span>
+                              )}
                             </td>
                             <td className="p-3 whitespace-nowrap">
                               <span
@@ -880,9 +991,36 @@ export const PrototypePage: React.FC = () => {
 
               <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-xs font-mono text-emerald-300">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>Risk Calibrated: P(violation) &le; {(riskTolerance * 100).toFixed(0)}%</span>
+                <span>
+                  {decision.riskModel === 'deterministic-no-uncertainty-data'
+                    ? 'Deadline check: window finishes before the deadline'
+                    : `Synthetic demo risk model: P(violation) ≤ ${(riskTolerance * 100).toFixed(0)}%`}
+                </span>
               </div>
             </div>
+
+            {decision.recommendedWindow && decision.timeline && (
+              <div className="p-3 rounded-xl bg-slate-950/60 border border-emerald-500/30 text-xs font-mono text-slate-300 space-y-1">
+                <div>
+                  <span className="text-emerald-400 font-bold">Run from </span>
+                  {formatLocal(decision.recommendedWindow.startUtc)} <span className="text-emerald-400 font-bold">to </span>
+                  {formatLocal(decision.recommendedWindow.endUtc)} (your time)
+                </div>
+                <div className="text-slate-500 text-[10px]">
+                  UTC {decision.recommendedWindow.startUtc} → {decision.recommendedWindow.endUtc} · deadline{' '}
+                  {decision.timeline.deadlineAt} ·{' '}
+                  <span className="text-emerald-400">meets deadline</span>
+                  {decision.timeline.deadlineBeyondForecast &&
+                    ` · forecast ends ${decision.timeline.forecastCoverageEndUtc}; later windows not evaluated`}
+                </div>
+                {decision.provenance && (
+                  <div className="text-slate-500 text-[10px]">
+                    Decision {decision.decisionId} · forecast snapshot {decision.snapshotId} ({decision.provenance.provider},{' '}
+                    {decision.provenance.dataClass === 'real' ? 'real data' : 'SYNTHETIC data'})
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Key Metrics */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs font-mono">
@@ -891,7 +1029,7 @@ export const PrototypePage: React.FC = () => {
                 <div className="text-lg font-extrabold text-white">
                   {decision.recommendedDecision.selectedWindow}
                 </div>
-                <span className="text-slate-500 text-[10px]">Optimal start period</span>
+                <span className="text-slate-500 text-[10px]">Hours after forecast start</span>
               </div>
 
               <div className="p-4 rounded-xl bg-slate-950/60 border border-emerald-500/30 space-y-1">
@@ -901,7 +1039,7 @@ export const PrototypePage: React.FC = () => {
                   <span className="text-xs text-slate-400">gCO2eq/kWh</span>
                 </div>
                 <span className="text-emerald-400/80 text-[10px]">
-                  {decision.comparisonSummary.carbonSavingsVsImmediatePct}% vs Immediate
+                  Forecast: {decision.comparisonSummary.carbonSavingsVsImmediatePct}% vs Immediate (predicted, not observed)
                 </span>
               </div>
 
@@ -1207,8 +1345,14 @@ export const PrototypePage: React.FC = () => {
                             <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800/80">
                               <span className="text-slate-500 block text-[10px]">Forecast Uncertainty:</span>
                               <span className="text-slate-300 font-bold text-sm">
-                                &plusmn;{lowWin.stdDev.toFixed(1)}{' '}
-                                <span className="text-[10px] font-normal text-slate-500">(&sigma;)</span>
+                                {lowWin.stdDev === null ? (
+                                  'not provided'
+                                ) : (
+                                  <>
+                                    &plusmn;{lowWin.stdDev.toFixed(1)}{' '}
+                                    <span className="text-[10px] font-normal text-slate-500">(&sigma;, synthetic)</span>
+                                  </>
+                                )}
                               </span>
                             </div>
                             <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800/80">
@@ -1510,64 +1654,48 @@ export const PrototypePage: React.FC = () => {
             </span>
             <h3 className="text-lg font-bold text-white font-mono flex items-center space-x-2">
               <BarChart3 className="w-4 h-4 text-emerald-400" />
-              <span>Execution Results &amp; Carbon Accounting</span>
+              <span>Execution, Observed Carbon &amp; Report</span>
             </h3>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 text-xs font-mono">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
             <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-              <span className="text-slate-400 text-[11px] block">Predicted Grid Intensity</span>
+              <span className="text-slate-400 text-[11px] block">Forecast window intensity</span>
+              <div className="text-xl font-bold text-white">{executionRecord.predictedCarbon} gCO2eq/kWh</div>
+              <span className="text-[10px] text-slate-500">Forecast at scheduling time (not an observation)</span>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+              <span className="text-slate-400 text-[11px] block">Execution</span>
               <div className="text-xl font-bold text-white">
-                {executionRecord.predictedCarbon} gCO2eq/kWh
+                {executionRecord.clusterMode === 'minikube' ? 'Kubernetes' : 'Simulated'}
               </div>
-              <span className="text-[10px] text-slate-500">Forecast at scheduling</span>
+              <span className="text-[10px] text-slate-500">
+                {executionRecord.execution?.note || executionRecord.clusterNotice}
+              </span>
             </div>
-
-            <div className="p-4 rounded-xl bg-slate-900 border border-emerald-500/30 space-y-1">
-              <span className="text-emerald-400 text-[11px] block">Realized Grid Intensity</span>
-              <div className="text-xl font-bold text-emerald-300">
-                {executionRecord.realizedCarbon} gCO2eq/kWh
-              </div>
-              <span className="text-[10px] text-emerald-400">Observed grid outcome</span>
-            </div>
-
-            {(() => {
-              const realized =
-                typeof executionRecord.realizedCarbon === 'number'
-                  ? executionRecord.realizedCarbon
-                  : Number(executionRecord.realizedCarbon) || executionRecord.predictedCarbon;
-              const error =
-                executionRecord.carbonError ?? realized - executionRecord.predictedCarbon;
-              return (
-                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-                  <span className="text-slate-400 text-[11px] block">Intensity Error</span>
-                  <div
-                    className={`text-xl font-bold ${
-                      error >= 0 ? 'text-amber-400' : 'text-emerald-400'
-                    }`}
-                  >
-                    {error > 0 ? '+' : ''}
-                    {error} gCO2eq/kWh
-                  </div>
-                  <span className="text-[10px] text-slate-500">Realized &minus; Predicted</span>
-                </div>
-              );
-            })()}
-
             <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-              <span className="text-slate-400 text-[11px] block">Execution Duration</span>
-              <div className="text-xl font-bold text-white">
-                {executionRecord.durationSeconds}s
+              <span className="text-slate-400 text-[11px] block">Scheduled window</span>
+              <div className="text-sm font-bold text-white">
+                {executionRecord.execution
+                  ? `${formatLocal(executionRecord.execution.scheduledStartUtc)} → ${formatLocal(executionRecord.execution.scheduledEndUtc)}`
+                  : '—'}
               </div>
-              <span className="text-[10px] text-slate-500">Active CPU runtime</span>
-            </div>
-
-            <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-              <span className="text-slate-400 text-[11px] block">Deadline / SLA Result</span>
-              <div className="text-xl font-bold text-emerald-400">On Schedule</div>
-              <span className="text-[10px] text-emerald-400">0% violation</span>
+              <span className="text-[10px] text-slate-500">Carbon is accounted for this window</span>
             </div>
           </div>
+
+          {activeJobId && (
+            <CarbonObservationPanel
+              jobId={activeJobId}
+              forecastPoints={[]}
+              result={observations}
+              collecting={collecting}
+              error={observationError}
+              onCollect={handleCollectObservations}
+              reportHtmlUrl={api.reportUrl(activeJobId, 'html')}
+              reportJsonUrl={api.reportUrl(activeJobId, 'json')}
+            />
+          )}
 
           {/* Measurement disclaimer */}
           <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 text-[11px] text-slate-400 font-mono">
