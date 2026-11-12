@@ -43,7 +43,7 @@ export interface CandidateWindowEvaluation {
   windowLabel: string;
   predictedCarbonIntensity: number; // gCO2eq/kWh
   predictedCarbonImpactGrams: number; // estimated total grams CO2
-  stdDev: number; // forecast uncertainty sigma
+  stdDev: number | null; // forecast uncertainty sigma; null when the data provides none
   uncertaintyRange: string;
   deadlineRisk: number; // decimal probability
   deadlineRiskPct: string; // e.g. "4.0%"
@@ -73,6 +73,11 @@ export interface SchedulingDecisionResponse {
   carbonSource: string;
   dataMode: 'live' | 'demo';
   region: string;
+  /**
+   * How deadline risk was computed: with the synthetic demo trace's uncertainty, or
+   * deterministically (window fits before the deadline or not) when the forecast has none.
+   */
+  riskModel: 'synthetic-demo-uncertainty' | 'deterministic-no-uncertainty-data';
   candidateWindows: CandidateWindowEvaluation[];
   evaluatedPolicies: PolicyEvaluationResult[];
   recommendedDecision: PolicyEvaluationResult;
@@ -120,16 +125,23 @@ export class SchedulerService {
      * Helper: computes window average carbon intensity and average uncertainty
      * for a job running continuously from hour t to t + dur - 1.
      */
+    // Forecast uncertainty is only used when every point provides it (synthetic demo traces do;
+    // Electricity Maps forecasts do not). It is never filled in with an assumed value.
+    const hasUncertainty = points.length > 0 && points.every((p) => typeof (p.stdDev ?? p.uncertaintyStdDev) === 'number');
+    const riskModel: SchedulingDecisionResponse['riskModel'] = hasUncertainty
+      ? 'synthetic-demo-uncertainty'
+      : 'deterministic-no-uncertainty-data';
+
     const computeWindowMetrics = (startHour: number) => {
       let sumCarbon = 0;
       let sumStd = 0;
       for (let h = startHour; h < startHour + dur; h++) {
         const pt = points[h % horizon];
         sumCarbon += pt ? (pt.predictedCarbon ?? pt.carbonIntensity ?? 250) : 250;
-        sumStd += pt ? (pt.stdDev ?? pt.uncertaintyStdDev ?? 20) : 20;
+        if (hasUncertainty) sumStd += pt ? ((pt.stdDev ?? pt.uncertaintyStdDev) as number) : 0;
       }
       const avgCarbon = Math.round(sumCarbon / dur);
-      const avgStd = Math.round(sumStd / dur);
+      const avgStd: number | null = hasUncertainty ? Math.round(sumStd / dur) : null;
       return { avgCarbon, avgStd };
     };
 
@@ -327,7 +339,8 @@ export class SchedulerService {
       const slackHours = ddl - endHour;
       const waitingTimeHours = startHour - arrival;
       const predictedCarbonImpactGrams = Math.round(avgCarbon * energyKwh);
-      const uncertaintyRange = `${avgCarbon} ± ${avgStd} gCO2/kWh`;
+      const uncertaintyRange =
+        avgStd === null ? `${avgCarbon} gCO2/kWh (no forecast uncertainty available)` : `${avgCarbon} ± ${avgStd} gCO2/kWh`;
 
       let deadlineRisk = 1.0;
       if (meetsDeadline) {
@@ -492,6 +505,7 @@ export class SchedulerService {
         riskDifferenceVsDeterministic: Number(((detRisk - optimalCandidate.deadlineRisk) * 100).toFixed(1)),
       },
       researchInsight,
+      riskModel,
     };
   }
 }

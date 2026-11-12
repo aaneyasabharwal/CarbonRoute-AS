@@ -1,4 +1,6 @@
-import { config } from '../config';
+import { ElectricityMapsClient, electricityMaps } from '../carbon/electricityMaps';
+import { ForecastSnapshot, ZoneInfo } from '../carbon/types';
+import { timezoneForZone } from '../carbon/zoneTimezones';
 
 export interface HourlyCarbonPoint {
   hour: number;
@@ -6,11 +8,15 @@ export interface HourlyCarbonPoint {
   timestamp: string;
   predictedCarbon: number; // gCO2eq/kWh
   carbonIntensity: number; // alias for consistency
-  stdDev: number; // Forecast uncertainty standard deviation
-  uncertainty: number; // alias
-  uncertaintyStdDev: number; // alias
-  confidenceLow: number;
-  confidenceHigh: number;
+  /**
+   * Forecast uncertainty (standard deviation, gCO2eq/kWh). Null when the provider gives
+   * none: Electricity Maps forecasts carry no uncertainty, and none is invented for them.
+   */
+  stdDev: number | null;
+  uncertainty: number | null; // alias
+  uncertaintyStdDev: number | null; // alias
+  confidenceLow: number | null;
+  confidenceHigh: number | null;
 }
 
 export interface CarbonForecastData {
@@ -19,6 +25,13 @@ export interface CarbonForecastData {
   regionName: string;
   timestamp: string;
   dataMode: 'live' | 'demo';
+  /** 'real' for provider data, 'synthetic' for the built-in demo profiles. */
+  dataClass: 'real' | 'synthetic';
+  /**
+   * Where the per-point uncertainty comes from: the demo's synthetic model, or
+   * 'unavailable' when the provider does not supply any.
+   */
+  uncertaintySource: 'synthetic-demo-model' | 'unavailable';
   traceVersion: string;
   forecastHorizonHours: number;
   timeResolution: string;
@@ -26,6 +39,10 @@ export interface CarbonForecastData {
   averageCarbon: number;
   minCarbon: number;
   maxCarbon: number;
+  /** IANA time zone of the zone for display, or null if unknown. Timestamps are UTC. */
+  timezone: string | null;
+  /** The exact provider forecast (live mode only), including issue and fetch times. */
+  snapshot?: ForecastSnapshot;
 }
 
 export interface ICarbonDataProvider {
@@ -165,6 +182,9 @@ export class PreparedTraceDataProvider implements ICarbonDataProvider {
       regionName: profile.name,
       timestamp: now.toISOString(),
       dataMode: this.dataMode,
+      dataClass: 'synthetic',
+      uncertaintySource: 'synthetic-demo-model',
+      timezone: selectedRegion === 'BENCHMARK-RESEARCH' ? null : timezoneForZone(selectedRegion),
       traceVersion: 'v1.0-ucs503-calibrated',
       forecastHorizonHours: validHorizon,
       timeResolution: '60 minutes (Hourly)',
@@ -189,110 +209,69 @@ export class PreparedTraceDataProvider implements ICarbonDataProvider {
  */
 export class ElectricityMapsDataProvider implements ICarbonDataProvider {
   public name = 'ElectricityMapsDataProvider';
-  public source = 'Electricity Maps Live API';
+  public source = 'Electricity Maps API';
   public dataMode: 'live' | 'demo' = 'live';
+  private readonly client: ElectricityMapsClient;
 
-  constructor(private apiKey?: string) {}
+  /**
+   * @param apiKey optional key; when omitted the shared client reads ELECTRICITY_MAPS_API_KEY.
+   * @param client optional client (tests inject one with a fake fetch or clock).
+   */
+  constructor(apiKey?: string, client?: ElectricityMapsClient) {
+    this.client = client ?? (apiKey !== undefined ? new ElectricityMapsClient({ apiKey }) : electricityMaps);
+  }
 
-  public async getForecast(
-    region: string = 'US-CAL-CISO',
-    horizonHours: number = 24
-  ): Promise<CarbonForecastData> {
-    const key = (
-      this.apiKey ||
-      process.env.ELECTRICITY_MAPS_API_KEY ||
-      config.electricityMapsApiKey ||
-      ''
-    ).trim();
-
-    if (!key) {
-      throw new Error(
-        'Live carbon forecast unavailable: Electricity Maps API key is not configured.'
-      );
-    }
-
-    const validHorizon = Math.max(1, Math.min(48, Number(horizonHours) || 24));
-    const selectedRegion = region ? region.trim() : 'US-CAL-CISO';
-    const profile = REGIONAL_PROFILES[selectedRegion];
-    const regionName = profile ? profile.name : selectedRegion;
-
-    let response: Response;
+  /**
+   * Hourly forecast for scheduling. The smallest supported horizon (6/24/48/72 h) covering
+   * `horizonHours` is requested. Points carry no uncertainty: the provider gives none, and
+   * none is invented (audit C3).
+   */
+  public async getForecast(region: string = 'US-CAL-CISO', horizonHours: number = 24): Promise<CarbonForecastData> {
+    let snapshot: ForecastSnapshot;
     try {
-      response = await fetch(
-        `https://api.electricitymap.org/v3/carbon-intensity/forecast?zone=${encodeURIComponent(
-          selectedRegion
-        )}`,
-        {
-          headers: {
-            'auth-token': key,
-          },
-        }
-      );
-    } catch (networkErr: any) {
-      throw new Error(
-        `Live carbon forecast unavailable: Network request failed (${networkErr.message}).`
-      );
+      const horizon = ElectricityMapsClient.horizonCovering(Math.max(1, Number(horizonHours) || 24)) ?? 72;
+      snapshot = await this.client.getForecast(region, { horizonHours: horizon, granularity: 'hourly' });
+    } catch (err: any) {
+      const status = err?.httpStatus ? ` (HTTP ${err.httpStatus})` : '';
+      const wrapped = new Error(`Live carbon forecast unavailable: ${err?.message || 'unknown error'}${status}`);
+      (wrapped as any).code = err?.code;
+      (wrapped as any).apiStatus = err?.apiStatus;
+      throw wrapped;
     }
 
-    if (!response.ok) {
-      throw new Error(
-        `Live carbon forecast unavailable: Electricity Maps API responded with HTTP ${response.status} (${response.statusText}).`
-      );
-    }
-
-    const apiData = (await response.json()) as any;
-    if (!apiData || !Array.isArray(apiData.forecast) || apiData.forecast.length === 0) {
-      throw new Error(
-        'Live carbon forecast unavailable: Electricity Maps returned an empty forecast.'
-      );
-    }
-
-    const now = new Date();
-    const hourlyProfile: HourlyCarbonPoint[] = apiData.forecast
-      .slice(0, validHorizon)
-      .map((f: any, idx: number) => {
-        const dt = f.datetime ? new Date(f.datetime) : new Date(now.getTime() + idx * 3600000);
-        const rawIntensity = f.carbonIntensity ?? f.carbon_intensity;
-        if (typeof rawIntensity !== 'number' || isNaN(rawIntensity)) {
-          throw new Error(
-            `Live carbon forecast unavailable: Invalid carbon intensity value at index ${idx}.`
-          );
-        }
-
-        // Use actual returned hourly forecast value directly (never fallback to baseCurve)
-        const intensity = Math.round(rawIntensity);
-        const baseStd = profile?.baseStdDev?.[idx % 24] ?? 15;
-        const stdDev = Math.round(baseStd * (1.0 + 0.18 * Math.sqrt(idx)));
-
-        return {
-          hour: idx,
-          offsetHour: idx,
-          timestamp: dt.toISOString(),
-          predictedCarbon: intensity,
-          carbonIntensity: intensity,
-          stdDev,
-          uncertainty: stdDev,
-          uncertaintyStdDev: stdDev,
-          confidenceLow: Math.max(0, Math.round(intensity - 1.96 * stdDev)),
-          confidenceHigh: Math.round(intensity + 1.96 * stdDev),
-        };
-      });
-
+    const start = Date.parse(snapshot.points[0].datetime);
+    const hourlyProfile: HourlyCarbonPoint[] = snapshot.points.map((p) => ({
+      hour: Math.round((Date.parse(p.datetime) - start) / 3600_000),
+      offsetHour: Math.round((Date.parse(p.datetime) - start) / 3600_000),
+      timestamp: p.datetime,
+      predictedCarbon: p.carbonIntensity,
+      carbonIntensity: p.carbonIntensity,
+      stdDev: null,
+      uncertainty: null,
+      uncertaintyStdDev: null,
+      confidenceLow: null,
+      confidenceHigh: null,
+    }));
     const carbons = hourlyProfile.map((p) => p.predictedCarbon);
+    const profile = REGIONAL_PROFILES[snapshot.zone];
 
     return {
       source: this.source,
-      region: selectedRegion,
-      regionName,
-      timestamp: now.toISOString(),
+      region: snapshot.zone,
+      regionName: profile ? profile.name : snapshot.zone,
+      timestamp: snapshot.fetchedAt,
       dataMode: this.dataMode,
-      traceVersion: 'v3.0-live-api',
-      forecastHorizonHours: hourlyProfile.length,
+      dataClass: 'real',
+      uncertaintySource: 'unavailable',
+      timezone: timezoneForZone(snapshot.zone),
+      traceVersion: 'electricitymaps-v3',
+      forecastHorizonHours: snapshot.horizonHours,
       timeResolution: '60 minutes',
       hourlyProfile,
       averageCarbon: Math.round(carbons.reduce((a, b) => a + b, 0) / carbons.length),
       minCarbon: Math.min(...carbons),
       maxCarbon: Math.max(...carbons),
+      snapshot,
     };
   }
 
@@ -329,8 +308,14 @@ export class CarbonService {
     return await provider.getForecast(region, horizonHours);
   }
 
+  /** The built-in synthetic demo profiles (used in demo mode only). */
   public static getAvailableRegions(): Array<{ code: string; name: string }> {
     return this.preparedProvider.getAvailableRegions();
+  }
+
+  /** Every zone the configured Electricity Maps key can see, with coverage and time zone. */
+  public static async getLiveZones(): Promise<ZoneInfo[]> {
+    return electricityMaps.getZones();
   }
 }
 

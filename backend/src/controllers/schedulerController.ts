@@ -31,6 +31,8 @@ export const simulateFeasibilityDecision = async (req: Request, res: Response) =
       for (let w = h; w < h + durationHours; w++) {
         const pt = forecastData.hourlyProfile[w % forecastData.hourlyProfile.length];
         sumCarbon += pt.predictedCarbon;
+        // This demo always uses the synthetic trace, whose points carry a (synthetic) stdDev.
+        if (pt.stdDev === null) throw new Error('Feasibility demo requires the synthetic demo trace.');
         sumStd += pt.stdDev;
       }
       const avgCarbon = Math.round(sumCarbon / durationHours);
