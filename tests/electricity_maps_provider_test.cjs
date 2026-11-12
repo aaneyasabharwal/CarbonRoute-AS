@@ -11,6 +11,28 @@
  * 7. Error Propagation: Network errors, HTTP 401, HTTP 429, and malformed responses propagate with HTTP 503 error format
  */
 
+// Harness changes for the M5 client (assertions below are unchanged):
+//  1. A local .env key must never reach this script: the variable is set to empty before the
+//     backend config loads (dotenv does not override existing variables).
+//  2. The original mocks were bare objects ({ ok, status, json }); the client reads text() and
+//     headers like any real Response, so every assigned mock is wrapped into a real Response.
+//  3. Mock timestamps are hour-aligned (HOUR0), because the client rejects irregular series (audit H5).
+process.env.ELECTRICITY_MAPS_API_KEY = '';
+const HOUR0 = Math.floor(Date.now() / 3600000) * 3600000;
+let currentFetch = global.fetch;
+Object.defineProperty(global, 'fetch', {
+  configurable: true,
+  get: () => currentFetch,
+  set: (fn) => {
+    currentFetch = typeof fn !== 'function' ? fn : async (...args) => {
+      const r = await fn(...args);
+      if (r instanceof Response) return r;
+      const body = r && r.json ? JSON.stringify(await r.json()) : null;
+      return new Response(body, { status: r.status, statusText: r.statusText });
+    };
+  },
+});
+
 const {
   CarbonService,
   ElectricityMapsDataProvider,
@@ -116,7 +138,7 @@ async function runElectricityMapsTests() {
           status: 200,
           json: async () => ({
             forecast: Array.from({ length: 24 }, (_, i) => ({
-              datetime: new Date(Date.now() + i * 3600000).toISOString(),
+              datetime: new Date(HOUR0 + i * 3600000).toISOString(),
               carbonIntensity: 200 + i * 5,
             })),
           }),
@@ -162,7 +184,7 @@ async function runElectricityMapsTests() {
         status: 200,
         json: async () => ({
           forecast: mockLiveIntensities.map((val, i) => ({
-            datetime: new Date(Date.now() + i * 3600000).toISOString(),
+            datetime: new Date(HOUR0 + i * 3600000).toISOString(),
             carbonIntensity: val,
           })),
         }),
@@ -210,7 +232,7 @@ async function runElectricityMapsTests() {
         status: 200,
         json: async () => ({
           forecast: mockIntensities.map((val, i) => ({
-            datetime: new Date(Date.now() + i * 3600000).toISOString(),
+            datetime: new Date(HOUR0 + i * 3600000).toISOString(),
             carbonIntensity: val,
           })),
         }),
