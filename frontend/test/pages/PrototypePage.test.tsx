@@ -86,4 +86,36 @@ describe('PrototypePage (M5 real-data workflow)', () => {
     expect(sent.jobData.deadlineAt).toMatch(/Z$/);
     expect(screen.queryByText('CarbonRoute Recommendation')).toBeNull();
   });
+
+  // Regression (defect 1, dashboard): the recommendation card uses the time-weighted forecast
+  // (demo job-7f42a910: recommended 117 vs Immediate 117.33 -> 0.28%), not the engine's
+  // hourly-slot saving (1.7%).
+  it('shows the time-weighted forecast and saving on the recommendation card', async () => {
+    const policy = (policyId: string, policyName: string, start: string, end: string, slot: number, category = 'Baseline') => ({
+      policyId, policyName, category, selectedStartHour: 0, selectedWindow: 'T+0:00 to T+1:00', predictedCarbon: slot, predictedCarbonIntensity: slot,
+      estimatedDeadlineRisk: 0, waitingTimeHours: 0, isFeasible: true, schedulerOverheadMs: 0, rationale: 'r',
+      selectedStartUtc: start, selectedEndUtc: end, meetsDeadline: true,
+    });
+    const imm = policy('immediate', 'Immediate Execution', '2026-11-12T19:49:57.531Z', '2026-11-12T20:49:57.531Z', 119);
+    const rec = policy('carbonroute_uncertainty', 'CarbonRoute Uncertainty-Aware', '2026-11-12T20:00:00.000Z', '2026-11-12T21:00:00.000Z', 117, 'Uncertainty-Aware');
+    backend({
+      status: 'RECOMMENDED',
+      job: { id: 'job-7f42a910', name: 'demo', region: 'US-CAL-CISO', durationHours: 1, deadlineHours: 2, arrivalHour: 0, cpu: 2, memoryMb: 1024, riskTolerance: 0.05, commandOrImage: 'x', isContainerImage: true, createdAt: '' },
+      carbonSource: 'Electricity Maps API',
+      dataMode: 'live',
+      region: 'US-CAL-CISO',
+      candidateWindows: [],
+      evaluatedPolicies: [imm, { ...imm, policyId: 'edf', policyName: 'EDF' }, { ...rec, policyId: 'deterministic_carbon', policyName: 'Deterministic' }, { ...imm, policyId: 'carbon_aware_baseline', policyName: 'Baseline' }, rec],
+      recommendedDecision: rec,
+      comparisonSummary: { carbonSavingsVsImmediatePct: 1.7, delayPenaltyHours: 0, riskDifferenceVsDeterministic: 0 },
+      riskModel: 'deterministic-no-uncertainty-data',
+      recommendedWindow: { startUtc: '2026-11-12T20:00:00.000Z', endUtc: '2026-11-12T21:00:00.000Z' },
+      timeline: { arrivalAt: '2026-11-12T19:49:57.531Z', deadlineAt: '2026-11-12T21:49:57.000Z', forecastStartUtc: '2026-11-12T19:00:00.000Z', forecastCoverageEndUtc: '2026-11-13T02:00:00.000Z', deadlineBeyondForecast: false, timezone: 'America/Los_Angeles', note: '' },
+      timeWeightedForecast: { recommendedIntensity: 117, immediateIntensity: 117.33, savingsVsImmediatePct: 0.28, basis: 'time-weighted' },
+    });
+    renderPage();
+    expect(await screen.findByText('CarbonRoute Recommendation')).toBeInTheDocument();
+    expect(screen.getByText(/Forecast: 0.28% vs Immediate \(time-weighted; predicted, not observed\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/Forecast: 1.7% vs Immediate/)).toBeNull();
+  });
 });

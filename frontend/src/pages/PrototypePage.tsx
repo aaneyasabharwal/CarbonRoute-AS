@@ -1035,11 +1035,15 @@ export const PrototypePage: React.FC = () => {
               <div className="p-4 rounded-xl bg-slate-950/60 border border-emerald-500/30 space-y-1">
                 <span className="text-emerald-400 block text-[11px]">Expected Grid Intensity</span>
                 <div className="text-lg font-extrabold text-emerald-300">
-                  {decision.recommendedDecision.predictedCarbonIntensity ?? decision.recommendedDecision.predictedCarbon}{' '}
+                  {decision.timeWeightedForecast?.recommendedIntensity ??
+                    decision.recommendedDecision.predictedCarbonIntensity ??
+                    decision.recommendedDecision.predictedCarbon}{' '}
                   <span className="text-xs text-slate-400">gCO2eq/kWh</span>
                 </div>
                 <span className="text-emerald-400/80 text-[10px]">
-                  Forecast: {decision.comparisonSummary.carbonSavingsVsImmediatePct}% vs Immediate (predicted, not observed)
+                  {decision.timeWeightedForecast
+                    ? `Forecast: ${decision.timeWeightedForecast.savingsVsImmediatePct ?? 'n/a'}% vs Immediate (time-weighted; predicted, not observed)`
+                    : `Forecast: ${decision.comparisonSummary.carbonSavingsVsImmediatePct}% vs Immediate (predicted, not observed)`}
                 </span>
               </div>
 
@@ -1253,7 +1257,7 @@ export const PrototypePage: React.FC = () => {
                         <div className="flex items-center space-x-2 text-xs">
                           <span className="text-slate-400">Carbon Savings:</span>
                           <span className="text-emerald-300 font-bold">
-                            -{decision.comparisonSummary.carbonSavingsVsImmediatePct}% vs Immediate
+                            -{decision.timeWeightedForecast?.savingsVsImmediatePct ?? decision.comparisonSummary.carbonSavingsVsImmediatePct}% vs Immediate (forecast)
                           </span>
                         </div>
                       </div>

@@ -14,6 +14,12 @@ export const QUALITY_LABEL = {
   missing: 'No observation',
 } as const;
 
+export const INTENSITY_QUALITY_LABEL = {
+  measured: 'Measured',
+  'provider-estimate': 'Provider estimates',
+  mixed: 'Mixed: measured and provider estimates',
+} as const;
+
 const QUALITY_CLASS = {
   measured: 'bg-emerald-950 text-emerald-300 border-emerald-500/40',
   'provider-estimate': 'bg-amber-950 text-amber-300 border-amber-500/40',
@@ -160,37 +166,79 @@ export const CarbonObservationPanel: React.FC<CarbonObservationPanelProps> = ({
         </div>
       )}
 
-      {result?.realized && (
-        <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
-          <div className="font-bold text-slate-100">Realized window (observed intensity × assumed energy)</div>
-          {result.realized.averageIntensity === null ? (
-            <p className="text-slate-400">{result.realized.reason}</p>
-          ) : (
-            <p className="text-slate-300">
-              {result.realized.averageIntensity} gCO2eq/kWh · {result.realized.emissionsGrams} gCO2eq ·{' '}
-              {result.realized.quality === 'measured'
-                ? 'measured'
-                : result.realized.quality === 'provider-estimate'
-                  ? 'provider estimates (not measurements)'
-                  : 'mix of measured values and provider estimates'}
-            </p>
-          )}
+      {result?.intensity && (
+        <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1" data-testid="window-intensity">
+          <div className="font-bold text-slate-100">Carbon intensity for the scheduled window (time-weighted)</div>
+          <p className="text-slate-300">
+            Forecast: {result.intensity.forecast.value ?? 'not available'}
+            {result.intensity.forecast.value !== null && ' gCO2eq/kWh'} · Observed:{' '}
+            {result.intensity.observed.value === null ? 'not available' : `${result.intensity.observed.value} gCO2eq/kWh`}
+            {result.intensity.observed.quality && (
+              <span className={`ml-2 px-2 py-0.5 rounded border text-[10px] font-bold ${QUALITY_CLASS[result.intensity.observed.quality === 'mixed' ? 'provider-estimate' : result.intensity.observed.quality]}`}>
+                {INTENSITY_QUALITY_LABEL[result.intensity.observed.quality]}
+              </span>
+            )}
+          </p>
+          <p className="text-slate-500 text-[10px]">
+            {result.intensity.observed.reason} Weighted by minutes: {result.intensity.observed.coveredMinutes} of{' '}
+            {result.intensity.observed.windowMinutes} min covered · {result.intensity.emissionFactorType} emission factors
+          </p>
         </div>
       )}
 
-      {result?.observedComparison && (
-        <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
-          <div className="font-bold text-slate-100">Observed comparison with Immediate execution</div>
-          {result.observedComparison.unavailable ? (
-            <p className="text-slate-400">{result.observedComparison.reason}</p>
-          ) : (
+      {result?.emissions && (
+        <div className="grid sm:grid-cols-2 gap-3" data-testid="emissions">
+          <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+            {result.emissions.realized.available ? (
+              <>
+                <div className="font-bold text-emerald-300">Realized emissions (recorded energy)</div>
+                <p className="text-slate-300">
+                  {result.emissions.realized.grams} gCO2eq ({result.emissions.realized.energyKwh} kWh recorded)
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="font-bold text-slate-100">{result.emissions.realized.label}</div>
+                <p className="text-slate-400">{result.emissions.realized.reason}</p>
+              </>
+            )}
+          </div>
+          <div className="p-3 rounded-xl bg-slate-950/70 border border-amber-500/30 space-y-1">
+            <div className="font-bold text-amber-300">{result.emissions.estimated.label}</div>
+            <p className="text-slate-300">
+              {result.emissions.estimated.grams === null
+                ? result.emissions.estimated.reason
+                : `${result.emissions.estimated.grams} gCO2eq (estimate, not a realized emission)`}
+            </p>
+            <p className="text-slate-500 text-[10px]">
+              Energy assumption: {result.emissions.estimated.energyKwh} kWh. {result.emissions.estimated.energyBasis}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {result?.windowComparison && (
+        <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1" data-testid="window-comparison">
+          <div className="font-bold text-slate-100">Comparison with Immediate execution (time-weighted intensity)</div>
+          {result.windowComparison.available ? (
             <>
               <p className="text-slate-300">
-                Recommended window {result.observedComparison.recommendedEmissionsGrams} gCO2eq vs Immediate{' '}
-                {result.observedComparison.immediateEmissionsGrams} gCO2eq (difference {result.observedComparison.differenceGrams} gCO2eq)
+                Observed: recommended {result.windowComparison.recommended.observedIntensity} vs Immediate{' '}
+                {result.windowComparison.immediate.observedIntensity} gCO2eq/kWh (difference {result.windowComparison.observedDifference} gCO2eq/kWh,{' '}
+                {result.windowComparison.observedDifferencePct}%)
               </p>
-              <p className="text-slate-500 text-[10px]">{result.observedComparison.basis}</p>
+              <p className="text-slate-400">
+                Forecast: recommended {result.windowComparison.recommended.forecastIntensity} vs Immediate{' '}
+                {result.windowComparison.immediate.forecastIntensity} gCO2eq/kWh
+              </p>
+              <p className="text-slate-400">
+                {result.windowComparison.estimatedEmissions.label}: {result.windowComparison.estimatedEmissions.recommendedGrams} vs{' '}
+                {result.windowComparison.estimatedEmissions.immediateGrams} gCO2eq. Realized emissions: {result.windowComparison.realizedEmissions}.
+              </p>
+              <p className="text-slate-500 text-[10px]">{result.windowComparison.basis}</p>
             </>
+          ) : (
+            <p className="text-slate-400">{result.windowComparison.basis}</p>
           )}
         </div>
       )}
