@@ -68,6 +68,11 @@ export interface StoredExecution {
   scheduledEndUtc: string;
   dispatchedAt: string;
   note: string;
+  /**
+   * Energy actually consumed, when a real execution recorded it (kWh). Absent for simulated
+   * executions; realized emissions are only calculated when this is present.
+   */
+  measuredEnergyKwh?: number;
 }
 
 export type ObservationStatus =
