@@ -100,9 +100,11 @@ describe('[legacy] prototype vertical slice', () => {
       status = K8sConnector.getExecutionStatus(baseJob.id);
     }
     expect(status?.status).toBe('completed');
-    // Current behaviour (audit C2): realized carbon is a random perturbation of the prediction.
-    expect(typeof status?.realizedCarbon).toBe('number');
-    expect(typeof status?.carbonError).toBe('number');
+    // Changed in M5 (audit C2, task M2.1): realized carbon used to be a random perturbation of
+    // the prediction. It is no longer invented; it comes only from provider observations.
+    expect(status?.realizedCarbon).toBeUndefined();
+    expect(status?.carbonError).toBeUndefined();
+    expect(status?.carbonObservation).toBe('collect-from-provider-after-window');
   });
 
   it('Test B: higher uncertainty multiplier keeps carbon values and does not pick a later window', () => {
