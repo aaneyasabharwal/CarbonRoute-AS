@@ -97,6 +97,8 @@ Run the frontend test suite (Vitest + React Testing Library; see [frontend/test/
 cd frontend && npm test
 ```
 
+Continuous integration ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs the backend and frontend typechecks, tests and builds on Node 20 for every pull request into `fix/prototype-flaws` or `main`, and on pushes to those branches and to `task/**` branches.
+
 The original script below is kept until the ported tests are reviewed. It requires a built `backend/dist`:
 
 ```bash
