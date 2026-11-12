@@ -91,6 +91,12 @@ Run the backend test suite (Vitest, no build or running server needed; see [back
 cd backend && npm test
 ```
 
+Run the frontend test suite (Vitest + React Testing Library; see [frontend/test/README.md](frontend/test/README.md)):
+
+```bash
+cd frontend && npm test
+```
+
 The original script below is kept until the ported tests are reviewed. It requires a built `backend/dist`:
 
 ```bash
