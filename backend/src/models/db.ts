@@ -119,9 +119,14 @@ class JsonDatabase {
   private data: DatabaseSchema;
 
   constructor() {
-    const dataDir = path.resolve(__dirname, '../../../database');
+    // CARBONROUTE_DB_FILE lets the test suite use an isolated temporary database file.
+    // When unset, the original location is used unchanged.
+    const overridePath = process.env.CARBONROUTE_DB_FILE;
+    const dataDir = overridePath
+      ? path.dirname(path.resolve(overridePath))
+      : path.resolve(__dirname, '../../../database');
     fs.mkdirSync(dataDir, { recursive: true });
-    this.dbPath = path.join(dataDir, 'carbonroute.db.json');
+    this.dbPath = overridePath ? path.resolve(overridePath) : path.join(dataDir, 'carbonroute.db.json');
     this.data = this.loadDatabase();
     this.seedDefaultsIfEmpty();
   }

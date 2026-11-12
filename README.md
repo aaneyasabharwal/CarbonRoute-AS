@@ -85,7 +85,13 @@ The Prototype Milestone implements an integrated, verifiable end-to-end software
 
 ## 🧪 Automated Verification Test Suite
 
-Run the automated prototype vertical slice test suite:
+Run the backend test suite (Vitest, no build or running server needed; see [backend/test/README.md](backend/test/README.md)):
+
+```bash
+cd backend && npm test
+```
+
+The original script below is kept until the ported tests are reviewed. It requires a built `backend/dist`:
 
 ```bash
 node tests/prototype_vertical_slice_test.cjs
