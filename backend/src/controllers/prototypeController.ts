@@ -539,11 +539,49 @@ export const listJobs = (req: AuthRequest, res: Response) => {
   return res.json({ success: true, data: jobs });
 };
 
+/** Policy comparison rows from a stored decision (same values the decision returned). */
+function storedPolicies(result: any) {
+  return (result?.evaluatedPolicies || []).map((p: any) => ({
+    policyId: p.policyId,
+    policyName: p.policyName,
+    category: p.category,
+    selectedStartUtc: p.selectedStartUtc ?? null,
+    selectedEndUtc: p.selectedEndUtc ?? null,
+    selectedWindow: p.selectedWindow,
+    forecastIntensity: p.forecastIntensityTimeWeighted ?? p.predictedCarbonIntensity ?? null,
+    estimatedEmissionsAssumedEnergyGrams: p.estimatedEmissionsAssumedEnergyGrams ?? p.estimatedWorkloadEmissionsGrams ?? null,
+    estimatedDeadlineRisk: p.estimatedDeadlineRisk ?? null,
+    waitingTimeHours: p.waitingTimeHours ?? null,
+    isFeasible: Boolean(p.isFeasible),
+    equivalentTo: p.equivalentTo ?? null,
+    recommended: p.policyId === result?.recommendedDecision?.policyId,
+  }));
+}
+
+/** Latest observation collection for a job, summarised by data quality (never relabelled). */
+function observationSummary(jobId: string) {
+  const sets = schedulingStore().observationSetsForJob(jobId);
+  const latest = sets[sets.length - 1];
+  if (!latest) return null;
+  const count = (q: string) => latest.observations.filter((o) => o.quality === q).length;
+  return {
+    status: latest.status,
+    statusDetail: latest.statusDetail,
+    collectedAt: latest.collectedAt,
+    intervals: latest.intervals.length,
+    measured: count('measured'),
+    providerEstimate: count('provider-estimate'),
+    missing: latest.missingIntervals.length,
+    attempts: sets.length,
+  };
+}
+
 /** GET /api/jobs/:id: job details, latest decision and latest execution record. */
 export const getJobDetails = (req: JobRequest, res: Response) => {
   const ref = req.job!;
   const store = schedulingStore();
   const decision = store.latestDecisionForJob(ref.id);
+  const result: any = decision?.result || null;
   return res.json({
     success: true,
     data: {
@@ -561,9 +599,18 @@ export const getJobDetails = (req: JobRequest, res: Response) => {
             recommendedWindow: decision.recommendedWindow,
             immediateWindow: decision.immediateWindow,
             infeasibilityReason: decision.infeasibilityReason ?? null,
+            riskModel: result?.riskModel ?? decision.riskModel ?? null,
+            runtimeCv: result?.runtimeCv ?? 0,
+            provenance: result?.provenance ?? null,
+            energyAssumption: decision.energyAssumption,
+            explanation: result?.explanation ?? null,
+            policies: storedPolicies(result),
+            unavailablePolicies: result?.unavailablePolicies ?? [],
+            candidateCount: (result?.candidateWindows || []).length,
           }
         : null,
       execution: store.latestExecutionForJob(ref.id) ?? null,
+      observations: observationSummary(ref.id),
     },
   });
 };

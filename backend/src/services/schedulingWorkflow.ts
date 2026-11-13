@@ -140,6 +140,13 @@ export async function scheduleWorkflow(
   const zone = input.mode === 'live' ? ElectricityMapsClient.validateZone(input.zone) : String(input.zone || 'BENCHMARK-RESEARCH');
   const energy = energyAssumption(input.cpu, dur);
 
+  // P4: fetch the forecast BEFORE storing anything. If the provider fails (no key, quota,
+  // outage) the request fails and no job without a decision is left behind. A job whose
+  // deadline is impossible needs no forecast and is stored with its INFEASIBLE decision.
+  const deadlineImpossible = arrival + dur * HOUR > deadline;
+  const hoursNeeded = Math.ceil((deadline - now) / HOUR) + 1;
+  const forecast = deadlineImpossible ? null : await getForecast(zone, Math.min(72, hoursNeeded), input.mode, now);
+
   const job: StoredJob = store.addJob({
     id: input.jobId,
     ...(input.ownerId ? { ownerId: input.ownerId } : {}),
@@ -174,16 +181,14 @@ export async function scheduleWorkflow(
   };
 
   // 1. Deadline feasibility before any data is fetched: even starting at arrival is too late.
-  if (arrival + dur * HOUR > deadline) {
+  if (deadlineImpossible || !forecast) {
     return infeasible(
       `A ${dur} h job arriving at ${iso(arrival)} cannot finish before the deadline ${iso(deadline)} (earliest finish ${iso(arrival + dur * HOUR)}).`,
       null
     );
   }
 
-  // 2. Forecast covering the deadline (the smallest supported horizon, at most 72 h).
-  const hoursNeeded = Math.ceil((deadline - now) / HOUR) + 1;
-  const forecast = await getForecast(zone, Math.min(72, hoursNeeded), input.mode, now);
+  // 2. Forecast covering the deadline (fetched above; the smallest supported horizon, at most 72 h).
   const snapshot = store.addSnapshot(forecast.snapshot ?? demoSnapshot(forecast));
   const points = forecast.hourlyProfile;
   const start = Date.parse(points[0].timestamp);
@@ -224,6 +229,7 @@ export async function scheduleWorkflow(
       candidateWindows: outcome.candidateWindows,
       evaluatedPolicies: outcome.evaluatedPolicies,
       unavailablePolicies: outcome.unavailablePolicies,
+      explanation: outcome.explanation,
     });
   }
   const result: SchedulingDecisionResponse = outcome;

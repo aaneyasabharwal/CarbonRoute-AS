@@ -15,6 +15,11 @@ import {
   SchedulingDecisionResponse,
   K8sJobExecutionRecord,
   ExperimentRecord,
+  JobSummary,
+  JobDetails,
+  OracleEvaluation,
+  BenchmarkListItem,
+  BenchmarkResultDetail,
   ZoneOption,
   JobObservationsResult,
 } from '../types';
@@ -588,6 +593,19 @@ function authFailure(
       ? json.message
       : fallbackMessage,
   };
+}
+
+/** GET with the sign-in token; 401 becomes a sign-in prompt; failures are returned, never replaced. */
+async function authedGet<T>(url: string, failText: string): Promise<ApiResponse<T>> {
+  try {
+    const res = await fetch(url, { headers: getHeaders() });
+    const json = await res.json().catch(() => null);
+    if (res.status === 401) return authFailure(res, json);
+    if (res.ok && json?.success) return json;
+    return { success: false, message: json?.message || `${failText} (${res.status})` };
+  } catch (err: any) {
+    return { success: false, message: err?.message || `${failText}: the backend is not reachable.` };
+  }
 }
 
 export const api = {
@@ -1278,6 +1296,43 @@ export const api = {
     } catch (err: any) {
       return { success: false, message: err.message || 'Network error recording experiment.' };
     }
+  },
+
+  // ---- P4: job management and results (backend data only; no fallbacks) ----
+
+  /** Signed-in user's jobs (administrators: all). Optional status filter. */
+  async listJobs(filters: { status?: string } = {}): Promise<ApiResponse<JobSummary[]>> {
+    const q = filters.status ? `?status=${encodeURIComponent(filters.status)}` : '';
+    return authedGet<JobSummary[]>(`${API_BASE}/jobs${q}`, 'Could not load jobs');
+  },
+
+  async getJobDetails(jobId: string): Promise<ApiResponse<JobDetails>> {
+    return authedGet<JobDetails>(`${API_BASE}/jobs/${encodeURIComponent(jobId)}`, 'Could not load the job');
+  },
+
+  async cancelJob(jobId: string): Promise<ApiResponse<JobSummary>> {
+    try {
+      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST', headers: getHeaders() });
+      const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
+      if (res.ok && json?.success) return json;
+      return { success: false, message: json?.message || `Cancel failed (${res.status})` };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error cancelling the job.' };
+    }
+  },
+
+  /** Hindsight (Oracle) evaluation: offline only, never a scheduling decision. */
+  async getJobOracle(jobId: string): Promise<ApiResponse<OracleEvaluation>> {
+    return authedGet<OracleEvaluation>(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/oracle`, 'Could not load the hindsight evaluation');
+  },
+
+  async listBenchmarks(): Promise<ApiResponse<BenchmarkListItem[]>> {
+    return authedGet<BenchmarkListItem[]>(`${API_BASE}/results/benchmarks`, 'Could not load benchmark results');
+  },
+
+  async getBenchmark(id: string): Promise<ApiResponse<BenchmarkResultDetail>> {
+    return authedGet<BenchmarkResultDetail>(`${API_BASE}/results/benchmarks/${encodeURIComponent(id)}`, 'Could not load the benchmark result');
   },
 
   async getExperiments(): Promise<ApiResponse<ExperimentRecord[]>> {

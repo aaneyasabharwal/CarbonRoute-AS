@@ -283,3 +283,35 @@ describe('live carbon data requires sign-in (P0/F9)', () => {
     expect(regions.authRequired).toBe(true);
   });
 });
+
+describe('P4 job and results calls', () => {
+  it('send the token, report 401 as sign-in, and never invent data when the backend is unreachable', async () => {
+    localStorage.setItem('carbonroute_token', 'tok-p4');
+    const fetchMock = stubFetch(() => ({ body: { success: true, data: [] } }));
+    await api.listJobs({ status: 'scheduled' });
+    await api.getJobDetails('job-1');
+    await api.cancelJob('job-1');
+    await api.getJobOracle('job-1');
+    await api.listBenchmarks();
+    await api.getBenchmark('benchmark-x');
+    expect(fetchMock.mock.calls.map((c) => String(c[0]))).toEqual([
+      `${API_BASE}/jobs?status=scheduled`,
+      `${API_BASE}/jobs/job-1`,
+      `${API_BASE}/jobs/job-1/cancel`,
+      `${API_BASE}/jobs/job-1/oracle`,
+      `${API_BASE}/results/benchmarks`,
+      `${API_BASE}/results/benchmarks/benchmark-x`,
+    ]);
+    for (const c of fetchMock.mock.calls) expect(new Headers((c[1] as RequestInit).headers).get('Authorization')).toBe('Bearer tok-p4');
+
+    stubFetch(() => ({ status: 401, body: { success: false, code: 'UNAUTHENTICATED', message: 'Authentication required.' } }));
+    expect((await api.listJobs()).authRequired).toBe(true);
+
+    stubFetch(() => undefined); // unreachable backend
+    for (const res of [await api.listJobs(), await api.getJobDetails('x'), await api.listBenchmarks()]) {
+      expect(res.success).toBe(false);
+      expect(res.data).toBeUndefined();
+    }
+    localStorage.removeItem('carbonroute_token');
+  });
+});

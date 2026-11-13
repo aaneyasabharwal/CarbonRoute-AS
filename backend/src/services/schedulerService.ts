@@ -30,6 +30,7 @@
 import { CarbonForecastData, HourlyCarbonPoint } from './carbonService';
 import { UncertaintyService, MAX_RUNTIME_CV } from './uncertaintyService';
 import { energyAssumption } from './energyModel';
+import { explainDecision, DecisionExplanation } from './explain';
 
 export interface WorkloadJob {
   id: string;
@@ -127,6 +128,8 @@ interface EngineCommon {
   candidateWindows: CandidateWindowEvaluation[];
   evaluatedPolicies: PolicyEvaluationResult[];
   unavailablePolicies: UnavailablePolicy[];
+  /** Structured explanation (P4): objective, constraints, binding constraint, policy relations. */
+  explanation?: DecisionExplanation;
 }
 
 export interface SchedulingDecisionResponse extends EngineCommon {
@@ -168,6 +171,28 @@ export interface EngineOptions {
 export class SchedulerService {
   /** Evaluates every policy; returns an explicit infeasible outcome instead of a fallback. */
   public static evaluatePolicies(
+    job: WorkloadJob,
+    forecast: CarbonForecastData | HourlyCarbonPoint[],
+    options: EngineOptions | number = {}
+  ): EngineOutcome {
+    const out = SchedulerService.evaluateCore(job, forecast, options);
+    out.explanation = explainDecision({
+      status: out.status,
+      reason: out.status === 'RECOMMENDED' ? undefined : out.reason,
+      riskModel: out.riskModel,
+      runtimeCv: out.runtimeCv,
+      riskTolerance: Number(job.riskTolerance),
+      deadlineHours: Number(job.deadlineHours),
+      durationHours: Number(job.durationHours),
+      candidateWindows: out.candidateWindows,
+      evaluatedPolicies: out.evaluatedPolicies,
+      unavailablePolicies: out.unavailablePolicies,
+      recommendedDecision: out.recommendedDecision,
+    });
+    return out;
+  }
+
+  private static evaluateCore(
     job: WorkloadJob,
     forecast: CarbonForecastData | HourlyCarbonPoint[],
     options: EngineOptions | number = {}
