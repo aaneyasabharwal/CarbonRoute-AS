@@ -1,8 +1,9 @@
 # Research summary: methodology, evaluation and current evidence
 
-Status as of 2026-11-13 19:23 UTC. Every number below comes from a stored result file (paths at the
-end) produced by the scripts in this repository. Nothing is extrapolated. **The data covers 5 hours of
-one day, so none of these numbers supports a general claim about carbon savings or forecast quality.**
+Status as of 2026-11-13 23:48 UTC. Every number below comes from a stored result file (paths at the
+end) produced by the scripts in this repository; `npm run report` regenerates the full report from
+those files. Nothing is extrapolated. **The data covers about 9.5 hours of one day (0.40 days), so none
+of these numbers supports a general claim about carbon savings or forecast quality.**
 
 ## 1. Question
 
@@ -42,53 +43,56 @@ with simple policies when scored on what the grid actually did?
 
 | | Value |
 |---|---|
-| Collection runs / calls / failures | 6 / 60 / 0 |
-| Span | 5.0 h (13:32–18:32 UTC, 2026-11-13) |
-| Forecast snapshots | 30 (6 per zone) |
-| Realized hourly values | 145; measured share 61.4 % (DE 0.93, FR 0.97, GB 0, IN-NO 0.17, US-CAL-CISO 1.0) |
-| Forecast/realized pairs (lead 0–5 h) | 105, of which 46 measured |
+| Collection runs / calls / failures | 12 / 120 / 0 |
+| Span | 0.40 days (2026-11-13 13:32–23:06 UTC) |
+| Forecast snapshots | 60 (12 per zone) |
+| Realized hourly values | 170; measured share 61.2 % (DE 0.94, FR 0.97, GB 0, IN-NO 0.15, US-CAL-CISO 1.0) |
+| Forecast/realized pairs (lead 0–10 h) | 350, of which 175 measured |
 
 GB realized values are all provider estimates; IN-NO mostly. Any result for those zones compares a
 forecast with another model's estimate.
 
 ## 5. Results
 
-### 5.1 Forecast accuracy (forecast − realized, gCO2eq/kWh, 21 pairs per zone)
+### 5.1 Forecast accuracy (forecast − realized, gCO2eq/kWh, 70 pairs per zone)
 
 | Zone | MAE | RMSE | Bias | MAE vs measured only (n) |
 |---|---|---|---|---|
-| DE | 36.24 | 36.68 | +36.24 | 32.20 (10) |
-| GB | 41.19 | 41.37 | −41.19 | n/a (0) |
-| US-CAL-CISO | 16.76 | 20.64 | −10.76 | 16.76 (21) |
-| IN-NO | 13.43 | 13.77 | +13.43 | n/a (0) |
-| FR | 9.57 | 10.26 | −8.90 | 8.47 (15) |
-| All | 23.44 (n=105) | | | 17.41 (n=46) |
+| DE | 35.57 | 40.14 | +35.57 | 43.94 (47) |
+| GB | 22.04 | 27.14 | −17.39 | n/a (0) |
+| US-CAL-CISO | 15.41 | 17.19 | −4.96 | 15.41 (70) |
+| IN-NO | 11.59 | 11.99 | +11.59 | n/a (0) |
+| FR | 9.27 | 9.61 | −9.07 | 8.84 (58) |
+| All | 18.78 (n=350) | 24.00 | +3.15 | 20.90 (n=175) |
 
-21 pairs per zone from one afternoon, short leads only; error bands (≥ 30 pairs per lead bucket) are
-not yet available. The large one-sided biases (DE, GB) may be specific to that afternoon.
+Each zone now has one lead-time bucket with at least 30 pairs (an empirical error band is available
+for it); longer leads still have too few pairs. DE's forecast was consistently above the realized
+values throughout this period (bias +35.6); this may be specific to the day.
 
-### 5.2 Policy comparison (replay benchmark, 600 synthetic workloads per scenario)
+### 5.2 Policy comparison (replay benchmark, 1 200 synthetic workloads per scenario)
 
 Paired difference in realized intensity vs Immediate (negative = cleaner), 95 % cluster-bootstrap
-interval over snapshots:
+interval over forecast snapshots, with the reading the report generator assigns (a difference is only
+called lower when the interval excludes 0):
 
-| Policy | cv = 0: Δ [95 % CI] (n, snapshots) | cv = 0.2: Δ [95 % CI] | Violation rate cv = 0.2 |
+| Policy | cv = 0: Δ [95 % CI] (n, snapshots) | cv = 0.2: Δ [95 % CI] (n, snapshots) | Violation rate cv = 0.2 (simulated) |
 |---|---|---|---|
-| Immediate / EDF | reference | reference | 4.8 % |
-| Greedy (deterministic carbon) | −11.08 [−26.28, −1.57] (286, 28) | −11.08 [−26.69, −1.51] | **19.7 %** |
-| CarbonAware baseline | −9.78 [−21.03, −0.75] (400, 30) | −9.78 [−21.80, −0.71] | 4.8 % |
-| **CarbonRoute** | −11.08 [−27.16, −1.38] (286, 28) | −10.22 [−23.66, −1.31] (274, 30) | **0.9 %** |
+| Immediate / EDF | reference | reference | 4.1 % |
+| Greedy (deterministic carbon) | −8.06 [−18.50, −0.28] (672, 57) | −8.06 [−17.82, −0.51] (672, 57) | **23.4 %** |
+| CarbonAware baseline | −6.39 [−13.57, −0.72] (824, 59) | −6.39 [−13.68, −0.42] (824, 59) | 4.4 % |
+| **CarbonRoute** | −8.06 [−17.61, −0.05] (672, 57) | −7.21 [−17.39, **+0.40**] (638, 58): no evidence of a difference | **0.9 %** |
 
-- 314 of 600 workloads per scenario could not yet be scored (their windows end after the last
-  collection) and 55 were infeasible for CarbonRoute at cv = 0.2 (no window within τ).
-- With cv = 0 CarbonRoute and Greedy choose the same windows (no runtime risk), as expected.
-- With cv = 0.2, the one consistent pattern is the deadline trade-off: Greedy's simulated violation
-  rate was 19.7 % against CarbonRoute's 0.9 %, at a similar paired difference. This follows from the
-  constraint by construction and uses simulated runtimes; it is not an empirical runtime result.
-- The paired differences are about −10 gCO2eq/kWh with intervals that nearly reach 0. Given 5 hours of
-  one day, 5 zones and intervals that may still be optimistic, **this is not evidence of a carbon
-  saving**. Mean realized intensities per policy are computed on different subsets and must not be
-  compared directly.
+- 528 of 1 200 workloads per scenario could not yet be scored (windows end after the last collection);
+  110 were infeasible for CarbonRoute at cv = 0.2 (no window within τ).
+- With cv = 0 CarbonRoute and Greedy choose the same windows, as expected (no runtime risk).
+- With cv = 0.2 the consistent pattern is the deadline trade-off: Greedy's simulated violation rate
+  was 23.4 % against CarbonRoute's 0.9 %. This follows from the constraint by construction and uses
+  simulated runtimes; it is not an empirical runtime result.
+- With the larger sample, CarbonRoute's cv = 0.2 interval now **includes 0** (it excluded 0 on the
+  5-hour sample). The other differences remain small and their intervals end close to 0. **This is not
+  evidence of a carbon saving**; per-policy means are over different subsets and are not compared.
+- Scheduler overhead (machine-dependent): median 0.027 ms, 95th percentile 0.093 ms per decision for
+  all five policies (300 decisions, Intel Core Ultra 7 155U, Node 24).
 
 ### 5.3 Single-job demonstration ([DEMO.md](DEMO.md))
 
@@ -97,20 +101,26 @@ US-CAL-CISO, forecast at 13:32 UTC: CarbonRoute recommended 15:00–17:00 (forec
 
 ### 5.4 Forecast-error model (machine learning, [ML.md](ML.md))
 
-Status **insufficient-data**: 105 pairs over 0.21 days; the pre-registered thresholds need ≥ 500 / 100
-/ 200 train / validation / test rows over ≥ 7 days. **No model has been trained; no model accuracy
-exists.** The pipeline itself is validated only on synthetic test fixtures.
+Status **insufficient-data**: 350 pairs (175 measured) over 0.40 days; chronological split 140 / 9 / 21
+(180 dropped by the leakage gap). The pre-registered thresholds need ≥ 500 / 100 / 200 train /
+validation / test rows over ≥ 7 days. **No model has been trained; no model accuracy exists.** The
+pipeline itself is validated only on synthetic test fixtures.
+
+### 5.5 Earlier sample (5 h, 2026-11-13 19:23 UTC)
+
+On the first 6 collection runs the same comparison gave CarbonRoute −10.22 [−23.66, −1.31] at cv = 0.2
+(30 snapshots). The change with more data illustrates why short samples must not be over-interpreted.
 
 ## 6. Threats to validity
 
-- **Duration**: 5 hours of one weekday afternoon; diurnal and weekly patterns are not represented.
+- **Duration**: about 9.5 hours of one day; diurnal and weekly patterns are not represented.
 - **Dependence**: workloads and snapshots overlap in time; cluster intervals address within-snapshot
   dependence only.
 - **Selection**: only windows observed so far are scored; later (often cleaner, evening) windows are
   under-represented until more data arrives.
 - **Ground truth**: 39 % of realized values are provider estimates.
-- **Deadline risk**: model-based from a declared cv; not calibrated against recorded runtimes; hourly
-  discretisation rounds the deadline down to whole forecast hours (conservative).
+- **Deadline risk**: model-based from a declared cv; not calibrated against recorded runtimes. (The
+  replay uses whole-hour arrivals and deadlines; the exact-instant fix of P8 does not change it.)
 - **Energy**: assumed, so emissions in grams are illustrative.
 - **Synthetic workloads** with a uniform mix; no queueing or capacity.
 
@@ -122,10 +132,12 @@ with their intervals, by zone, and for measured values only.
 
 ## Result files (outside the repository, `../CarbonRoute-AS-data/`)
 
-- `benchmark-results/benchmark-2026-11-13T19-23-19-164Z.{json,md}` (dataset 6fec27740a4e, config
-  a074e5bb9fa8, seed 42)
-- `ml-results/ml-2026-11-13T19-23-20-497Z.{json,md}`
+- `benchmark-results/benchmark-2026-11-13T23-48-22-308Z.{json,md}` (dataset 46a5a644d1b4, config
+  a074e5bb9fa8, seed 42, commit 1ba4508)
+- `ml-results/ml-2026-11-13T23-48-23-207Z.{json,md}`
+- `reports/research-report-2026-11-13T23-48-22-308Z.{md,json}` (`npm run report`)
+- Earlier (5 h sample): `benchmark-2026-11-13T19-23-19-164Z`, `ml-2026-11-13T19-23-20-497Z`
 - Demo: `npm run demo` output (reproducible; see DEMO.md)
 
-These three were produced from the P6 working tree before it was committed, so their recorded commit
-is the parent (1a89f6f); the code that produced them is the P6 commit.
+The 23:48 results were produced by the code of `fix/prototype-flaws` at 1ba4508 plus the report
+generator (branch `task/p8-research-report`); the benchmark and ML code are unchanged from 1ba4508.

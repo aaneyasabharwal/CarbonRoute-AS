@@ -288,7 +288,8 @@ describe('every entry point uses the same lock', () => {
       return /collectOnce\(/.test(t) || /collection-\$\{/.test(t);
     });
     expect(offenders).toEqual([]);
-    const self = fs.readFileSync(path.join(src, 'scripts', 'collectElectricityMaps.ts'), 'utf8');
+    // Normalise line endings: Windows checkouts use CRLF (git autocrlf), CI uses LF.
+    const self = fs.readFileSync(path.join(src, 'scripts', 'collectElectricityMaps.ts'), 'utf8').replace(/\r\n/g, '\n');
     expect(self.match(/appendFileSync/g)).toHaveLength(1);
     expect(self).toMatch(/if \(!lock\.isOwner\(\)\) return \{[^}]*lost: true \};\n\s*fs\.appendFileSync/);
   });
