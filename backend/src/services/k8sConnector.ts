@@ -1,9 +1,22 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
+import { validateWorkloadSpec, runsAsImage } from './workloadSpec';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+/**
+ * Runs kubectl with an argument array (F10 / M1.4): no shell is involved, so no value from a
+ * job can be interpreted as shell syntax on the host.
+ */
+function kubectl(args: string[]): Promise<{ stdout: string; stderr: string }> {
+  return execFileAsync('kubectl', args, { timeout: 60_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true }) as Promise<{
+    stdout: string;
+    stderr: string;
+  }>;
+}
 
 export interface K8sJobExecutionRecord {
   success: boolean;
@@ -45,7 +58,7 @@ export class K8sConnector {
    */
   public static async checkClusterHealth(): Promise<{ isAvailable: boolean; message: string }> {
     try {
-      const { stdout } = await execAsync('kubectl cluster-info --request-timeout=2s');
+      const { stdout } = await kubectl(['cluster-info', '--request-timeout=2s']);
       return {
         isAvailable: true,
         message: stdout.split('\n')[0] || 'Live Kubernetes / Minikube cluster accessible.',
@@ -73,16 +86,19 @@ export class K8sConnector {
     const cpu = typeof job === 'object' && job !== null ? (job.cpu || 1) : 1;
     const memoryMb = typeof job === 'object' && job !== null ? (job.memoryMb || 512) : 512;
 
-    // Use user-supplied command or container image
+    // Workload (F10 / M1.4): a container image runs with its own entrypoint; a command runs
+    // inside the default workload image via sh -c. Both are validated first. The manifest is
+    // an object, serialised as JSON by the caller, so no value can change its structure.
     let containerImage = 'ghcr.io/carbonroute/workload-synthetic:latest';
-    let containerCommand: string[] = ['python', '/app/workload.py', '--epochs', '5'];
+    let containerCommand: string[] | undefined = ['python', '/app/workload.py', '--epochs', '5'];
 
-    if (typeof job === 'object' && job !== null) {
-      if (job.isContainerImage && job.commandOrImage && !job.commandOrImage.startsWith('python')) {
-        containerImage = job.commandOrImage;
-        containerCommand = ['sh', '-c', 'echo "Starting container workload..." && sleep 2'];
-      } else if (job.commandOrImage) {
-        containerCommand = ['sh', '-c', job.commandOrImage];
+    if (typeof job === 'object' && job !== null && job.commandOrImage) {
+      validateWorkloadSpec({ commandOrImage: job.commandOrImage, isContainerImage: job.isContainerImage });
+      if (runsAsImage(job)) {
+        containerImage = String(job.commandOrImage);
+        containerCommand = undefined;
+      } else {
+        containerCommand = ['sh', '-c', String(job.commandOrImage)];
       }
     }
 
@@ -111,11 +127,18 @@ export class K8sConnector {
           },
           spec: {
             restartPolicy: 'Never',
+            automountServiceAccountToken: false,
+            securityContext: { seccompProfile: { type: 'RuntimeDefault' } },
             containers: [
               {
                 name: 'workload-runner',
                 image: containerImage,
-                command: containerCommand,
+                ...(containerCommand ? { command: containerCommand } : {}),
+                securityContext: {
+                  privileged: false,
+                  allowPrivilegeEscalation: false,
+                  capabilities: { drop: ['ALL'] },
+                },
                 resources: {
                   requests: {
                     cpu: `${cpu}`,
@@ -223,7 +246,12 @@ export class K8sConnector {
     activeExecutions.set(jobId, record);
 
     if (clusterHealth.isAvailable) {
-      this.executeOnK8s(record, cores, ram);
+      const workload =
+        typeof jobOrId === 'object' && jobOrId !== null
+          ? jobOrId
+          : { id: jobId, commandOrImage: cmd, isContainerImage: false, cpu: cores, memoryMb: ram };
+      const manifest = this.generateJobManifest(workload, 0, k8sJobName);
+      this.executeOnK8s(record, manifest);
     } else {
       this.executeInSandbox(record, durationSec);
     }
@@ -258,52 +286,29 @@ export class K8sConnector {
     record.completedAt = record.completionTime;
     record.logs.push(`[${record.completionTime}] [CarbonRoute Dispatcher] Execution cancelled by ${by}.`);
     if (wasLive) {
-      await execAsync(`kubectl delete job ${record.k8sJobName} -n carbonroute-jobs --ignore-not-found`).catch((err: any) => {
+      await kubectl(['delete', 'job', record.k8sJobName, '-n', 'carbonroute-jobs', '--ignore-not-found']).catch((err: any) => {
         record.logs.push(`[${new Date().toISOString()}] Could not delete the Kubernetes Job: ${err.message}`);
       });
     }
     return record;
   }
 
-  private static async executeOnK8s(record: K8sJobExecutionRecord, cpu: number, memoryMb: number) {
+  private static async executeOnK8s(record: K8sJobExecutionRecord, manifest: any) {
     try {
-      const manifest = `
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: ${record.k8sJobName}
-  namespace: carbonroute-jobs
-  labels:
-    app: carbonroute-workload
-    job-id: "${record.jobId}"
-spec:
-  backoffLimit: 1
-  template:
-    metadata:
-      name: ${record.podName}
-    spec:
-      restartPolicy: Never
-      containers:
-      - name: batch-worker
-        image: ${record.containerImage}
-        command: ["sh", "-c", "${record.command}"]
-        resources:
-          limits:
-            cpu: "${cpu}"
-            memory: "${memoryMb}Mi"
-`;
-      const tempPath = path.join(process.cwd(), `k8s-${record.k8sJobName}.yaml`);
-      fs.writeFileSync(tempPath, manifest);
+      // JSON is valid input for kubectl apply; serialising the object means no job value can
+      // add or change manifest fields (F10 / M1.4). Written to the OS temp folder.
+      const tempPath = path.join(os.tmpdir(), `carbonroute-${record.k8sJobName}-${process.pid}.json`);
+      fs.writeFileSync(tempPath, JSON.stringify(manifest), { mode: 0o600 });
 
       record.status = 'scheduled';
       record.logs.push(`[${new Date().toISOString()}] Applied Kubernetes Job manifest to cluster.`);
 
-      await execAsync(`kubectl apply -f "${tempPath}"`);
+      await kubectl(['apply', '-f', tempPath]);
       // The job may have been cancelled while the manifest was being applied. Its delete
       // then ran before the Job existed, so delete it now and do not mark it running (M1.2).
       if ((record.status as K8sJobExecutionRecord['status']) === 'cancelled') {
         record.logs.push(`[${new Date().toISOString()}] Cancelled while the manifest was being applied; deleting the Kubernetes Job.`);
-        await execAsync(`kubectl delete job ${record.k8sJobName} -n carbonroute-jobs --ignore-not-found`).catch((err: any) => {
+        await kubectl(['delete', 'job', record.k8sJobName, '-n', 'carbonroute-jobs', '--ignore-not-found']).catch((err: any) => {
           record.logs.push(`[${new Date().toISOString()}] Could not delete the Kubernetes Job: ${err.message}`);
         });
         if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
@@ -321,7 +326,7 @@ spec:
           return;
         }
         try {
-          const { stdout } = await execAsync(`kubectl get job ${record.k8sJobName} -n carbonroute-jobs -o json`);
+          const { stdout } = await kubectl(['get', 'job', record.k8sJobName, '-n', 'carbonroute-jobs', '-o', 'json']);
           const parsed = JSON.parse(stdout);
           if (parsed.status?.succeeded) {
             clearInterval(checkInterval);
@@ -330,9 +335,7 @@ spec:
             record.completedAt = compTime.toISOString();
             record.completionTime = compTime.toISOString();
             record.exitCode = 0;
-            const { stdout: logOut } = await execAsync(
-              `kubectl logs job/${record.k8sJobName} -n carbonroute-jobs`
-            ).catch(() => ({ stdout: '' }));
+            const { stdout: logOut } = await kubectl(['logs', `job/${record.k8sJobName}`, '-n', 'carbonroute-jobs']).catch(() => ({ stdout: '' }));
             if (logOut) record.logs.push(...logOut.split('\n'));
             if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
           } else if (parsed.status?.failed) {

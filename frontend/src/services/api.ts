@@ -571,14 +571,22 @@ export const SIGN_IN_REQUIRED_MESSAGE =
  * Handles a 401 from a protected route: a stored token that the backend rejected (expired,
  * revoked or signed with an old secret) is removed, and the caller is told to sign in.
  */
-function authFailure(res: Response, json: any): { success: false; message: string; authRequired: true } {
+/** Message when live (Electricity Maps) data is requested without signing in (P0/F9). */
+export const LIVE_DATA_SIGN_IN_MESSAGE =
+  'Sign in to use live Electricity Maps data (it uses a limited API quota). Demo mode works without signing in.';
+
+function authFailure(
+  res: Response,
+  json: any,
+  fallbackMessage: string = SIGN_IN_REQUIRED_MESSAGE
+): { success: false; message: string; authRequired: true } {
   if (localStorage.getItem('carbonroute_token')) localStorage.removeItem('carbonroute_token');
   return {
     success: false,
     authRequired: true,
     message: res.status === 401 && json?.message && json?.code === 'UNAUTHENTICATED' && !/^Authentication required/.test(json.message)
       ? json.message
-      : SIGN_IN_REQUIRED_MESSAGE,
+      : fallbackMessage,
   };
 }
 
@@ -1279,8 +1287,10 @@ export const api = {
       if (region) params.set('region', region);
       if (mode) params.set('mode', mode);
       const queryStr = params.toString() ? `?${params.toString()}` : '';
-      const res = await fetch(`${API_BASE}/carbon/forecast${queryStr}`);
+      // Live data needs sign-in (it spends the provider quota); demo data is public.
+      const res = await fetch(`${API_BASE}/carbon/forecast${queryStr}`, { headers: getHeaders() });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json, LIVE_DATA_SIGN_IN_MESSAGE);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Carbon forecast query failed (${res.status})` };
     } catch (err: any) {
@@ -1294,8 +1304,9 @@ export const api = {
    */
   async getCarbonRegions(mode: 'live' | 'demo' = 'live'): Promise<ApiResponse<ZoneOption[]> & { source?: string }> {
     try {
-      const res = await fetch(`${API_BASE}/carbon/regions${mode === 'demo' ? '?mode=demo' : ''}`);
+      const res = await fetch(`${API_BASE}/carbon/regions${mode === 'demo' ? '?mode=demo' : ''}`, { headers: getHeaders() });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json, LIVE_DATA_SIGN_IN_MESSAGE);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Regions query failed (${res.status})` };
     } catch (err: any) {

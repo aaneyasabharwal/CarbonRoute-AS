@@ -42,7 +42,18 @@ export interface ElectricityMapsClientOptions {
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
   cacheTtlMs?: Partial<Record<'zones' | 'latest' | 'history' | 'forecast' | 'powerBreakdown', number>>;
+  /**
+   * Server-wide budget of network requests to the provider (F9). Cache hits do not count.
+   * Defaults: EM_MAX_CALLS_PER_HOUR (120) and EM_MAX_CALLS_PER_DAY (1500).
+   */
+  maxCallsPerHour?: number;
+  maxCallsPerDay?: number;
 }
+
+const budgetFromEnv = (name: string, fallback: number) => {
+  const v = Number(process.env[name]);
+  return Number.isFinite(v) && v > 0 ? Math.floor(v) : fallback;
+};
 
 const DEFAULT_TTL = {
   zones: 24 * 3600_000,
@@ -68,6 +79,8 @@ export class ElectricityMapsClient {
   private readonly now: () => number;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly ttl: typeof DEFAULT_TTL;
+  /** Times of recent network requests, for the call budget. */
+  private callTimes: number[] = [];
 
   constructor(private readonly options: ElectricityMapsClientOptions = {}) {
     this.baseUrl = (options.baseUrl || ELECTRICITY_MAPS_BASE_URL).replace(/\/$/, '');
@@ -87,6 +100,31 @@ export class ElectricityMapsClient {
 
   clearCache(): void {
     this.cache.clear();
+  }
+
+  /** Network requests made in the last hour and day, and the budget (no secrets). */
+  callBudget(): { lastHour: number; lastDay: number; maxPerHour: number; maxPerDay: number } {
+    const now = this.now();
+    this.callTimes = this.callTimes.filter((t) => t > now - 24 * 3600_000);
+    return {
+      lastHour: this.callTimes.filter((t) => t > now - 3600_000).length,
+      lastDay: this.callTimes.length,
+      maxPerHour: this.options.maxCallsPerHour ?? budgetFromEnv('EM_MAX_CALLS_PER_HOUR', 120),
+      maxPerDay: this.options.maxCallsPerDay ?? budgetFromEnv('EM_MAX_CALLS_PER_DAY', 1500),
+    };
+  }
+
+  /** Refuses a network request once the hourly or daily budget is used up (F9). */
+  private reserveCall(): void {
+    const b = this.callBudget();
+    if (b.lastHour >= b.maxPerHour || b.lastDay >= b.maxPerDay) {
+      const period = b.lastHour >= b.maxPerHour ? 'hourly' : 'daily';
+      throw new ProviderError(
+        'QUOTA_GUARD',
+        `CarbonRoute's ${period} Electricity Maps call budget is used up; live data is paused to protect the API quota. Cached data and demo mode still work.`
+      );
+    }
+    this.callTimes.push(this.now());
   }
 
   private apiKey(): string {
@@ -118,6 +156,7 @@ export class ElectricityMapsClient {
     let lastError: ProviderError | null = null;
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       if (attempt > 0) await this.sleep(Math.min(4000, 500 * 2 ** (attempt - 1)));
+      this.reserveCall();
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), this.timeoutMs);
       let res: Response;

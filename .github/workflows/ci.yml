@@ -90,3 +90,19 @@ jobs:
         run: npm run build
         env:
           GITHUB_PAGES: 'true'
+
+  python:
+    name: Python service checks (standard library only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: FastAPI CORS settings tests (M1.9)
+        run: python -m unittest discover -s fastapi_service/tests -v

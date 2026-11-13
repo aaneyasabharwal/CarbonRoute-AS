@@ -252,3 +252,26 @@ describe('job requests are authenticated (M1.2)', () => {
     expect(res.authRequired).toBe(true);
   });
 });
+
+describe('live carbon data requires sign-in (P0/F9)', () => {
+  const header = (call: unknown[]) => new Headers((call[1] as RequestInit | undefined)?.headers).get('Authorization');
+
+  it('forecast and region requests send the stored token', async () => {
+    localStorage.setItem('carbonroute_token', 'tok-live');
+    const fetchMock = stubFetch(() => ({ body: { success: true, data: [] } }));
+    await api.getCarbonForecast('DE', 'live');
+    await api.getCarbonRegions('live');
+    for (const call of fetchMock.mock.calls) expect(header(call)).toBe('Bearer tok-live');
+    localStorage.removeItem('carbonroute_token');
+  });
+
+  it('a 401 on live data asks the user to sign in and mentions demo mode', async () => {
+    stubFetch(() => ({ status: 401, body: { success: false, code: 'UNAUTHENTICATED', message: 'Authentication required. Sign in ...' } }));
+    const res = await api.getCarbonForecast('DE', 'live');
+    expect(res.authRequired).toBe(true);
+    expect(res.message).toMatch(/Sign in to use live Electricity Maps data/);
+    expect(res.message).toMatch(/Demo mode works without signing in/);
+    const regions = await api.getCarbonRegions('live');
+    expect(regions.authRequired).toBe(true);
+  });
+});

@@ -104,7 +104,12 @@ For any other user a job id answers **404**, exactly like an unknown id.
 | `GET /jobs/:id/report` (`?format=html`) | owner, admin | Report as JSON or a downloadable HTML file. |
 | `POST /experiments`, `GET /experiments` | any user | Record / list experiments. Records are owned by the caller (admins see all); a `jobId` must be a job the caller can access. |
 
-Carbon data routes (`/carbon/*`), `/cluster/health` and `/scheduler/simulate` do not use job data and remain public.
+`/cluster/health` and `/scheduler/simulate` do not use job data and remain public.
+
+### Carbon data and limits (P0)
+- Live `/carbon/*` routes (`forecast`, `forecast/snapshot`, `latest`, `history`, `power-breakdown`, `regions`) spend the Electricity Maps quota: they require a token (401 otherwise) and are rate limited per user. With `?mode=demo` (synthetic data) `forecast` and `regions` are public. `GET /carbon/provider` is public and shows the server-wide `callBudget` (no secrets).
+- **429** `{ "code": "RATE_LIMITED" }` with `Retry-After`: too many login attempts (per account and per address), job actions or live-data requests. **429** `{ "code": "QUOTA_GUARD" }`: the server's provider call budget is used up.
+- Job images must be valid image references and commands may not contain control characters (400 `INVALID_WORKLOAD`).
 
 ## 5. Scheduling & Feasibility Simulation
 

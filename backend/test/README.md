@@ -31,7 +31,7 @@ Every file passes when run on its own (`npx vitest run <file>`), together, and i
 | Folder | Contents |
 |---|---|
 | `test/legacy/` | Characterization tests ported from the original scripts in `/tests` (`*.legacy.test.ts`). |
-| `test/security/` | M1.1 credential handling: JWT secret resolution, initial-admin seeding from the environment, password rotation script, and a scan that no formerly published secret remains in tracked files (`credentials.test.ts`). M1.2 job-route authentication and ownership: unauthenticated requests, owners, non-owners (IDOR), admins, listing, cancellation, invalid/expired/revoked tokens (`jobAccess.test.ts`). Users and passwords are generated at run time. |
+| `test/security/` | M1.1 credential handling: JWT secret resolution, initial-admin seeding from the environment, password rotation script, and a scan that no formerly published secret remains in tracked files (`credentials.test.ts`). M1.2 job-route authentication and ownership: unauthenticated requests, owners, non-owners (IDOR), admins, listing, cancellation, invalid/expired/revoked tokens (`jobAccess.test.ts`). P0 hardening: storage traversal, manifest/command injection, rate limits, live-data quota guard, CORS and CSP (`hardening.test.ts`). Users and passwords are generated at run time. |
 | `test/features/` | Tests for existing behaviour that must be preserved, plus `[legacy]` blocks for audit-flagged behaviour. |
 | `test/isolation/` | Tests proving the suite is isolated from real data and from other test files. |
 | `test/support/` | Test environment and authentication fixtures. |

@@ -52,11 +52,27 @@ import {
   cancelJob,
 } from '../controllers/prototypeController';
 import { requireJobAccess } from '../services/jobAccess';
+import { buildRateLimiters } from '../middleware/rateLimit';
+import type { Request, Response, NextFunction } from 'express';
 import { authenticateToken, requireAdmin, requireTeamMemberOrAdmin, optionalAuth } from '../middleware/auth';
 import { uploadMiddleware } from '../middleware/upload';
 import { db } from '../models/db';
 
 const router = Router();
+
+// Rate limits (F11 / M1.8); limits come from RATE_LIMIT_* environment variables.
+const limit = buildRateLimiters();
+
+/** Synthetic demo data costs no provider quota, so it stays public. */
+const isDemoRequest = (req: Request) => req.query.mode === 'demo' || req.query.dataSource === 'demo';
+/**
+ * Live carbon data spends the Electricity Maps quota (F9): it requires sign-in and is rate
+ * limited per user. Demo-mode requests stay public.
+ */
+const liveCarbon = [
+  (req: Request, res: Response, next: NextFunction) => (isDemoRequest(req) ? next() : authenticateToken(req, res, next)),
+  (req: Request, res: Response, next: NextFunction) => (isDemoRequest(req) ? next() : limit.carbonLive(req, res, next)),
+];
 
 // Health Check
 router.get('/health', (_req, res) => {
@@ -72,7 +88,7 @@ router.get('/health', (_req, res) => {
 router.get('/storage/:category/:fileName', serveFile);
 
 // Authentication Routes
-router.post('/auth/login', login);
+router.post('/auth/login', limit.loginPerIp, limit.loginPerAccount, login);
 router.post('/auth/logout', optionalAuth, logout);
 router.get('/auth/me', authenticateToken, getMe);
 
@@ -127,28 +143,28 @@ router.post('/scheduler/simulate', simulateFeasibilityDecision);
 // require access to that job (its owner, or an administrator); otherwise 404.
 const jobAccess = [authenticateToken, requireJobAccess];
 router.get('/jobs', authenticateToken, listJobs);
-router.post('/jobs', authenticateToken, submitJob);
-router.post('/schedule', authenticateToken, scheduleJob);
+router.post('/jobs', authenticateToken, limit.jobWrites, submitJob);
+router.post('/schedule', authenticateToken, limit.jobWrites, scheduleJob);
 router.get('/jobs/:id', ...jobAccess, getJobDetails);
 router.get('/jobs/:id/status', ...jobAccess, getJobStatus);
 router.get('/jobs/:id/results', ...jobAccess, getJobResults);
 router.get('/jobs/:id/manifest', ...jobAccess, getJobManifest);
-router.post('/jobs/:id/dispatch', ...jobAccess, dispatchJobToExecution);
-router.post('/jobs/:id/cancel', ...jobAccess, cancelJob);
-router.post('/jobs/:id/observations', ...jobAccess, collectJobObservations);
+router.post('/jobs/:id/dispatch', ...jobAccess, limit.jobWrites, dispatchJobToExecution);
+router.post('/jobs/:id/cancel', ...jobAccess, limit.jobWrites, cancelJob);
+router.post('/jobs/:id/observations', ...jobAccess, limit.jobWrites, collectJobObservations);
 router.get('/jobs/:id/observations', ...jobAccess, getJobObservations);
 router.get('/jobs/:id/report', ...jobAccess, getJobReport);
 
-router.get('/carbon/forecast', getCarbonForecast);
-router.get('/carbon/forecast/snapshot', getCarbonForecastSnapshot);
-router.get('/carbon/latest', getCarbonLatest);
-router.get('/carbon/history', getCarbonHistory);
-router.get('/carbon/power-breakdown', getCarbonPowerBreakdown);
+router.get('/carbon/forecast', ...liveCarbon, getCarbonForecast);
+router.get('/carbon/forecast/snapshot', ...liveCarbon, getCarbonForecastSnapshot);
+router.get('/carbon/latest', ...liveCarbon, getCarbonLatest);
+router.get('/carbon/history', ...liveCarbon, getCarbonHistory);
+router.get('/carbon/power-breakdown', ...liveCarbon, getCarbonPowerBreakdown);
 router.get('/carbon/provider', getCarbonProviderStatus);
-router.get('/carbon/regions', getAvailableRegions);
+router.get('/carbon/regions', ...liveCarbon, getAvailableRegions);
 router.get('/cluster/health', getClusterHealth);
 
-router.post('/experiments', authenticateToken, recordExperiment);
+router.post('/experiments', authenticateToken, limit.jobWrites, recordExperiment);
 router.get('/experiments', authenticateToken, getExperiments);
 
 // Audit Logs (Admin only)

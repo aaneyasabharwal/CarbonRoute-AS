@@ -10,6 +10,9 @@ import { describe, it, expect, vi, beforeAll } from 'vitest';
 vi.mock('child_process', () => ({
   exec: (_cmd: string, cb: (err: Error | null, out?: unknown) => void) =>
     cb(new Error('kubectl disabled in tests')),
+  // kubectl is called through execFile (argument arrays) since P0/F10.
+  execFile: (...args: unknown[]) =>
+    (args[args.length - 1] as (err: Error | null) => void)(new Error('kubectl disabled in tests')),
 }));
 
 import request from 'supertest';
@@ -102,7 +105,7 @@ describe('carbon data API', () => {
   });
 
   it('in live mode without a key reports the provider error instead of the demo list', async () => {
-    const res = await request(app).get('/api/carbon/regions');
+    const res = await request(app).get('/api/carbon/regions').set(auth());
     expect(res.status).toBe(503);
     expect(res.body.code).toBe('NO_API_KEY');
     expect(res.body.data).toBeUndefined();
@@ -114,7 +117,7 @@ describe('carbon data API', () => {
     expect(demo.body.data.dataMode).toBe('demo');
     expect(demo.body.data.hourlyProfile).toHaveLength(12);
 
-    expect((await request(app).get('/api/carbon/forecast?region=DE')).status).toBe(503);
+    expect((await request(app).get('/api/carbon/forecast?region=DE').set(auth())).status).toBe(503);
   });
 });
 
@@ -154,7 +157,7 @@ describe('M5 workflow routes', () => {
 
   it('rejects invalid input with 400 and invalid zones with 422', async () => {
     expect((await request(app).post('/api/schedule').set(auth()).send({ mode: 'demo', jobData: { ...jobBody, durationHours: 2.5 } })).status).toBe(400);
-    const badZone = await request(app).get('/api/carbon/latest?zone=not-a-zone!');
+    const badZone = await request(app).get('/api/carbon/latest?zone=not-a-zone!').set(auth());
     expect(badZone.status).toBe(422);
     expect(badZone.body.code).toBe('INVALID_PARAMETER');
   });

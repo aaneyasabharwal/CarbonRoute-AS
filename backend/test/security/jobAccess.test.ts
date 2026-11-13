@@ -9,6 +9,9 @@ import { describe, it, expect, vi, beforeAll } from 'vitest';
 
 vi.mock('child_process', () => ({
   exec: (_cmd: string, cb: (err: Error | null, out?: unknown) => void) => cb(new Error('kubectl disabled in tests')),
+  // kubectl is called through execFile (argument arrays) since P0/F10.
+  execFile: (...args: unknown[]) =>
+    (args[args.length - 1] as (err: Error | null) => void)(new Error('kubectl disabled in tests')),
 }));
 
 import request from 'supertest';

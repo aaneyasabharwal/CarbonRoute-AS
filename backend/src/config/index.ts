@@ -12,7 +12,8 @@ const jwt = resolveJwtSecret(process.env);
 export const config = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '5000', 10),
-  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  // Comma-separated browser origins allowed to call the API (M1.6). Defaults to local dev servers.
+  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173',
   jwtSecret: jwt.secret,
   jwtSecretSource: jwt.source,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',

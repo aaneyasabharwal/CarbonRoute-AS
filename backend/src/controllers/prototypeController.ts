@@ -8,6 +8,7 @@ import { schedulingStore } from '../models/schedulingStore';
 import { electricityMaps } from '../carbon/electricityMaps';
 import { ProviderError } from '../carbon/types';
 import { K8sConnector } from '../services/k8sConnector';
+import { validateWorkloadSpec, WorkloadSpecError } from '../services/workloadSpec';
 import { AuthRequest, isAdmin } from '../middleware/auth';
 import { db } from '../models/db';
 import {
@@ -70,6 +71,11 @@ export const submitJob = (req: AuthRequest, res: Response) => {
         message: 'Job Name and Command/Container Image are required.',
       });
     }
+    try {
+      validateWorkloadSpec({ commandOrImage: commandOrImage || req.body.command, isContainerImage });
+    } catch (err: any) {
+      return res.status(400).json({ success: false, code: 'INVALID_WORKLOAD', message: err.message });
+    }
 
     const job: WorkloadJob = {
       id: `job-${uuidv4().substring(0, 8)}`,
@@ -104,7 +110,7 @@ export const submitJob = (req: AuthRequest, res: Response) => {
 /** Maps a thrown error to an HTTP status and message without exposing internals. */
 function sendError(res: Response, error: any, fallbackStatus = 500) {
   const status =
-    error instanceof WorkflowError
+    error instanceof WorkflowError || error instanceof WorkloadSpecError
       ? error.status
       : error instanceof ProviderError
         ? error.apiStatus
@@ -323,7 +329,7 @@ export const getJobManifest = (req: JobRequest, res: Response) => {
     const manifest = K8sConnector.generateJobManifest(job, scheduledHour);
     return res.json({ success: true, data: manifest });
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error instanceof WorkloadSpecError ? 400 : 500).json({ success: false, message: error.message });
   }
 };
 
@@ -422,6 +428,8 @@ export const getCarbonProviderStatus = (_req: Request, res: Response) => {
       historyWindowHours: 24,
       pastRangeAvailable: false,
       verifiedOn: '2026-11-12',
+      // F9: live data needs sign-in and is rate limited; this is the server-wide call budget.
+      callBudget: electricityMaps.callBudget(),
       note: 'past and past-range endpoints are not included in the current API plan.',
     },
   });
