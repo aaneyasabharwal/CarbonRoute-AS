@@ -1,3 +1,4 @@
+import { internalError } from '../utils/httpErrors';
 import { Request, Response } from 'express';
 import { db, TaskStatus } from '../models/db';
 import { AuthRequest } from '../middleware/auth';
@@ -12,10 +13,7 @@ export const getRoadmap = (_req: Request, res: Response) => {
       data: milestones,
     });
   } catch (err: any) {
-    return res.status(500).json({
-      success: false,
-      message: err.message || 'Failed to retrieve roadmap.',
-    });
+    return internalError(res, err, 'Error reading roadmap', 'Failed to retrieve the roadmap.');
   }
 };
 

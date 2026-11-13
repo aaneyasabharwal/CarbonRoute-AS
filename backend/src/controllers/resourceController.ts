@@ -1,3 +1,4 @@
+import { internalError } from '../utils/httpErrors';
 import path from 'path';
 import { Request, Response } from 'express';
 import { db } from '../models/db';
@@ -86,11 +87,7 @@ export const createResource = async (req: AuthRequest, res: Response) => {
       data: newResource,
     });
   } catch (error: any) {
-    console.error('Error creating resource:', error);
-    return res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to upload resource.',
-    });
+    return internalError(res, error, 'Error creating resource', 'Failed to upload the resource.');
   }
 };
 

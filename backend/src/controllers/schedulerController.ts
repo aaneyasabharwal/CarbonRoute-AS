@@ -1,3 +1,4 @@
+import { internalError } from '../utils/httpErrors';
 import { Request, Response } from 'express';
 import { CarbonService } from '../services/carbonService';
 import { SchedulerService, WorkloadJob, EngineOutcome } from '../services/schedulerService';
@@ -107,6 +108,6 @@ export const simulateFeasibilityDecision = async (req: Request, res: Response) =
       },
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
+    return internalError(res, err, 'Feasibility demonstration failed');
   }
 };

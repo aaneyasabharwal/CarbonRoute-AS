@@ -1,3 +1,4 @@
+import { internalError } from '../utils/httpErrors';
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { CarbonService } from '../services/carbonService';
@@ -104,7 +105,7 @@ export const submitJob = (req: AuthRequest, res: Response) => {
       data: job,
     });
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message });
+    return internalError(res, error, 'Job submission failed');
   }
 };
 
@@ -118,6 +119,10 @@ function sendError(res: Response, error: any, fallbackStatus = 500) {
         : typeof error?.apiStatus === 'number'
           ? error.apiStatus
           : fallbackStatus;
+  // Only errors CarbonRoute raises on purpose carry a message meant for users; anything else that
+  // ends as a server error is logged and answered generically (P8).
+  const known = error instanceof WorkflowError || error instanceof WorkloadSpecError || error instanceof ProviderError || typeof error?.apiStatus === 'number';
+  if (!known && status >= 500) return internalError(res, error, 'Request failed');
   return res.status(status).json({ success: false, message: error?.message || 'Request failed.', code: error?.code });
 }
 
@@ -372,7 +377,8 @@ export const getJobManifest = (req: JobRequest, res: Response) => {
     const manifest = K8sConnector.generateJobManifest(job, scheduledHour);
     return res.json({ success: true, data: manifest });
   } catch (error: any) {
-    return res.status(error instanceof WorkloadSpecError ? 400 : 500).json({ success: false, message: error.message });
+    if (error instanceof WorkloadSpecError) return res.status(400).json({ success: false, message: error.message });
+    return internalError(res, error, 'Manifest generation failed');
   }
 };
 
@@ -478,9 +484,21 @@ export const getCarbonProviderStatus = (_req: Request, res: Response) => {
   });
 };
 
+/**
+ * Public cluster status (P8): only whether a cluster is reachable. The kubectl output (which names
+ * the control-plane address) is never returned to anonymous callers.
+ */
 export const getClusterHealth = async (_req: Request, res: Response) => {
   const health = await K8sConnector.checkClusterHealth();
-  return res.json({ success: true, data: health });
+  return res.json({
+    success: true,
+    data: {
+      isAvailable: health.isAvailable,
+      message: health.isAvailable
+        ? 'A Kubernetes cluster is reachable; dispatched jobs are submitted to it.'
+        : 'No Kubernetes cluster is reachable; dispatched jobs are simulated (no workload process is run).',
+    },
+  });
 };
 
 export const recordExperiment = (req: AuthRequest, res: Response) => {
@@ -501,7 +519,7 @@ export const recordExperiment = (req: AuthRequest, res: Response) => {
     experimentRecords.unshift(exp);
     return res.status(201).json({ success: true, data: exp });
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message });
+    return internalError(res, error, 'Recording experiment failed');
   }
 };
 /** Experiments recorded by the caller (administrators see all). */
