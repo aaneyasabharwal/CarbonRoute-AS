@@ -81,7 +81,18 @@ export interface StoredExecution {
    * executions; realized emissions are only calculated when this is present.
    */
   measuredEnergyKwh?: number;
+  /**
+   * P8: execution status as last reported by the executor (persisted, so it survives a restart).
+   * A non-final status without a live executor is reported as 'interrupted'.
+   */
+  status?: ExecutionStatus;
+  statusUpdatedAt?: string;
+  finishedAt?: string;
 }
+
+/** 'interrupted': the server stopped before the run finished; recorded when the job is dispatched again. */
+export type ExecutionStatus = 'pending' | 'scheduled' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+export const FINAL_EXECUTION_STATUSES: ExecutionStatus[] = ['completed', 'failed', 'cancelled', 'interrupted'];
 
 export type ObservationStatus =
   | 'COMPLETE'
@@ -216,6 +227,17 @@ export class SchedulingStore {
   }
   latestExecutionForJob(jobId: string): StoredExecution | undefined {
     return [...this.data.executions].reverse().find((e) => e.jobId === jobId);
+  }
+  /** Records the executor's status for the job's latest execution (P8). Final statuses are kept. */
+  updateExecutionStatus(jobId: string, status: ExecutionStatus, at: string = new Date().toISOString()): StoredExecution | undefined {
+    const e = this.latestExecutionForJob(jobId);
+    if (!e) return undefined;
+    if (e.status && FINAL_EXECUTION_STATUSES.includes(e.status)) return e;
+    e.status = status;
+    e.statusUpdatedAt = at;
+    if (FINAL_EXECUTION_STATUSES.includes(status)) e.finishedAt = at;
+    this.save();
+    return e;
   }
 
   // Observation collections (every attempt is kept; the latest is used)

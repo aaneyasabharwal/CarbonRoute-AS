@@ -195,3 +195,19 @@ describe('JobsPage observations (P4 review)', () => {
     expect(screen.getByRole('region', { name: 'Observations' }).querySelector('[data-quality="measured"]')).toBeNull();
   });
 });
+
+describe('JobsPage interrupted runs (P8)', () => {
+  it('explains an interrupted run instead of showing it as finished, and still offers cancellation', async () => {
+    localStorage.setItem('carbonroute_token', 't');
+    stubFetch((url) => {
+      if (url === `${API_BASE}/jobs`) return { body: { success: true, data: [{ ...summary, status: 'interrupted' }] } };
+      if (url === `${API_BASE}/jobs/job-abc12345`) return { body: { success: true, data: { ...details, status: 'interrupted' } } };
+      return undefined;
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: /Nightly ETL/ }));
+    expect(await screen.findByTestId('interrupted-note')).toHaveTextContent('outcome is unknown');
+    expect(screen.getByRole('button', { name: /Cancel job/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'interrupted' })).toBeInTheDocument();
+  });
+});

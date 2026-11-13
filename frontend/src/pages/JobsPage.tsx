@@ -12,7 +12,7 @@ import { DataQualityBadge } from '../components/DataQualityBadge';
 import { DecisionExplanationPanel } from '../components/DecisionExplanationPanel';
 import { PolicyComparisonTable } from '../components/PolicyComparisonTable';
 
-const STATUSES = ['', 'pending', 'scheduled', 'infeasible', 'running', 'completed', 'failed', 'cancelled'] as const;
+const STATUSES = ['', 'pending', 'scheduled', 'infeasible', 'running', 'completed', 'failed', 'cancelled', 'interrupted'] as const;
 const FINISHED = new Set(['completed', 'failed', 'cancelled']);
 const when = (iso: string | null | undefined) => (iso ? `${iso.slice(0, 16).replace('T', ' ')} UTC` : 'n/a');
 
@@ -184,6 +184,11 @@ const Details: React.FC<{
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-lg font-bold text-white mr-2">{d.name || d.id}</h2>
         <span className="text-xs text-slate-400">status {d.status}</span>
+        {d.status === 'interrupted' && (
+          <span className="text-xs text-amber-300" data-testid="interrupted-note">
+            The server stopped before this run finished; its outcome is unknown. It can be dispatched again.
+          </span>
+        )}
         {dec && <DataQualityBadge quality={dec.dataClass === 'synthetic' ? 'synthetic' : 'forecast'}>{dec.dataClass === 'synthetic' ? 'Synthetic data' : 'Real forecast'}</DataQualityBadge>}
         <div className="ml-auto flex gap-2">
           {!FINISHED.has(d.status) && (

@@ -80,13 +80,20 @@ export function allJobs(): JobRef[] {
   return [...ids].map((id) => findJob(id)).filter((j): j is JobRef => j !== null);
 }
 
-export type JobStatus = 'pending' | 'scheduled' | 'infeasible' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type JobStatus = 'pending' | 'scheduled' | 'infeasible' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
 
 /** Current status: cancelled, else the execution status, else the latest decision. */
 export function jobStatus(job: JobRef): JobStatus {
   if (job.cancelled) return 'cancelled';
   const execution = K8sConnector.getJobExecution(job.id);
   if (execution) return execution.status === 'pending' ? 'scheduled' : (execution.status as JobStatus);
+  // P8: after a restart the in-memory executor is gone; use the persisted status. A run that had not
+  // finished when the server stopped is reported as 'interrupted', never as completed.
+  const stored = schedulingStore().latestExecutionForJob(job.id);
+  if (stored?.status) {
+    if (stored.status === 'completed' || stored.status === 'failed' || stored.status === 'cancelled' || stored.status === 'interrupted') return stored.status;
+    return 'interrupted';
+  }
   const decision = schedulingStore().latestDecisionForJob(job.id);
   if (decision) return decision.status === 'RECOMMENDED' ? 'scheduled' : 'infeasible';
   return (job.registered?.status as JobStatus) || 'pending';

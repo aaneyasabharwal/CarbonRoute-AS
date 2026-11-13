@@ -52,6 +52,10 @@ export interface K8sJobExecutionRecord {
 // In-memory active execution store
 const activeExecutions = new Map<string, K8sJobExecutionRecord>();
 
+/** P8: notified on every execution status change (used to persist the status). */
+type StatusListener = (jobId: string, status: K8sJobExecutionRecord['status'], at: string) => void;
+const statusListeners: StatusListener[] = [];
+
 export class K8sConnector {
   /**
    * Checks if local Minikube / Kubectl cluster is accessible
@@ -259,6 +263,29 @@ export class K8sConnector {
     return record;
   }
 
+  /** Registers a listener for execution status changes (P8). */
+  public static onStatusChange(listener: StatusListener): void {
+    statusListeners.push(listener);
+  }
+
+  /** Sets an execution's status and notifies listeners. Every status change goes through here. */
+  public static setStatus(record: K8sJobExecutionRecord, status: K8sJobExecutionRecord['status']): void {
+    record.status = status;
+    const at = new Date().toISOString();
+    for (const l of statusListeners) {
+      try {
+        l(record.jobId, status, at);
+      } catch (err) {
+        console.error('Execution status listener failed:', err);
+      }
+    }
+  }
+
+  /** Forgets in-memory executions, as a restart does (tests only). */
+  public static forgetExecutionsForTests(): void {
+    activeExecutions.clear();
+  }
+
   public static getJobExecution(jobId: string): K8sJobExecutionRecord | undefined {
     return activeExecutions.get(jobId);
   }
@@ -281,7 +308,7 @@ export class K8sConnector {
     if (!record) return null;
     if (record.status === 'completed' || record.status === 'failed' || record.status === 'cancelled') return record;
     const wasLive = record.clusterMode === 'minikube';
-    record.status = 'cancelled';
+    K8sConnector.setStatus(record, 'cancelled');
     record.completionTime = new Date().toISOString();
     record.completedAt = record.completionTime;
     record.logs.push(`[${record.completionTime}] [CarbonRoute Dispatcher] Execution cancelled by ${by}.`);
@@ -300,7 +327,7 @@ export class K8sConnector {
       const tempPath = path.join(os.tmpdir(), `carbonroute-${record.k8sJobName}-${process.pid}.json`);
       fs.writeFileSync(tempPath, JSON.stringify(manifest), { mode: 0o600 });
 
-      record.status = 'scheduled';
+      K8sConnector.setStatus(record, 'scheduled');
       record.logs.push(`[${new Date().toISOString()}] Applied Kubernetes Job manifest to cluster.`);
 
       await kubectl(['apply', '-f', tempPath]);
@@ -314,7 +341,7 @@ export class K8sConnector {
         if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
         return;
       }
-      record.status = 'running';
+      K8sConnector.setStatus(record, 'running');
       const startTime = new Date();
       record.startedAt = startTime.toISOString();
       record.actualStartTime = startTime.toISOString();
@@ -331,7 +358,7 @@ export class K8sConnector {
           if (parsed.status?.succeeded) {
             clearInterval(checkInterval);
             const compTime = new Date();
-            record.status = 'completed';
+            K8sConnector.setStatus(record, 'completed');
             record.completedAt = compTime.toISOString();
             record.completionTime = compTime.toISOString();
             record.exitCode = 0;
@@ -340,7 +367,7 @@ export class K8sConnector {
             if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
           } else if (parsed.status?.failed) {
             clearInterval(checkInterval);
-            record.status = 'failed';
+            K8sConnector.setStatus(record, 'failed');
             record.completionTime = new Date().toISOString();
             record.completedAt = record.completionTime;
             record.exitCode = 1;
@@ -351,20 +378,20 @@ export class K8sConnector {
         }
       }, 2000);
     } catch (err: any) {
-      record.status = 'failed';
+      K8sConnector.setStatus(record, 'failed');
       record.logs.push(`[${new Date().toISOString()}] Failed to launch on Kubernetes: ${err.message}`);
     }
   }
 
   private static executeInSandbox(record: K8sJobExecutionRecord, durationSec: number) {
-    record.status = 'scheduled';
+    K8sConnector.setStatus(record, 'scheduled');
     record.logs.push(
       `[${new Date().toISOString()}] [Simulation] Simulated execution starting (no workload process will be run).`
     );
 
     setTimeout(() => {
       if (record.status === 'cancelled') return;
-      record.status = 'running';
+      K8sConnector.setStatus(record, 'running');
       const startTime = new Date();
       record.startedAt = startTime.toISOString();
       record.actualStartTime = startTime.toISOString();
@@ -389,7 +416,7 @@ export class K8sConnector {
         if (currentEpoch >= totalEpochs) {
           clearInterval(interval);
           const compTime = new Date();
-          record.status = 'completed';
+          K8sConnector.setStatus(record, 'completed');
           record.completedAt = compTime.toISOString();
           record.completionTime = compTime.toISOString();
           record.exitCode = 0;
