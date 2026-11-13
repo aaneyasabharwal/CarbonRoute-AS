@@ -5,11 +5,16 @@
  */
 import { schedulingStore, SchedulingStore } from '../models/schedulingStore';
 import { evaluateJob, WorkflowError } from './schedulingWorkflow';
+import { timeWeightedAverage } from '../evaluation/timeWeighting';
+import { ESTIMATED_EMISSIONS_LABEL, REALIZED_UNAVAILABLE_LABEL } from '../evaluation/forecastEvaluation';
+
+const GRANULARITY_MIN: Record<string, number> = { '5_minutes': 5, '15_minutes': 15, hourly: 60 };
+const r2 = (v: number) => Math.round(v * 100) / 100;
 
 export function buildReport(jobId: string, store: SchedulingStore = schedulingStore()) {
   const job = store.getJob(jobId);
   if (!job) throw new WorkflowError(404, `Job ${jobId} was not found.`);
-  const { decision, snapshot, observationSet, evaluation, realized, observedComparison } = evaluateJob(jobId, store);
+  const { decision, snapshot, observationSet, evaluation, intensity, emissions, windowComparison } = evaluateJob(jobId, store);
   const execution = store.latestExecutionForJob(jobId) ?? null;
   const result = decision.result || {};
   const synthetic = decision.dataClass === 'synthetic';
@@ -28,8 +33,38 @@ export function buildReport(jobId: string, store: SchedulingStore = schedulingSt
     limitations.push(`The deadline is after the end of the forecast (${result.timeline.forecastCoverageEndUtc}); later windows were not evaluated.`);
   }
 
+  // Time-weighted forecast intensity for any window, from the stored snapshot (read only).
+  const forecastTw = (startUtc?: string | null, endUtc?: string | null): number | null => {
+    if (!snapshot || !startUtc || !endUtc) return null;
+    try {
+      return timeWeightedAverage(
+        { startUtc, endUtc },
+        snapshot.points.map((p) => ({ datetime: p.datetime, value: p.carbonIntensity, intervalMinutes: GRANULARITY_MIN[snapshot.granularity] ?? 60 }))
+      ).value;
+    } catch {
+      return null;
+    }
+  };
+  const policies = (result.evaluatedPolicies || []).map((p: any) => {
+    const tw = forecastTw(p.selectedStartUtc, p.selectedEndUtc);
+    return {
+      policy: p.policyName,
+      policyId: p.policyId,
+      category: p.category,
+      startUtc: p.selectedStartUtc ?? null,
+      endUtc: p.selectedEndUtc ?? null,
+      forecastIntensityTimeWeighted: tw,
+      estimatedEmissionsAssumedEnergyGrams: tw === null ? null : Math.round(tw * decision.energyAssumption.energyKwh * 10) / 10,
+      engineHourlySlotIntensity: p.predictedCarbonIntensity,
+      meetsDeadline: p.meetsDeadline ?? null,
+      rationale: p.rationale,
+    };
+  });
+  const recTw = policies.find((p: any) => p.policyId === result.recommendedDecision?.policyId)?.forecastIntensityTimeWeighted ?? null;
+  const immTw = policies.find((p: any) => p.policyId === 'immediate')?.forecastIntensityTimeWeighted ?? null;
+
   return {
-    reportVersion: 1,
+    reportVersion: 2,
     generatedAt: new Date().toISOString(),
     dataClass: decision.dataClass,
     job: {
@@ -79,19 +114,12 @@ export function buildReport(jobId: string, store: SchedulingStore = schedulingSt
             basis: 'Scheduled window end compared with the deadline.',
           }
         : null,
-      algorithmComparison: (result.evaluatedPolicies || []).map((p: any) => ({
-        policy: p.policyName,
-        category: p.category,
-        startUtc: p.selectedStartUtc ?? null,
-        endUtc: p.selectedEndUtc ?? null,
-        predictedIntensity: p.predictedCarbonIntensity,
-        predictedEmissionsGrams: p.estimatedWorkloadEmissionsGrams,
-        meetsDeadline: p.meetsDeadline ?? null,
-        rationale: p.rationale,
-      })),
-      predictedSavingsVsImmediatePct: result.comparisonSummary?.carbonSavingsVsImmediatePct ?? null,
-      predictedSavingsLabel: 'Predicted from the forecast, not observed.',
-      energyAssumption: decision.energyAssumption,
+      algorithmComparison: policies,
+      algorithmComparisonNote:
+        'forecastIntensityTimeWeighted weights each forecast interval by the minutes it overlaps the window. engineHourlySlotIntensity is the hourly-slot average the scheduler used for ranking; it differs when a window starts mid-hour. Emissions use ASSUMED energy (estimates).',
+      predictedSavingsVsImmediatePct: recTw !== null && immTw ? r2(((immTw - recTw) / immTw) * 100) : null,
+      predictedSavingsBasis: 'Time-weighted forecast intensity of the recommended window vs the Immediate window. Predicted, not observed.',
+      engineSlotSavingsVsImmediatePct: result.comparisonSummary?.carbonSavingsVsImmediatePct ?? null,
     },
     execution: execution
       ? {
@@ -127,8 +155,41 @@ export function buildReport(jobId: string, store: SchedulingStore = schedulingSt
           definition: 'error = forecast - observed, gCO2eq/kWh. Computed only for intervals with both values; measured and estimated observations are reported separately.',
         }
       : null,
-    realized,
-    observedComparison,
+    observedIntensity: intensity
+      ? {
+          window: intensity.window,
+          emissionFactorType: intensity.emissionFactorType,
+          forecastTimeWeighted: intensity.forecast.value,
+          observedTimeWeighted: intensity.observed.value,
+          observedQuality: intensity.observed.quality,
+          coveredMinutes: intensity.observed.coveredMinutes,
+          windowMinutes: intensity.observed.windowMinutes,
+          segments: intensity.observed.segments,
+          missing: intensity.observed.missing,
+          note: intensity.observed.reason,
+          unit: 'gCO2eq/kWh',
+        }
+      : null,
+    energy: {
+      recordedEnergyKwh: execution?.measuredEnergyKwh ?? null,
+      assumption: decision.energyAssumption,
+      note:
+        execution?.measuredEnergyKwh === undefined
+          ? 'No energy consumption was recorded. The assumption is used only for labelled estimates.'
+          : 'Recorded energy consumption is available.',
+    },
+    emissions: emissions ?? {
+      realized: { available: false as const, label: REALIZED_UNAVAILABLE_LABEL, reason: 'Observations have not been collected for the whole window yet.' },
+      estimated: {
+        label: ESTIMATED_EMISSIONS_LABEL,
+        grams: null,
+        energyKwh: decision.energyAssumption.energyKwh,
+        energyBasis: decision.energyAssumption.basis,
+        intensityQuality: null,
+        reason: 'Not calculable yet.',
+      },
+    },
+    windowComparison,
     limitations,
   };
 }
@@ -139,6 +200,15 @@ const esc = (v: unknown) =>
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+
+const qualityLabel = (q: string | null | undefined) =>
+  q === 'measured'
+    ? 'Measured'
+    : q === 'provider-estimate'
+      ? 'Provider estimate'
+      : q === 'mixed'
+        ? 'Mixed: measured values and provider estimates'
+        : 'Unavailable';
 
 /** Self-contained printable HTML version of the report. */
 export function renderReportHtml(r: ReturnType<typeof buildReport>): string {
@@ -170,13 +240,13 @@ ${row(['Recommended window (UTC)', r.decision.recommendedWindow ? `${r.decision.
 ${row(['Deadline compliance', r.decision.deadlineCompliance ? (r.decision.deadlineCompliance.meetsDeadline ? 'Meets deadline' : 'MISSES deadline') : 'n/a'])}
 ${row(['Risk model', r.decision.riskModel])}${row(['Infeasibility reason', r.decision.infeasibilityReason])}
 ${row(['Rationale', r.decision.rationale])}
-${row(['Predicted saving vs Immediate', r.decision.predictedSavingsVsImmediatePct === null ? 'n/a' : `${r.decision.predictedSavingsVsImmediatePct}% (${r.decision.predictedSavingsLabel})`])}
-${row(['Energy assumption', `${r.decision.energyAssumption.energyKwh} kWh: ${r.decision.energyAssumption.basis}`])}
+${row(['Predicted saving vs Immediate (time-weighted forecast)', r.decision.predictedSavingsVsImmediatePct === null ? 'n/a' : `${r.decision.predictedSavingsVsImmediatePct}% (${r.decision.predictedSavingsBasis})`])}
+${row(['Engine hourly-slot saving (recorded at scheduling time)', r.decision.engineSlotSavingsVsImmediatePct === null ? 'n/a' : `${r.decision.engineSlotSavingsVsImmediatePct}%`])}
 </table>
 <h3>Algorithm comparison (predicted, from the forecast)</h3>
-<table><tr><th>Policy</th><th>Start (UTC)</th><th>End (UTC)</th><th>Predicted gCO2eq/kWh</th><th>Predicted gCO2eq</th><th>Meets deadline</th></tr>
-${r.decision.algorithmComparison.map((p: any) => row([p.policy, p.startUtc, p.endUtc, p.predictedIntensity, p.predictedEmissionsGrams, p.meetsDeadline])).join('')}
-</table>
+<table><tr><th>Policy</th><th>Start (UTC)</th><th>End (UTC)</th><th>Forecast gCO2eq/kWh (time-weighted)</th><th>Engine hourly-slot gCO2eq/kWh</th><th>Estimated emissions (assumed energy), gCO2eq</th><th>Meets deadline</th></tr>
+${r.decision.algorithmComparison.map((p: any) => row([p.policy, p.startUtc, p.endUtc, p.forecastIntensityTimeWeighted, p.engineHourlySlotIntensity, p.estimatedEmissionsAssumedEnergyGrams, p.meetsDeadline])).join('')}
+</table><p>${esc(r.decision.algorithmComparisonNote)}</p>
 <h2>Execution</h2><table>
 ${r.execution ? Object.entries(r.execution).map(([k, v]) => row([k, v])).join('') : row(['—', 'Not dispatched'])}
 </table>
@@ -198,20 +268,62 @@ ${
       ])}${row(['Unmatched intervals', r.forecastError.unmatchedIntervals.join(', ') || 'none'])}${row(['Definition', r.forecastError.definition])}</table>`
     : '<p>Not calculable yet: no matching observations.</p>'
 }
-<h2>Realized result</h2>
+<h2>Observed carbon intensity (time-weighted)</h2>
 ${
-  r.realized
-    ? `<table>${row(['Average observed intensity', r.realized.averageIntensity ?? 'n/a'])}${row(['Emissions (assumed energy x observed intensity)', r.realized.emissionsGrams ?? 'n/a'])}${row([
-        'Observation quality',
-        r.realized.quality ?? 'n/a',
-      ])}${row(['Coverage', `${r.realized.coverage.observed}/${r.realized.coverage.expected}`])}${row(['Note', r.realized.reason])}</table>`
-    : '<p>No realized result yet.</p>'
+  r.observedIntensity
+    ? `<table>${row(['Window (UTC)', `${r.observedIntensity.window.startUtc} to ${r.observedIntensity.window.endUtc}`])}${row([
+        'Forecast intensity, time-weighted',
+        r.observedIntensity.forecastTimeWeighted === null ? 'not available' : `${r.observedIntensity.forecastTimeWeighted} gCO2eq/kWh`,
+      ])}${row([
+        'Observed intensity, time-weighted',
+        r.observedIntensity.observedTimeWeighted === null ? 'not available' : `${r.observedIntensity.observedTimeWeighted} gCO2eq/kWh`,
+      ])}${row(['Observation type', qualityLabel(r.observedIntensity.observedQuality)])}${row([
+        'Coverage',
+        `${r.observedIntensity.coveredMinutes} of ${r.observedIntensity.windowMinutes} min`,
+      ])}${row(['Emission factor', r.observedIntensity.emissionFactorType])}${row(['Note', r.observedIntensity.note])}</table>`
+    : '<p>Not available yet: observations have not been collected for the whole window.</p>'
 }
+<h2>Energy</h2><table>
+${row(['Recorded energy consumption', r.energy.recordedEnergyKwh === null ? 'Not recorded' : `${r.energy.recordedEnergyKwh} kWh`])}
+${row(['Energy assumption (used only for estimates)', `${r.energy.assumption.energyKwh} kWh: ${r.energy.assumption.basis}`])}
+${row(['Note', r.energy.note])}
+</table>
+<h2>Emissions</h2><table>
 ${
-  r.observedComparison
-    ? `<h3>Observed comparison with Immediate execution</h3><table>${Object.entries(r.observedComparison)
-        .map(([k, v]) => row([k, typeof v === 'object' ? JSON.stringify(v) : v]))
-        .join('')}</table>`
+  r.emissions.realized.available
+    ? row(['Realized emissions (recorded energy)', `${(r.emissions.realized as any).grams} gCO2eq`])
+    : row([(r.emissions.realized as any).label, (r.emissions.realized as any).reason])
+}
+${row([
+  r.emissions.estimated.label,
+  r.emissions.estimated.grams === null ? r.emissions.estimated.reason : `${r.emissions.estimated.grams} gCO2eq (estimate, not a realized emission)`,
+])}
+</table>
+${
+  r.windowComparison
+    ? `<h3>Comparison with Immediate execution (time-weighted intensity)</h3>${
+        r.windowComparison.available
+          ? `<table><tr><th></th><th>Recommended window</th><th>Immediate window</th></tr>${row([
+              'Window (UTC)',
+              `${r.windowComparison.recommended.window.startUtc} to ${r.windowComparison.recommended.window.endUtc}`,
+              `${r.windowComparison.immediate.window.startUtc} to ${r.windowComparison.immediate.window.endUtc}`,
+            ])}${row(['Forecast intensity (gCO2eq/kWh)', r.windowComparison.recommended.forecastIntensity, r.windowComparison.immediate.forecastIntensity])}${row([
+              'Observed intensity (gCO2eq/kWh)',
+              r.windowComparison.recommended.observedIntensity,
+              r.windowComparison.immediate.observedIntensity,
+            ])}${row([
+              'Observation type',
+              qualityLabel(r.windowComparison.recommended.observedQuality),
+              qualityLabel(r.windowComparison.immediate.observedQuality),
+            ])}${row([
+              r.windowComparison.estimatedEmissions.label + ', gCO2eq',
+              r.windowComparison.estimatedEmissions.recommendedGrams,
+              r.windowComparison.estimatedEmissions.immediateGrams,
+            ])}</table><p>Observed difference (Immediate minus recommended): ${esc(r.windowComparison.observedDifference)} gCO2eq/kWh (${esc(
+              r.windowComparison.observedDifferencePct
+            )}%). ${esc(r.windowComparison.basis)} ${esc(r.windowComparison.estimatedEmissions.basis)} Realized emissions: ${esc(r.windowComparison.realizedEmissions)}.</p>`
+          : `<p>${esc(r.windowComparison.basis)}</p>`
+      }`
     : ''
 }
 <h2>Limitations and assumptions</h2><ul>${r.limitations.map((l: string) => `<li>${esc(l)}</li>`).join('')}</ul>

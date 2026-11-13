@@ -34,7 +34,7 @@ The Prototype Milestone implements an integrated, verifiable end-to-end software
 [Container Execution & Live Streaming Logs] (Progress epochs streamed to UI)
         │
         ▼
-[Empirical Carbon Accounting & Dashboard] (Realized emissions vs Immediate baseline)
+[Empirical Carbon Accounting & Dashboard] (Time-weighted observed intensity vs Immediate baseline; realized emissions only with recorded energy)
 ```
 
 ---

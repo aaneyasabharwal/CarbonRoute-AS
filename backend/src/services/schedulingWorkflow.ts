@@ -13,7 +13,8 @@ import type { ForecastSnapshot } from '../carbon/types';
 import { CarbonService, CarbonForecastData } from './carbonService';
 import { SchedulerService, WorkloadJob, SchedulingDecisionResponse } from './schedulerService';
 import { schedulingStore, SchedulingStore, StoredDecision, StoredJob, StoredObservationSet, WindowTimes } from '../models/schedulingStore';
-import { evaluateForecast, hourlyIntervals, realizedWindow } from '../evaluation/forecastEvaluation';
+import { assessEmissions, evaluateForecast, hourlyIntervals, windowIntensity } from '../evaluation/forecastEvaluation';
+import { timeWeightedAverage } from '../evaluation/timeWeighting';
 
 export const ENGINE_VERSION = 'carbonroute-engine-2026-11-m5';
 const HOUR = 3600_000;
@@ -200,9 +201,22 @@ export async function scheduleWorkflow(
     return { startUtc: iso(s), endUtc: iso(s + dur * HOUR) };
   };
   const meets = (w: WindowTimes) => Date.parse(w.endUtc) <= deadline && Date.parse(w.startUtc) >= arrival;
+  // Time-weighted forecast for each policy's actual wall-clock window (a window that starts at
+  // the arrival time mid-hour only counts the minutes it overlaps each hour). The engine's
+  // hourly-slot values are kept unchanged for ranking and traceability.
+  const forecastValues = snapshot.points.map((p) => ({ datetime: p.datetime, value: p.carbonIntensity, intervalMinutes: 60 }));
+  const forecastTw = (w: WindowTimes) => timeWeightedAverage(w, forecastValues).value;
   const policies = result.evaluatedPolicies.map((p) => {
     const w = windowTimes(p.selectedStartHour);
-    return { ...p, selectedStartUtc: w.startUtc, selectedEndUtc: w.endUtc, meetsDeadline: meets(w) };
+    const tw = forecastTw(w);
+    return {
+      ...p,
+      selectedStartUtc: w.startUtc,
+      selectedEndUtc: w.endUtc,
+      meetsDeadline: meets(w),
+      forecastIntensityTimeWeighted: tw,
+      estimatedEmissionsAssumedEnergyGrams: tw === null ? null : Math.round(tw * energy.energyKwh * 10) / 10,
+    };
   });
   const candidateWindows = result.candidateWindows.map((c) => {
     const w = windowTimes(c.startHour);
@@ -249,7 +263,16 @@ export async function scheduleWorkflow(
       uncertaintySource: forecast.uncertaintySource,
     },
     energyAssumption: energy,
-    emissionsLabel: 'Predicted emissions = forecast intensity x assumed energy (not measured).',
+    emissionsLabel: 'Estimated emissions (assumed energy) = forecast intensity x assumed energy. Not measured or realized.',
+    timeWeightedForecast: {
+      recommendedIntensity: rec.forecastIntensityTimeWeighted,
+      immediateIntensity: immediate.forecastIntensityTimeWeighted,
+      savingsVsImmediatePct:
+        rec.forecastIntensityTimeWeighted !== null && immediate.forecastIntensityTimeWeighted
+          ? Math.round(((immediate.forecastIntensityTimeWeighted - rec.forecastIntensityTimeWeighted) / immediate.forecastIntensityTimeWeighted) * 10000) / 100
+          : null,
+      basis: 'Forecast intensity weighted by the minutes each forecast interval overlaps the window. Predicted, not observed.',
+    },
   };
 
   const decision = store.addDecision({
@@ -363,39 +386,63 @@ export async function collectObservations(
   });
 }
 
-/** Evaluation of the latest observation collection against the stored forecast. */
+/** Interval length in minutes for a stored granularity. */
+const GRANULARITY_MIN: Record<string, number> = { '5_minutes': 5, '15_minutes': 15, hourly: 60 };
+
+/**
+ * Evaluation of the latest observation collection against the stored forecast:
+ *  - per-interval forecast error (matched intervals only, measured and estimates separately);
+ *  - time-weighted forecast and observed intensity for the recommended window;
+ *  - emissions: realized only with recorded energy, otherwise an estimate labelled as such;
+ *  - comparison with the Immediate window on time-weighted intensity, only when both windows
+ *    are fully observed with the same emission-factor type.
+ * Stored decisions and records are only read, never changed.
+ */
 export function evaluateJob(jobId: string, store: SchedulingStore = schedulingStore()) {
   const decision = store.latestDecisionForJob(jobId);
   if (!decision) throw new WorkflowError(404, `No scheduling decision found for job ${jobId}.`);
   const sets = store.observationSetsForJob(jobId);
   const latest = sets[sets.length - 1] ?? null;
   const snapshot = decision.snapshotId ? store.getSnapshot(decision.snapshotId) : undefined;
-  if (!latest || !snapshot || !decision.recommendedWindow || !['COMPLETE', 'PARTIAL'].includes(latest.status)) {
-    return { decision, snapshot: snapshot ?? null, observationSet: latest, evaluation: null, realized: null, observedComparison: null };
-  }
+  const execution = store.latestExecutionForJob(jobId);
+  const empty = { decision, snapshot: snapshot ?? null, observationSet: latest, evaluation: null, intensity: null, emissions: null, windowComparison: null };
+  if (!latest || !snapshot || !decision.recommendedWindow || !['COMPLETE', 'PARTIAL'].includes(latest.status)) return empty;
+
+  const forecastSpec = {
+    points: snapshot.points,
+    granularityMinutes: GRANULARITY_MIN[snapshot.granularity] ?? 60,
+    emissionFactorType: snapshot.emissionFactorType,
+  };
   const evaluation = evaluateForecast(latest.intervals, snapshot.points, latest.observations);
-  const realized = realizedWindow(latest.intervals, latest.observations, decision.energyAssumption.energyKwh);
-  let observedComparison = null;
-  if (latest.immediate) {
-    const immRealized = realizedWindow(latest.immediate.intervals, latest.immediate.observations, decision.energyAssumption.energyKwh);
-    if (realized.emissionsGrams !== null && immRealized.emissionsGrams !== null) {
-      observedComparison = {
-        recommendedEmissionsGrams: realized.emissionsGrams,
-        immediateEmissionsGrams: immRealized.emissionsGrams,
-        differenceGrams: Math.round((immRealized.emissionsGrams - realized.emissionsGrams) * 10) / 10,
-        recommendedQuality: realized.quality,
-        immediateQuality: immRealized.quality,
-        basis:
-          'Observed intensities for both windows multiplied by the same assumed energy use. This is a counterfactual comparison (the job ran only once), not a measurement of saved emissions.',
-      };
-    } else {
-      observedComparison = {
-        unavailable: true,
-        reason: 'Both windows need full observation coverage before an observed comparison is made.',
-        recommendedCoverage: realized.coverage,
-        immediateCoverage: immRealized.coverage,
-      };
-    }
+  const intensity = windowIntensity(decision.recommendedWindow, forecastSpec, latest.observations);
+  const emissions = assessEmissions(intensity.observed, decision.energyAssumption, execution?.measuredEnergyKwh);
+
+  let windowComparison: any = null;
+  if (latest.immediate && decision.immediateWindow) {
+    const imm = windowIntensity(decision.immediateWindow, forecastSpec, latest.immediate.observations);
+    const immEmissions = assessEmissions(imm.observed, decision.energyAssumption, null);
+    const both = intensity.observed.value !== null && imm.observed.value !== null;
+    const r2 = (v: number) => Math.round(v * 100) / 100;
+    windowComparison = {
+      available: both,
+      emissionFactorType: snapshot.emissionFactorType,
+      recommended: { window: intensity.window, forecastIntensity: intensity.forecast.value, observedIntensity: intensity.observed.value, observedQuality: intensity.observed.quality, segments: intensity.observed.segments },
+      immediate: { window: imm.window, forecastIntensity: imm.forecast.value, observedIntensity: imm.observed.value, observedQuality: imm.observed.quality, segments: imm.observed.segments, missing: imm.observed.missing },
+      forecastDifference: intensity.forecast.value !== null && imm.forecast.value !== null ? r2(imm.forecast.value - intensity.forecast.value) : null,
+      observedDifference: both ? r2((imm.observed.value as number) - (intensity.observed.value as number)) : null,
+      observedDifferencePct: both ? r2((((imm.observed.value as number) - (intensity.observed.value as number)) / (imm.observed.value as number)) * 100) : null,
+      estimatedEmissions: {
+        label: emissions.estimated.label,
+        recommendedGrams: emissions.estimated.grams,
+        immediateGrams: immEmissions.estimated.grams,
+        basis: 'Both use the same ASSUMED energy; not measured or realized emissions.',
+      },
+      realizedEmissions: emissions.realized.available ? 'see emissions.realized' : 'unavailable: no recorded energy for either window',
+      unit: 'gCO2eq/kWh',
+      basis: both
+        ? 'Time-weighted intensities (each interval weighted by the minutes it overlaps the window). Positive differences mean the Immediate window had higher intensity. This is a counterfactual comparison: the job ran only once.'
+        : `Not available: ${intensity.observed.value === null ? 'the recommended window' : 'the Immediate window'} is not fully observed.`,
+    };
   }
-  return { decision, snapshot, observationSet: latest, evaluation, realized, observedComparison };
+  return { decision, snapshot, observationSet: latest, evaluation, intensity, emissions, windowComparison };
 }

@@ -219,14 +219,54 @@ export interface JobObservationsResult {
     measured: ErrorMetrics | null;
     providerEstimate: ErrorMetrics | null;
   } | null;
-  realized: {
-    averageIntensity: number | null;
-    emissionsGrams: number | null;
-    quality: 'measured' | 'provider-estimate' | 'mixed' | null;
-    coverage: { observed: number; expected: number };
-    reason: string;
+  /** Time-weighted forecast and observed intensity for the recommended window. */
+  intensity: {
+    window: { startUtc: string; endUtc: string };
+    emissionFactorType: string;
+    forecast: TimeWeightedValue & { reason: string };
+    observed: TimeWeightedValue & { quality: IntensityQuality | null; excludedForEmissionFactor: string[]; reason: string };
   } | null;
-  observedComparison: any;
+  emissions: EmissionsAssessment | null;
+  windowComparison: WindowComparison | null;
+}
+
+export type IntensityQuality = 'measured' | 'provider-estimate' | 'mixed';
+
+export interface TimeWeightedValue {
+  value: number | null;
+  complete: boolean;
+  windowMinutes: number;
+  coveredMinutes: number;
+  segments: { intervalStart: string; overlapStart: string; overlapEnd: string; overlapMinutes: number; value: number }[];
+  missing: { start: string; end: string }[];
+}
+
+export interface EmissionsAssessment {
+  realized:
+    | { available: true; grams: number; energyKwh: number; energySource: 'recorded'; intensityQuality: IntensityQuality }
+    | { available: false; label: string; reason: string };
+  estimated: {
+    label: string;
+    grams: number | null;
+    energyKwh: number;
+    energyBasis: string;
+    intensityQuality: IntensityQuality | null;
+    reason: string;
+  };
+}
+
+export interface WindowComparison {
+  available: boolean;
+  emissionFactorType: string;
+  recommended: { window: { startUtc: string; endUtc: string }; forecastIntensity: number | null; observedIntensity: number | null; observedQuality: IntensityQuality | null };
+  immediate: { window: { startUtc: string; endUtc: string }; forecastIntensity: number | null; observedIntensity: number | null; observedQuality: IntensityQuality | null };
+  forecastDifference: number | null;
+  observedDifference: number | null;
+  observedDifferencePct: number | null;
+  estimatedEmissions: { label: string; recommendedGrams: number | null; immediateGrams: number | null; basis: string };
+  realizedEmissions: string;
+  unit: string;
+  basis: string;
 }
 
 export interface ObservationSetRecord {
@@ -364,6 +404,13 @@ export interface SchedulingDecisionResponse {
     uncertaintySource: string;
   };
   energyAssumption?: { powerKw: number; energyKwh: number; basis: string };
+  /** Forecast intensity weighted by the minutes each interval overlaps the window. */
+  timeWeightedForecast?: {
+    recommendedIntensity: number | null;
+    immediateIntensity: number | null;
+    savingsVsImmediatePct: number | null;
+    basis: string;
+  };
 }
 
 export interface K8sJobExecutionRecord {

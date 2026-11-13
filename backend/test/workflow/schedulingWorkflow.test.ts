@@ -15,7 +15,7 @@ import { ElectricityMapsDataProvider, CarbonService } from '../../src/services/c
 import { SchedulingStore } from '../../src/models/schedulingStore';
 import { scheduleWorkflow, collectObservations, evaluateJob, ScheduleInput } from '../../src/services/schedulingWorkflow';
 import { buildReport, renderReportHtml } from '../../src/services/reportService';
-import { errorMetrics, evaluateForecast, hourlyIntervals, realizedWindow } from '../../src/evaluation/forecastEvaluation';
+import { errorMetrics, evaluateForecast, hourlyIntervals } from '../../src/evaluation/forecastEvaluation';
 import type { Observation } from '../../src/carbon/types';
 
 const FIX = path.join(__dirname, '..', 'fixtures', 'electricitymaps');
@@ -170,16 +170,20 @@ describe('observations after execution', () => {
     expect(set.status).toBe('COMPLETE');
     expect(set.observations.map((o) => o.quality)).toEqual(intervals.map((_, i) => (i === intervals.length - 1 ? 'provider-estimate' : 'measured')));
 
-    const { evaluation, realized, observedComparison } = evaluateJob(out.job.id, store);
+    // Changed in task/reporting-corrections: window values are time-weighted and emissions are
+    // split into realized (recorded energy only) and estimated (assumed energy).
+    const { evaluation, intensity, emissions, windowComparison } = evaluateJob(out.job.id, store);
     expect(evaluation!.measured!.n).toBe(intervals.length - 1);
     expect(evaluation!.providerEstimate!.n).toBe(1);
     const snap = store.getSnapshot(out.snapshotId)!;
     const f0 = snap.points.find((p) => p.datetime === intervals[0])!.carbonIntensity;
     expect(evaluation!.pairs[0]).toMatchObject({ forecast: f0, observed: 350, error: f0 - 350 });
-    expect(realized!.quality).toBe('mixed');
-    expect(realized!.averageIntensity).toBe(350);
-    expect(observedComparison).toMatchObject({ recommendedQuality: 'mixed' });
-    expect((observedComparison as any).basis).toMatch(/counterfactual/);
+    expect(intensity!.observed.quality).toBe('mixed');
+    expect(intensity!.observed.value).toBe(350);
+    expect(emissions!.realized).toMatchObject({ available: false, label: 'Realized emissions unavailable' });
+    expect(emissions!.estimated).toMatchObject({ label: 'Estimated emissions (assumed energy)', grams: 350 * out.energyAssumption.energyKwh });
+    expect(windowComparison).toMatchObject({ available: true, recommended: { observedQuality: 'mixed' } });
+    expect(windowComparison.basis).toMatch(/counterfactual/);
   });
 
   it('PARTIAL coverage: errors only for matched intervals, no realized value, missing listed', async () => {
@@ -190,11 +194,13 @@ describe('observations after execution', () => {
     const set = await collectObservations(out.job.id, { now: () => Date.parse(w.endUtc) + H, store, client });
     expect(set.status).toBe('PARTIAL');
     expect(set.missingIntervals).toEqual([intervals[0]]);
-    const { evaluation, realized } = evaluateJob(out.job.id, store);
+    const { evaluation, intensity, emissions } = evaluateJob(out.job.id, store);
     expect(evaluation!.unmatchedIntervals).toEqual([intervals[0]]);
     expect(evaluation!.pairs).toHaveLength(intervals.length - 1);
-    expect(realized!.averageIntensity).toBeNull();
-    expect(realized!.reason).toMatch(/full coverage/);
+    expect(intensity!.observed.value).toBeNull();
+    expect(intensity!.observed.missing[0].start).toBe(w.startUtc);
+    expect(intensity!.observed.reason).toMatch(/whole window is covered/);
+    expect(emissions!.estimated.grams).toBeNull();
   });
 
   it('reports the window as missed after 24 h, without calling the provider', async () => {
@@ -243,11 +249,14 @@ describe('report', () => {
     expect(r.dataProvenance).toMatchObject({ provider: 'electricitymaps', forecastIssuedAt: '2026-11-12T18:58:56.219Z' });
     expect(r.decision.deadlineCompliance!.meetsDeadline).toBe(true);
     expect(r.decision.algorithmComparison).toHaveLength(5);
-    expect(r.decision.predictedSavingsLabel).toMatch(/not observed/);
+    expect(r.decision.predictedSavingsBasis).toMatch(/not observed/);
     expect(r.observations.status).toBe('COMPLETE');
     expect(r.forecastError!.versusMeasured!.n).toBe(intervals.length);
     expect(r.forecastError!.versusProviderEstimate).toBeNull();
     expect(r.limitations.join(' ')).toMatch(/simulated/i);
+    expect(r.energy.recordedEnergyKwh).toBeNull();
+    expect(r.emissions.realized).toMatchObject({ available: false, label: 'Realized emissions unavailable' });
+    expect(r.emissions.estimated.label).toBe('Estimated emissions (assumed energy)');
 
     const html = renderReportHtml(r);
     expect(html).toContain('<!doctype html>');
@@ -298,7 +307,5 @@ describe('evaluation helpers (hand-computed)', () => {
     expect(ev.pairs).toEqual([expect.objectContaining({ datetime: 'a', error: 10 })]);
     expect(ev.unmatchedIntervals).toEqual(['b', 'c']);
     expect(ev.providerEstimate).toBeNull();
-    expect(realizedWindow(['a', 'b'], [obs('a', 90)], 1).emissionsGrams).toBeNull();
-    expect(realizedWindow(['a'], [obs('a', 90)], 2)).toMatchObject({ emissionsGrams: 180, quality: 'measured' });
   });
 });
