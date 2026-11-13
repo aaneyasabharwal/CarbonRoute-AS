@@ -5,12 +5,21 @@ Date: 2026-11-13 (UTC). Branch `task/p6-final-delivery` from `fix/prototype-flaw
 This report states what was verified, by what evidence, and what is not done. Implemented does not
 mean production-ready.
 
+> **P7 review (2026-11-13).** Every claim below was re-checked against its evidence. Corrections:
+> the backend test count includes 11 legacy `it.fails` tests (they pass because the old behaviour is
+> still asserted to fail); Kubernetes submission is verified by unit tests only; the live
+> observation path was exercised only up to `PENDING` through the API (the `COMPLETE` path is
+> verified with fixtures and with replayed real history); local credentials were rotated, hosted
+> ones were **not**; the Pages base path is fixed in P7; Docker images are now built in CI (not
+> locally). Deployment status and blockers: [DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md).
+> Final P7 test numbers are in §6.
+
 ## 1. Verification performed
 
 | Check | Result |
 |---|---|
 | Backend `npm run typecheck` (source + tests) | pass |
-| Backend `npm test` (Vitest) | **278 passed**, 19 files (legacy tests that encoded the removed risk model run as expected failures with corrected versions alongside) |
+| Backend `npm test` (Vitest) | **278 passed**, 19 files. 11 of them are legacy `it.fails` tests (old behaviour that must keep failing, e.g. the removed risk model), with corrected tests alongside; 267 assert current behaviour. |
 | Backend `npm run build` | pass |
 | Frontend `npm run typecheck` | pass |
 | Frontend `npm test` (Vitest + Testing Library) | **92 passed**, 9 files |
@@ -18,10 +27,10 @@ mean production-ready.
 | Python `unittest` (FastAPI CORS settings) | 5 passed (Python 3.12) |
 | End-to-end API check on a running backend with a temporary database (scratch script, not committed) | **30/30**: CORS allow-list and rejection of unknown origins, CSP header, 401 without token on jobs and live data, public demo data, login / wrong password, **live** scheduling with provenance (real data, raw SHA-256), declared runtime CV applied, explanation, 5 policies + 2 unavailable, no invented forecast uncertainty, job details, 404 for another user's job, observations before window end are `PENDING` with none invented, oracle unavailable without coverage, HTML report download, simulated dispatch labelled, cancel, impossible deadline stored as `INFEASIBLE`, results endpoints (cluster intervals present, ML `insufficient-data` without scores), logout and token revocation, no password or API key in server output. One provider call was used. |
 | Reproducible demo (`npm run demo`) on collected data | runs end to end; two runs give identical summaries (also a unit test) |
-| CI | see the PR's checks |
+| CI | PR #14 head `ddb3939`: 6/6 checks green (backend, frontend, Python; push and pull_request). Base after merge `8729f43`: 3/3 green. |
 
-Not verified: Docker image builds (Docker is not installed on this machine; configuration reviewed
-by reading), a real Kubernetes execution (no cluster), the hosted deployment of this code (not
+Not verified: Docker image builds at P6 (Docker is not installed on this machine; configuration
+reviewed by reading; P7 adds a CI job that builds and smoke-tests the images), a real Kubernetes execution (no cluster), the hosted deployment of this code (not
 deployed; requires approval), browsers other than the test environment's DOM.
 
 ## 2. Defects found by the P6 audit and fixed in this PR
@@ -42,8 +51,10 @@ deployed; requires approval), browsers other than the test environment's DOM.
 
 | Severity | Item | Notes |
 |---|---|---|
-| **High (live)** | The hosted backend `https://carbonroute.onrender.com` runs **pre-remediation code**: it reflected an arbitrary `Origin` (`https://evil.example`) with `Access-Control-Allow-Credentials: true`, and none of the remediated routes exist (`/api/jobs`, `/api/results/*` answer 404). Earlier versions also had a committed default admin password and JWT secrets. | Observed 2026-11-13 19:28 UTC with `GET /api/health`. Fixing requires deploying the remediated backend with new secrets (DEPLOYMENT.md §5); not done without approval. The hosted Pages frontend (from `main`) is also the old version. |
-| Medium | GitHub Pages base path is `/CarbonRoute/`; on this fork (`CarbonRoute-AS`) a Pages deployment would serve broken asset paths. | Depends on which repository hosts Pages. |
+| ~~High (live)~~ **contained**, replacement pending | The old hosted backend `https://carbonroute.onrender.com` ran **pre-remediation code**: it reflected an arbitrary `Origin` (`https://evil.example`) with `Access-Control-Allow-Credentials: true` (observed 2026-11-13 19:28 and 20:00 UTC), remediated routes answered 404, and that code version used the committed default admin password and JWT secrets. | **Suspended manually by the service owner** (not deleted). **Externally verified 2026-11-13 20:35 UTC:** `/`, `/api/health`, `/api/auth/login` (GET and POST) and `/api/presentations` return 503 with `x-render-routing: suspend-by-user` and no CORS headers. The old secrets are still in git history and must not be reused. The secured replacement is not deployed (DEPLOYMENT_READINESS.md). The public Pages site (from `main`) is the old version and now has no working backend. |
+| ~~Medium~~ fixed in P7 | GitHub Pages base path was hard-coded to `/CarbonRoute/`; on this repository (`CarbonRoute-AS`) every asset and route would break. | Now derived from the repository name; production build served under `/CarbonRoute-AS/` and checked in a browser (P7). |
+| **Medium (deployment blocker, not fixed)** | `.github/workflows/deploy-pages.yml` does not set `VITE_API_URL`, so a Pages build falls back to the hard-coded `https://carbonroute.onrender.com` (`frontend/src/services/api.ts`), the suspended backend. | Must be fixed before any merge to `main` (DEPLOYMENT_READINESS.md B7). |
+| ~~Medium~~ fixed in P7 | Collector lock. The first P7 lock let collectors that started together while a stale lock existed both start (3 of 6 processes), and the sprint wrapper ignored it. Its replacement (c204f90, heartbeat leases) was still unsafe under adversarial review: a live collector whose lease looked stale (sleep, stalled loop, clock jump) kept appending after another collector took over (reproduced: 4 records), and its tidy-up could delete a newer owner's lock (reproduced). | Now an operating-system-enforced lock (exclusive listening socket on 127.0.0.1, port derived from the folder), freed by the OS on any exit including SIGKILL; no files, leases, clocks or pids; every append fenced by a synchronous ownership check; every entry point goes through it. Multi-process regression tests and an adversarial stress test with an oracle self-check, also in CI. Limits (same machine only) in COLLECTOR.md. |
 | Medium | Session token in `localStorage` (exposed to any XSS). | Roadmap M14.7 (httpOnly cookie). CSP reduces but does not remove the risk. |
 | Medium | JSON-file storage, single process; rate limits, provider budget and caches in memory. | Not suitable for multiple instances or concurrent writers. Ephemeral disks lose data. |
 | Medium | Older databases may contain orphan "pending" jobs created before the P4 fix. | Cosmetic in the job list. |
@@ -69,11 +80,13 @@ deployed; requires approval), browsers other than the test environment's DOM.
 ## 5. Completion status
 
 **1. Fully implemented and verified (tests + end-to-end check)**
-Credential handling and rotation tooling; JWT with revocation and password-change cut-off; job
+Credential handling and rotation tooling (local credentials rotated; **hosted credentials not
+rotated**); JWT with revocation and password-change cut-off; job
 ownership and audited admin access; rate limits and provider call budget; CORS allow-list and CSP;
-storage path allow-list; safe Kubernetes manifest/kubectl invocation; Electricity Maps client with
-provenance and quality labels; risk-constrained engine with five policies, explicit infeasible
-results and explanations; observation collection and forecast-vs-realized evaluation; reports;
+storage path allow-list; Electricity Maps client with provenance and quality labels (live: 70
+collector calls, 0 failures, plus one live scheduling call); risk-constrained engine with five policies, explicit infeasible
+results and explanations; forecast-vs-realized evaluation and reports (observation collection:
+live API path verified to `PENDING`, `COMPLETE` path with fixtures and replayed real history);
 offline oracle; Results page; collector, coverage, benchmark, ML pipeline gating and demo scripts;
 CI for backend, frontend and Python.
 
@@ -81,10 +94,13 @@ CI for backend, frontend and Python.
 Policy comparison on real data (5–6 h of data; no conclusion possible); forecast-accuracy figures
 (21 pairs per zone); the ML pipeline on real data (only the insufficient-data path has run on real
 data; the evaluated paths are tested on synthetic fixtures); Kubernetes submission (no cluster
-available); Docker/compose configuration (not built); deadline-risk model (not calibrated).
+available; manifest construction and argument-array invocation are unit-tested only);
+Docker/compose configuration (built and smoke-tested in CI from P7, never run locally);
+deadline-risk model (not calibrated).
 
 **3. Partially implemented**
-Deployment (configuration documented, hosted services still run the old code); risk calibration
+Deployment (configuration documented; old hosted backend suspended and verified unavailable;
+secured replacement not deployed; Pages `VITE_API_URL` not configured); risk calibration
 (formula and declared CV only); forecast uncertainty (error bands gated on data); execution
 (simulated path complete, real path untested, no scheduled start).
 
@@ -93,3 +109,25 @@ Seven days of collected data; trained/promoted forecast-error model; any statist
 carbon-saving result; measured energy and realized emissions; cost-aware scheduling; multi-job
 queueing/capacity; PostgreSQL or other durable multi-instance storage; httpOnly-cookie sessions;
 deployment of the remediated system; merge of `fix/prototype-flaws` into `main`.
+
+## 6. P7 stabilisation (on top of `8729f43`)
+
+- GitHub Pages base path derived from the repository (`/CarbonRoute-AS/`); two `href="/admin"` links
+  that ignored the base path replaced by router links. Pages build served under `/CarbonRoute-AS/`
+  with a Pages-like 404 fallback and checked in a browser: assets load, deep links (`/how-it-works`,
+  `/resources`) render, all internal links carry the base path.
+- Collector folder lock (no second collector can write to the same folder; stale locks replaced; data
+  files untouched), tested. Verified backup of the collected data.
+- CI job `Docker images`: builds both images, proves decoy `.env`/database files stay out, runs the
+  backend in production mode behind nginx, refuses to start without `JWT_SECRET`, validates compose.
+- Deployment readiness report with blockers, rotation plan, staging checklist:
+  [DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md).
+- Verification on the P7 tree: backend typecheck, **280 tests** (11 `it.fails`), build; frontend
+  typecheck, **97 tests**, build and Pages build (assets under `/CarbonRoute-AS/`); Python 5 tests. The
+  30-check end-to-end API run was not repeated for P7 (no backend request path changed). Docker job:
+  see the P7 PR's CI.
+- **Containment (2026-11-13):** the old Render service was suspended manually by its owner and
+  verified unavailable from outside at 20:35 UTC (503, `x-render-routing: suspend-by-user`, no CORS
+  headers). Nothing else on Render was changed; no service or disk was created; no credential was
+  rotated. Open deployment blockers, including the unconfigured Pages `VITE_API_URL`, are in
+  [DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md).

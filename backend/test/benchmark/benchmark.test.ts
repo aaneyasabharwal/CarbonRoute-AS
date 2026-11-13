@@ -346,3 +346,4 @@ describe('P6: reproducible demo (runDemo)', () => {
     await expect(runDemo(recs, 'sha', fs.mkdtempSync(path.join(os.tmpdir(), 'cr-demo-')), {})).rejects.toThrow(/old enough/);
   });
 });
+
