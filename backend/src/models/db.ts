@@ -3,6 +3,7 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
+import { adminPasswordProblem, ConfigError, MIN_ADMIN_PASSWORD_LENGTH } from '../config/secrets';
 
 export interface User {
   id: string;
@@ -165,19 +166,28 @@ class JsonDatabase {
   private seedDefaultsIfEmpty(): void {
     let changed = false;
 
-    // Seed Admin User
+    // Seed the initial admin from configuration (M1.1): there is no default password.
+    // Production refuses to start without a strong ADMIN_PASSWORD when no user exists;
+    // elsewhere the account is not created and a warning explains how to create it.
     if (this.data.users.length === 0) {
-      const salt = bcrypt.genSaltSync(10);
-      const passwordHash = bcrypt.hashSync('CarbonRoute2026!Secure', salt);
-      this.data.users.push({
-        id: uuidv4(),
-        username: 'admin',
-        email: 'admin@carbonroute.org',
-        passwordHash,
-        role: 'admin',
-        createdAt: new Date().toISOString(),
-      });
-      changed = true;
+      const { username, email, password } = config.initialAdmin;
+      const problem = adminPasswordProblem(password);
+      if (problem) {
+        if (config.env === 'production') {
+          throw new ConfigError(`${problem} It is required to create the initial admin account. Refusing to start in production.`);
+        }
+        console.warn(`[db] ${problem} No admin account was created. Set ADMIN_PASSWORD (at least ${MIN_ADMIN_PASSWORD_LENGTH} characters) and restart to create "${username}".`);
+      } else {
+        this.data.users.push({
+          id: uuidv4(),
+          username,
+          email,
+          passwordHash: bcrypt.hashSync(password as string, bcrypt.genSaltSync(10)),
+          role: 'admin',
+          createdAt: new Date().toISOString(),
+        });
+        changed = true;
+      }
     }
 
     // Seed Team Members strictly matching prompt:
@@ -483,6 +493,22 @@ class JsonDatabase {
 
   getUserByUsername(username: string): User | undefined {
     return this.data.users.find((u) => u.username.toLowerCase() === username.toLowerCase() || u.email.toLowerCase() === username.toLowerCase());
+  }
+
+  /**
+   * Replaces a user's password (used to rotate credentials, e.g. the formerly published
+   * default admin password). The new password must pass the same checks as ADMIN_PASSWORD.
+   * The password itself is never logged.
+   */
+  setUserPassword(username: string, newPassword: string, performedBy = 'System'): User {
+    const problem = adminPasswordProblem(newPassword);
+    if (problem) throw new ConfigError(problem.replace('ADMIN_PASSWORD', 'The new password'));
+    const user = this.getUserByUsername(username);
+    if (!user) throw new ConfigError(`User "${username}" does not exist.`);
+    user.passwordHash = bcrypt.hashSync(newPassword, bcrypt.genSaltSync(10));
+    this.addAuditLog('PASSWORD_CHANGED', 'User', user.id, `Password changed for ${user.username}`, performedBy);
+    this.saveDatabase();
+    return user;
   }
 
   // Presentation Operations
