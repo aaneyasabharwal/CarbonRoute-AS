@@ -127,8 +127,8 @@ Data and secrets (P6 audit):
 - **Frontend**: GitHub Pages, deployed by `.github/workflows/deploy-pages.yml` **only on pushes to
   `main`** (the remediation work is on `fix/prototype-flaws` and has not been deployed). Built with
   `GITHUB_PAGES=true`. The base path follows the repository that builds it (`/CarbonRoute-AS/` here,
-  from `GITHUB_REPOSITORY`; override with `PAGES_BASE_PATH`), fixed in P7; it calls `https://carbonroute.onrender.com` unless
-  `VITE_API_URL` is set at build time.
+  from `GITHUB_REPOSITORY`; override with `PAGES_BASE_PATH`), fixed in P7. The backend URL comes from
+  the repository variable `VITE_API_URL`; the build fails without it (P8). There is no default backend.
 - **Backend**: Render (`https://carbonroute.onrender.com`). Before deploying the remediated backend:
   set `NODE_ENV=production`, a new `JWT_SECRET`, `ADMIN_PASSWORD` (if the database is new),
   `CORS_ORIGIN` with the Pages origin, `TRUST_PROXY=1` and `ELECTRICITY_MAPS_API_KEY` in Render's

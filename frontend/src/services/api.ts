@@ -25,19 +25,13 @@ import {
   ZoneOption,
   JobObservationsResult,
 } from '../types';
+import { resolveBackendUrl } from '../config/apiUrl';
 
-const getInitialBackendUrl = (): string => {
-  const envUrl = (import.meta as any).env?.VITE_API_URL as string;
-  if (envUrl) {
-    return envUrl.replace(/\/api\/?$/, '');
-  }
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return 'http://localhost:5000';
-  }
-  return 'https://carbonroute.onrender.com';
-};
-
-export const BACKEND_URL = getInitialBackendUrl();
+// P8 (B7): no hard-coded remote backend; see src/config/apiUrl.ts.
+export const BACKEND_URL = resolveBackendUrl(
+  (import.meta as any).env?.VITE_API_URL as string | undefined,
+  typeof window !== 'undefined' ? window.location.hostname : undefined
+);
 export const API_BASE = `${BACKEND_URL}/api`;
 
 /**

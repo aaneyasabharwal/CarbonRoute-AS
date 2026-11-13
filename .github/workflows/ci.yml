@@ -98,10 +98,25 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Build for GitHub Pages (as deploy-pages.yml does)
+      - name: A Pages build without VITE_API_URL must fail (P8, no default backend)
+        run: |
+          if GITHUB_PAGES=true npm run build > /tmp/pages-noapi.log 2>&1; then
+            echo "Pages build succeeded without VITE_API_URL"; exit 1
+          fi
+          grep -q "VITE_API_URL is required" /tmp/pages-noapi.log && echo "refused as expected"
+
+      - name: Build for GitHub Pages (as deploy-pages.yml does, with a placeholder API URL)
         run: npm run build
         env:
           GITHUB_PAGES: 'true'
+          VITE_API_URL: https://api.example.invalid
+
+      - name: No source file or built bundle points at the retired backend
+        run: |
+          if grep -rIl "carbonroute.onrender.com" src dist --exclude=apiUrl.ts; then
+            echo "retired backend referenced"; exit 1
+          fi
+          grep -rlq "api.example.invalid" dist/assets && echo "bundle uses the configured API URL"
 
   python:
     name: Python service checks (standard library only)
