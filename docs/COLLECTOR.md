@@ -20,52 +20,64 @@ npm run collect -- --out ../../CarbonRoute-AS-data/em-collection --zones DE,GB,U
   or printed.
 - Output is outside the repository. Never move it into the repository or commit it.
 
-- **Folder lock (P7).** Every collector entry point (`npm run collect`, and any wrapper, which must
-  call `runCollectorCli`/`runCollector` from `backend/src/scripts/collectElectricityMaps.ts`) takes the
-  folder lock before doing anything, including before checking the API key. Details:
+- **Folder lock.** Every collector entry point (`npm run collect`, and any wrapper, which must
+  call `runCollectorCli`/`runCollector` in `backend/src/scripts/collectElectricityMaps.ts`) takes the
+  folder lock before anything else, including before checking the API key. Details:
   `backend/src/scripts/collectorLock.ts`.
 
-### How the lock works
+### How the lock works (since the P7 adversarial review)
 
-- The lock is a sequence of files `<out>/.collector.lock.<n>`; the highest `n` is current. To take it,
-  a collector atomically **creates** the next number. Only one process can create a given number, so
-  two collectors that start at the same instant, even when both find an old stale lock, cannot both
-  win. Nothing is deleted in order to take a lock.
-- The holder refreshes its file (heartbeat) every 30 s. A holder is live only if its file was touched
-  in the last 3 minutes **and** its process exists. A crashed collector, or a reused process id
-  (Windows can give an old id to another program), therefore stops counting after at most 3 minutes.
-  An empty, freshly created lock file counts as live (when unsure, refuse).
-- Before every run the collector checks it still owns the lock. If the computer slept long enough
-  for another collector to take over, the old one stops with exit code **4** without writing.
-- Exit codes: 0 done, 2 no API key, **3 another collector holds the lock**, 4 lock lost.
+- The owner keeps a listening socket open on `127.0.0.1:<port>`, where the port (20000–29999) is
+  derived from the folder's real path (case-insensitive on Windows). The operating system allows only
+  one process to listen on that address and port, so **two collectors can never both hold the lock**,
+  in any interleaving.
+- The operating system frees the port when the owner ends in any way: normal exit, crash, Ctrl-C or
+  SIGKILL. There are no lock files, no heartbeat, no timeouts and no process-id checks, so a crash
+  leaves nothing stale, and **sleep/resume, a frozen process, a clock jump or a reused process id
+  cannot let a second collector take over** while the first is alive.
+- Every append is fenced: the collector checks it still owns the lock immediately before writing each
+  record, with no waiting in between, and stops (exit code 4) if it does not.
+- Nothing is ever deleted to take or release the lock, so no collector can remove another's lock.
+- Exit codes: 0 done, 2 no API key, **3 another collector holds the lock**, 4 no longer owner.
 - The lock never opens the `.jsonl` files; collection only appends to them.
+- Transition: a collector still running the previous version (old `.collector.lock.<n>` files naming
+  a live process) also blocks a new start.
 
-Verified by tests (`backend/test/collector/collectorLock.test.ts`): 6 separate processes starting at
-the same instant, with and without a stale lock (exactly one wins); dead and reused process ids;
-lost lock; the CLI started as a separate process (wrapper invocation) refusing while another
-process holds the lock. In a 15-trial stress run (8 processes each) exactly one won every time; the
-previous single-file lock let 3 of 6 processes in one of three trials.
+### Evidence
+
+- `backend/test/collector/collectorLock.test.ts`: 8 separate processes starting at the same instant
+  with no lock files, with stale/empty old-style lock files, with a live holder, and with a live
+  old-style holder; SIGKILL and crash of the holder; a holder frozen for 5 s is never taken over;
+  ownership lost mid-run writes no further record; the CLI and a wrapper, each run as a separate
+  process, refuse while the folder is held; a static check that nothing else writes collection files.
+- `backend/test/stress/collectorLockStress.cjs` (also in CI): many rounds of processes contending
+  continuously with random holds, frozen event loops and random SIGKILLs of holders, checked by an
+  independent exclusive-file oracle. With `STRESS_BROKEN_LOCK=1` (a lock that always grants) the
+  oracle reports violations, showing it can detect overlap.
+- The previous lock (commit c204f90) was shown to be unsafe: a live collector whose lease looked stale
+  kept appending after another took over (4 records), and its tidy-up deleted a newer owner's lock.
 
 ### Remaining limitations
 
-- Liveness uses file modification times on the same machine. Do not put the collection folder on a
-  network or synced drive (OneDrive, SMB), where timestamps and atomic creation may not be reliable.
-- After a crash, a new collector can start only once the old heartbeat is 3 minutes old.
-- A script that writes collection files without going through `runCollector` bypasses the lock.
-  The sprint wrapper (`em-collector.cjs`) was replaced on 2026-11-13 20:50 UTC by a delegate that
-  calls `runCollectorCli`; the earlier standalone wrapper is retired.
+- Both collectors must run on the **same machine**. The lock does not protect a folder on a network
+  share or synchronised drive (OneDrive, SMB) written from two machines; do not do that.
+- If an unrelated program happens to listen on the folder's port, the collector refuses to start
+  (it never shares). Rename the collection folder to get a different port.
+- A script that writes collection files without going through `runCollector` bypasses the lock. The
+  sprint wrapper (`em-collector.cjs`) only delegates to `runCollectorCli`.
 
 ### Recovery when a start is refused (exit code 3)
 
-1. Read the pid and start time in the message.
-2. Check whether that process is a collector:
+1. Read the message: it names the holder's pid and start time (or says the port is used by another
+   program).
+2. Check that process:
    ```powershell
    Get-CimInstance Win32_Process -Filter "ProcessId=<pid>" | Select-Object ProcessId, Name, CommandLine, CreationDate
    ```
-3. If it **is** a running collector: do nothing; collection is already happening.
-4. If it is not: wait 3 minutes and start again (its heartbeat will be stale). Only if the refusal
-   persists, delete the `.collector.lock.*` files (never the `.jsonl` files) and start again.
-5. After the first run, check with `npm run coverage` that records were appended and none failed.
+3. If it is a running collector: do nothing; collection is already happening.
+4. If you want to stop it, stop that process (Ctrl-C or end the task). The lock is free as soon as it
+   has exited; there is nothing to delete. Never delete or edit the `.jsonl` files.
+5. After the first run of a new collector, check with `npm run coverage` that records were appended.
 
 ## Checking that it is healthy
 
@@ -118,6 +130,10 @@ realized values (the next history call returns the last 24 h) but not for foreca
   runs and replaced by the lock-respecting delegate for the remaining 17 runs (same 25-run plan,
   ending about 2026-11-14 12:50 UTC). Its first run at 20:50 appended 10/10 records; a second
   `npm run collect` against the same folder was refused with exit code 3 and added nothing.
+- 21:06 UTC: after 9 runs (90 records, checksum unchanged) that collector was stopped between runs
+  and replaced by one using the socket lock for the remaining 16 runs (same 25-run plan). Its first
+  run appended 10/10 records; a second `npm run collect` was refused with exit code 3 and added
+  nothing. The leftover old lock file (dead process) was removed; no `.jsonl` file was changed.
 - **Seven days of data have not been collected.** The forecast-error model needs at least 7 days
   (see [ML.md](ML.md)); collection must be restarted after the 25th run and kept running without gaps.
 - The Electricity Maps trial key expires around 26–27 November 2026. After that, collection stops

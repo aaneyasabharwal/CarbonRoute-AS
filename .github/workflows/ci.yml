@@ -56,6 +56,18 @@ jobs:
       - name: Build
         run: npm run build
 
+      # P7 review: adversarial multi-process test of the collector lock (needs the build).
+      - name: Collector lock stress test (multi-process, random SIGKILLs)
+        run: node test/stress/collectorLockStress.cjs 25 8 1500
+
+      - name: Stress oracle self-check (a broken lock must be detected)
+        run: |
+          set +e
+          STRESS_BROKEN_LOCK=1 node test/stress/collectorLockStress.cjs 2 6 800
+          code=$?
+          set -e
+          test "$code" -eq 1 && echo "oracle detected the broken lock"
+
   frontend:
     name: Frontend (typecheck, test, build)
     runs-on: ubuntu-latest

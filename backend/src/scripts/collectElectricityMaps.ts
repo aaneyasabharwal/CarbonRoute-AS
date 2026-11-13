@@ -15,7 +15,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { ElectricityMapsClient } from '../carbon/electricityMaps';
-import { acquireCollectorLock, LockOptions } from './collectorLock';
+import { acquireCollectorLock, CollectorLock, LockOptions } from './collectorLock';
 
 export interface CollectorOptions {
   zones: string[];
@@ -26,7 +26,12 @@ export interface CollectorOptions {
 
 type Client = Pick<ElectricityMapsClient, 'getForecast' | 'getHistory' | 'isConfigured'>;
 
-export async function collectOnce(client: Client, zones: string[], run: number, outDir: string, now = () => new Date()) {
+/**
+ * One collection run. Requires the folder lock: ownership is checked synchronously immediately
+ * before EVERY append (fencing), so a collector that no longer holds the lock never writes another
+ * record. Returns lost: true if it stopped for that reason.
+ */
+export async function collectOnce(client: Client, zones: string[], run: number, outDir: string, lock: CollectorLock, now = () => new Date()) {
   const runAt = now().toISOString();
   const file = path.join(outDir, `collection-${runAt.slice(0, 10)}.jsonl`);
   let ok = 0;
@@ -43,60 +48,64 @@ export async function collectOnce(client: Client, zones: string[], run: number, 
         rec.error = { code: err?.code, apiStatus: err?.apiStatus, message: String(err?.message || err).slice(0, 300) };
         failed++;
       }
+      // Fence: no await between this check and the append.
+      if (!lock.isOwner()) return { runAt, ok, failed, file, lost: true };
       fs.appendFileSync(file, JSON.stringify(rec) + '\n');
     }
   }
-  return { runAt, ok, failed, file };
+  return { runAt, ok, failed, file, lost: false };
 }
 
 export type CollectorDeps = {
   sleep?: (ms: number) => Promise<void>;
   log?: (msg: string) => void;
   now?: () => Date;
-  /** Lock behaviour (tests inject clocks and liveness). */
+  /** Lock options (tests choose a port). */
   lock?: LockOptions;
 };
 
 /**
- * Exit codes: 0 done, 2 no API key, 3 another collector holds the folder lock, 4 the lock was
- * lost while running (e.g. after a long sleep another collector took over), so this one stopped.
+ * Exit codes: 0 done, 2 no API key, 3 another collector holds the folder lock, 4 this collector
+ * no longer held the lock (released or socket error) and stopped without writing further records.
  */
 export async function runCollector(client: Client, opts: CollectorOptions, deps: CollectorDeps = {}) {
   const sleep = deps.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   const log = deps.log ?? console.log;
   // The lock comes first, so every start (even a misconfigured one) is checked against it.
-  const lock = acquireCollectorLock(opts.outDir, deps.lock);
+  const lock = await acquireCollectorLock(opts.outDir, deps.lock);
   if ('error' in lock) {
     log(lock.error);
     return 3;
   }
   if (!client.isConfigured()) {
-    lock.release();
+    await lock.release();
     log('Electricity Maps key not configured (ELECTRICITY_MAPS_API_KEY); nothing collected.');
     return 2;
   }
-  const onSignal = (code: number) => () => {
-    lock.release();
-    process.exit(code);
-  };
+  // Exiting frees the lock port in the operating system; nothing else needs cleaning up.
+  const onSignal = (code: number) => () => process.exit(code);
   const onInt = onSignal(130);
   const onTerm = onSignal(143);
   process.once('SIGINT', onInt);
   process.once('SIGTERM', onTerm);
   try {
     for (let run = 1; run <= opts.runs; run++) {
-      if (!lock.stillOwner()) {
-        log(`[collector] lock lost before run ${run}: another collector took over ${opts.outDir}. Stopping without writing.`);
+      if (!lock.isOwner()) {
+        log(`[collector] no longer holds the lock for ${opts.outDir} before run ${run}. Stopping without writing.`);
         return 4;
       }
-      const r = await collectOnce(client, opts.zones, run, opts.outDir, deps.now);
+      const r = await collectOnce(client, opts.zones, run, opts.outDir, lock, deps.now);
+      if (r.lost) {
+        log(`[collector] lock lost during run ${run}; stopped before the next record (${r.ok + r.failed} written this run).`);
+        return 4;
+      }
       log(`[collector] run ${run}/${opts.runs} at ${r.runAt}: ${r.ok} ok, ${r.failed} failed`);
       if (run < opts.runs) await sleep(opts.intervalMs);
     }
   } finally {
     process.off('SIGINT', onInt);
     process.off('SIGTERM', onTerm);
-    lock.release();
+    await lock.release();
   }
   return 0;
 }
