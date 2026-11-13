@@ -25,6 +25,7 @@ const ROUTES = [
   '/presentations/planning/v1',
   '/presentation/v1',
   '/dashboard',
+  '/account',
   '/admin',
 ];
 
