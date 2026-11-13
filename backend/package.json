@@ -13,7 +13,8 @@
     "user:create": "node dist/scripts/createUser.js",
     "benchmark": "node dist/scripts/runBenchmark.js",
     "collect": "node dist/scripts/collectElectricityMaps.js",
-    "coverage": "node dist/scripts/coverageReport.js"
+    "coverage": "node dist/scripts/coverageReport.js",
+    "ml": "node dist/scripts/runMlPipeline.js"
   },
   "keywords": [
     "carbon-aware",

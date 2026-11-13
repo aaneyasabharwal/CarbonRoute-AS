@@ -9,6 +9,7 @@ import { api } from '../services/api';
 import type { BenchmarkListItem, BenchmarkResultDetail, ConfidenceIntervalResult } from '../types';
 import { EmptyState, ErrorState, LoadingState, SignInRequired } from '../components/StateViews';
 import { DataQualityBadge } from '../components/DataQualityBadge';
+import { ModelEvaluationSection } from '../components/ModelEvaluationSection';
 
 type Load<T> = { state: 'idle' } | { state: 'loading' } | { state: 'ok'; data: T } | { state: 'error'; message: string; auth?: boolean };
 
@@ -93,6 +94,7 @@ export const ResultsPage: React.FC = () => {
           )}
         </div>
       )}
+      {signedIn && !(list.state === 'error' && list.auth) && <ModelEvaluationSection />}
     </div>
   );
 };

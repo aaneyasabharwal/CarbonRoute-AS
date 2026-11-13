@@ -33,6 +33,7 @@ export const ISOLATED_ENV_VARS = [
   'RATE_LIMIT_CARBON_MAX',
   'CORS_ORIGIN',
   'BENCHMARK_RESULTS_DIR',
+  'ML_RESULTS_DIR',
   'TRUST_PROXY',
   'CARBONROUTE_TEST_ADMIN_USERNAME',
   'CARBONROUTE_TEST_ADMIN_PASSWORD',
@@ -103,6 +104,7 @@ export function createTestEnv(): TestEnv {
   process.env.CORS_ORIGIN = '';
   // Benchmark results are read from a per-file temporary folder, never the real results.
   process.env.BENCHMARK_RESULTS_DIR = path.join(root, 'benchmark-results');
+  process.env.ML_RESULTS_DIR = path.join(root, 'ml-results');
   process.env.TRUST_PROXY = '';
   process.env.CARBONROUTE_TEST_ADMIN_USERNAME = admin.username;
   process.env.CARBONROUTE_TEST_ADMIN_PASSWORD = admin.password;

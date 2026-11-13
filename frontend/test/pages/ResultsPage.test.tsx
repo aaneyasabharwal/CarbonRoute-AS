@@ -66,14 +66,17 @@ describe('ResultsPage', () => {
     localStorage.setItem('carbonroute_token', 't');
     stubFetch(() => ({ body: { success: true, data: [] } }));
     renderPage();
-    expect(await screen.findByTestId('empty-state')).toHaveTextContent('npm run benchmark');
+    // Both sections (benchmarks and the ML model) explain how to produce their results.
+    const empties = await screen.findAllByTestId('empty-state');
+    expect(empties.map((e) => e.textContent).join(' | ')).toMatch(/npm run benchmark.*|.*npm run ml/);
   });
 
   it('shows the backend error instead of numbers', async () => {
     localStorage.setItem('carbonroute_token', 't');
     stubFetch(() => ({ status: 503, body: { success: false, message: 'Results folder unreadable' } }));
     renderPage();
-    expect(await screen.findByRole('alert')).toHaveTextContent('Results folder unreadable');
+    const alerts = await screen.findAllByRole('alert');
+    expect(alerts.some((a) => a.textContent!.includes('Results folder unreadable'))).toBe(true);
     expect(screen.queryByRole('table')).toBeNull();
   });
 

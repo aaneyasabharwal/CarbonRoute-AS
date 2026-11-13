@@ -104,6 +104,7 @@ For any other user a job id answers **404**, exactly like an unknown id.
 | `GET /jobs/:id/report` (`?format=html`) | owner, admin | Report as JSON or a downloadable HTML file. |
 | `POST /experiments`, `GET /experiments` | any user | Record / list experiments. Records are owned by the caller (admins see all); a `jobId` must be a job the caller can access. |
 | `GET /jobs/:id/oracle` | owner, admin | Hindsight (Oracle) evaluation on realized observations. **Offline evaluation only**; usually unavailable for single jobs (observations exist only for the scheduled and Immediate windows). |
+| `GET /results/ml`, `GET /results/ml/:id` | any user | Forecast-error model evaluations (`npm run ml`, see ML.md): status (`insufficient-data` / `evaluated-not-promoted` / `evaluated-promoted`) with reasons, data inventory, thresholds, held-out scores when evaluated. Only `ml-<timestamp>` ids are served. |
 | `GET /results/benchmarks`, `GET /results/benchmarks/:id` | any user | Stored benchmark runs (`npm run benchmark`) from `BENCHMARK_RESULTS_DIR`: policy comparison with bootstrap intervals, pending counts, forecast accuracy split by realized quality. Only `benchmark-<timestamp>` ids are served. |
 
 A scheduling request that fails before a decision exists (e.g. the provider is unavailable) stores nothing; an impossible deadline is stored as an `INFEASIBLE` decision.

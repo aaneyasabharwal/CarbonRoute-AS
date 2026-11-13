@@ -20,6 +20,8 @@ import {
   OracleEvaluation,
   BenchmarkListItem,
   BenchmarkResultDetail,
+  MlEvaluationListItem,
+  MlEvaluation,
   ZoneOption,
   JobObservationsResult,
 } from '../types';
@@ -1329,6 +1331,14 @@ export const api = {
 
   async listBenchmarks(): Promise<ApiResponse<BenchmarkListItem[]>> {
     return authedGet<BenchmarkListItem[]>(`${API_BASE}/results/benchmarks`, 'Could not load benchmark results');
+  },
+
+  async listMlEvaluations(): Promise<ApiResponse<MlEvaluationListItem[]>> {
+    return authedGet<MlEvaluationListItem[]>(`${API_BASE}/results/ml`, 'Could not load model evaluations');
+  },
+
+  async getMlEvaluation(id: string): Promise<ApiResponse<MlEvaluation>> {
+    return authedGet<MlEvaluation>(`${API_BASE}/results/ml/${encodeURIComponent(id)}`, 'Could not load the model evaluation');
   },
 
   async getBenchmark(id: string): Promise<ApiResponse<BenchmarkResultDetail>> {
