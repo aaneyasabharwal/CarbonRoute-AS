@@ -29,15 +29,20 @@ describe('authentication', () => {
 
   it('GET /api/auth/me requires a token and returns the user for a valid one', async () => {
     expect((await request(app).get('/api/auth/me')).status).toBe(401);
-    expect((await request(app).get('/api/auth/me').set('Authorization', 'Bearer not-a-jwt')).status).toBe(403);
+    // M1.2: an invalid token is "not authenticated" (401), not "forbidden" (403).
+    expect((await request(app).get('/api/auth/me').set('Authorization', 'Bearer not-a-jwt')).status).toBe(401);
     const me = await request(app).get('/api/auth/me').set(auth());
     expect(me.status).toBe(200);
     expect(me.body.user).toMatchObject({ username: testAdminCredentials().username, role: 'admin' });
     expect(me.body.user.passwordHash).toBeUndefined();
   });
 
-  it('logout succeeds and is recorded in the admin-only audit log', async () => {
-    expect((await request(app).post('/api/auth/logout').set(auth())).status).toBe(200);
+  it('logout succeeds, revokes that token and is recorded in the admin-only audit log', async () => {
+    // A separate session is signed out, so the shared token stays valid for later tests.
+    const session = await loginAsTestAdmin(app);
+    const bearer = { Authorization: `Bearer ${session}` };
+    expect((await request(app).post('/api/auth/logout').set(bearer)).status).toBe(200);
+    expect((await request(app).get('/api/auth/me').set(bearer)).status).toBe(401);
     expect((await request(app).get('/api/admin/audit-logs')).status).toBe(401);
     const logs = await request(app).get('/api/admin/audit-logs').set(auth());
     expect(logs.status).toBe(200);

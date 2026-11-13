@@ -29,6 +29,7 @@ import {
   Filter,
   CheckCircle,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { api } from '../services/api';
 import {
   WorkloadJob,
@@ -650,7 +651,17 @@ export const PrototypePage: React.FC = () => {
           <div className="mt-4 p-4 rounded-xl bg-rose-950/50 border border-rose-800/70 space-y-2 text-rose-200 font-mono text-xs">
             <div className="flex items-start space-x-2 font-bold text-rose-400">
               <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-              <span>{scheduleError || forecastError}</span>
+              <span>
+                {scheduleError || forecastError}
+                {scheduleError && !api.hasSession() && (
+                  <>
+                    {' '}
+                    <Link to="/admin" className="underline font-bold">
+                      Sign in
+                    </Link>
+                  </>
+                )}
+              </span>
             </div>
             {dataSourceMode === 'live' && (
               <div className="pt-2 border-t border-rose-900/50 flex flex-wrap items-center justify-between gap-3">
@@ -1696,8 +1707,10 @@ export const PrototypePage: React.FC = () => {
               collecting={collecting}
               error={observationError}
               onCollect={handleCollectObservations}
-              reportHtmlUrl={api.reportUrl(activeJobId, 'html')}
-              reportJsonUrl={api.reportUrl(activeJobId, 'json')}
+              onDownloadReport={async (format) => {
+                const res = await api.downloadReport(activeJobId, format);
+                if (!res.success) setObservationError(res.message || 'Report download failed.');
+              }}
             />
           )}
 

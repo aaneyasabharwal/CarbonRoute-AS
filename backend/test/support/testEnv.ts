@@ -23,6 +23,10 @@ export const ISOLATED_ENV_VARS = [
   'LOCAL_STORAGE_DIR',
   'STORAGE_TYPE',
   'ELECTRICITY_MAPS_API_KEY',
+  'JWT_SECRET',
+  'ADMIN_USERNAME',
+  'ADMIN_EMAIL',
+  'ADMIN_PASSWORD',
   'CARBONROUTE_TEST_ADMIN_USERNAME',
   'CARBONROUTE_TEST_ADMIN_PASSWORD',
 ] as const;
@@ -76,6 +80,13 @@ export function createTestEnv(): TestEnv {
   // dotenv never overrides variables that already exist, so an empty value
   // guarantees no real key from a local .env file reaches the tests.
   process.env.ELECTRICITY_MAPS_API_KEY = '';
+  // Same for credentials (M1.2): a developer's real JWT_SECRET / ADMIN_* values from .env
+  // must never reach the tests. Empty values make the backend generate a per-process
+  // JWT secret and keep the admin seeding path off.
+  process.env.JWT_SECRET = '';
+  process.env.ADMIN_USERNAME = '';
+  process.env.ADMIN_EMAIL = '';
+  process.env.ADMIN_PASSWORD = '';
   process.env.CARBONROUTE_TEST_ADMIN_USERNAME = admin.username;
   process.env.CARBONROUTE_TEST_ADMIN_PASSWORD = admin.password;
 

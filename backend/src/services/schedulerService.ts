@@ -13,8 +13,10 @@ export interface WorkloadJob {
   memoryMb: number;
   region: string;
   riskTolerance: number; // tau in (0, 1), e.g. 0.05 (5%)
-  status?: 'pending' | 'scheduled' | 'running' | 'completed' | 'failed';
+  status?: 'pending' | 'scheduled' | 'running' | 'completed' | 'failed' | 'cancelled';
   createdAt: string;
+  /** User who registered the job (M1.2). */
+  ownerId?: string;
 }
 
 export interface PolicyEvaluationResult {

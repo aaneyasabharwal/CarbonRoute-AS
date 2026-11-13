@@ -34,6 +34,21 @@ Authenticates an administrator or evaluator.
 Fetches current session user profile from Bearer JWT.
 - **Headers**: `Authorization: Bearer <token>`
 
+### `POST /auth/logout`
+Ends the session. The token sent with the request is revoked and is rejected from then on.
+
+### Tokens and status codes (M1.2)
+- Tokens are HS256 JWTs (no other algorithm is accepted) with a unique id (`jti`).
+- A token stops working when it expires, when it is revoked by logout, or when the user's password changes (every older token is rejected).
+- **401** `{ "code": "UNAUTHENTICATED" }` with a `WWW-Authenticate: Bearer` header: no token, or an invalid, expired or revoked one.
+- **403**: authenticated, but the role lacks the permission (for example a non-admin using an admin route or `GET /jobs?owner=<someone else>`).
+- **404** `{ "code": "JOB_NOT_FOUND" }`: the job does not exist **or belongs to another user**. Both cases give the same response, so job ids cannot be probed.
+
+### Accounts
+Roles: `admin`, `student`, `evaluator`. Only `admin` has administrator rights. Create accounts with
+`NEW_USER_USERNAME=... NEW_USER_EMAIL=... NEW_USER_ROLE=student NEW_USER_PASSWORD=... npm run user:create`
+(in `backend/`, after `npm run build`; the password is read from the environment and never printed).
+
 ---
 
 ## 2. Presentation & Versioning Endpoints
@@ -69,7 +84,29 @@ Streams uploaded files (PDFs, PPTX, reports) from Object Storage with support fo
 
 ---
 
-## 4. Scheduling & Feasibility Simulation
+## 4. Jobs (authentication and ownership required, M1.2)
+
+Every route in this section needs `Authorization: Bearer <token>`. A job belongs to the user who created it.
+Owners can see and change only their own jobs; administrators can see and change every job (including jobs
+stored before M1.2, which have no owner), and their actions on other users' jobs are written to the audit log.
+For any other user a job id answers **404**, exactly like an unknown id.
+
+| Method and path | Who | Purpose |
+| --- | --- | --- |
+| `GET /jobs` | any user | The caller's jobs (admins: all jobs, with `owner` names). Filters: `?status=pending\|scheduled\|infeasible\|running\|completed\|failed\|cancelled`, `?zone=`, `?owner=` (admins only; `me` for anyone, otherwise 403). |
+| `POST /jobs` | any user | Register a job. The owner is always the caller (`ownerId` in the body is ignored). |
+| `POST /schedule` | any user | Schedule `jobData` (new job owned by the caller; an unknown `jobData.id` is replaced by a server id) or an existing `jobId` the caller can access. Cancelled jobs: 409. |
+| `GET /jobs/:id` | owner, admin | Job details, latest decision (forecast snapshot id, windows) and latest execution record. |
+| `GET /jobs/:id/status`, `/results`, `/manifest` | owner, admin | Execution status and logs, results, Kubernetes manifest. |
+| `POST /jobs/:id/dispatch` | owner, admin | Execute or simulate the job. Cancelled jobs: 409. |
+| `POST /jobs/:id/cancel` | owner, admin | Cancel a job that has not finished (stops a simulated run; deletes the Kubernetes Job on a live cluster). Already cancelled or finished: 409. |
+| `POST /jobs/:id/observations`, `GET /jobs/:id/observations` | owner, admin | Collect / read provider observations for the scheduled window. |
+| `GET /jobs/:id/report` (`?format=html`) | owner, admin | Report as JSON or a downloadable HTML file. |
+| `POST /experiments`, `GET /experiments` | any user | Record / list experiments. Records are owned by the caller (admins see all); a `jobId` must be a job the caller can access. |
+
+Carbon data routes (`/carbon/*`), `/cluster/health` and `/scheduler/simulate` do not use job data and remain public.
+
+## 5. Scheduling & Feasibility Simulation
 
 ### `POST /scheduler/simulate`
 Simulates scheduling decisions under identical carbon forecasts with Low vs High forecast uncertainty.

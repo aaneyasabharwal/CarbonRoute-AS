@@ -1,9 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { db } from '../models/db';
-import { config } from '../config';
-import { AuthRequest } from '../middleware/auth';
+import { AuthRequest, issueAccessToken } from '../middleware/auth';
 
 export const login = (req: Request, res: Response) => {
   const { username, password } = req.body;
@@ -31,11 +29,7 @@ export const login = (req: Request, res: Response) => {
     });
   }
 
-  const token = jwt.sign(
-    { id: user.id, username: user.username, role: user.role },
-    config.jwtSecret,
-    { expiresIn: config.jwtExpiresIn as any }
-  );
+  const token = issueAccessToken(user);
 
   db.addAuditLog('USER_LOGIN', 'User', user.id, `User ${user.username} logged in`, user.username);
 
@@ -73,6 +67,9 @@ export const getMe = (req: AuthRequest, res: Response) => {
 
 export const logout = (req: AuthRequest, res: Response) => {
   if (req.user) {
+    // Revoke this token so it cannot be reused after signing out (M1.2).
+    const payload = req.tokenPayload;
+    if (payload?.jti) db.revokeToken(payload.jti, req.user.id, (payload.exp ?? Math.floor(Date.now() / 1000) + 7 * 86400) * 1000);
     db.addAuditLog('USER_LOGOUT', 'User', req.user.id, `User ${req.user.username} logged out`, req.user.username);
   }
   return res.json({

@@ -12,7 +12,7 @@ export interface K8sJobExecutionRecord {
   podId: string;
   podName: string;
   namespace: string;
-  status: 'pending' | 'scheduled' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'scheduled' | 'running' | 'completed' | 'failed' | 'cancelled';
   containerImage: string;
   command: string;
   scheduledStartTime: string;
@@ -243,6 +243,28 @@ export class K8sConnector {
     return Array.from(activeExecutions.values());
   }
 
+  /**
+   * Cancels a job's execution (M1.2). Returns the record, or null if the job has no
+   * execution. Finished executions cannot be cancelled. On a live cluster the Kubernetes Job
+   * is deleted; the simulated runner stops at its next step.
+   */
+  public static async cancelExecution(jobId: string, by: string): Promise<K8sJobExecutionRecord | null> {
+    const record = activeExecutions.get(jobId);
+    if (!record) return null;
+    if (record.status === 'completed' || record.status === 'failed' || record.status === 'cancelled') return record;
+    const wasLive = record.clusterMode === 'minikube';
+    record.status = 'cancelled';
+    record.completionTime = new Date().toISOString();
+    record.completedAt = record.completionTime;
+    record.logs.push(`[${record.completionTime}] [CarbonRoute Dispatcher] Execution cancelled by ${by}.`);
+    if (wasLive) {
+      await execAsync(`kubectl delete job ${record.k8sJobName} -n carbonroute-jobs --ignore-not-found`).catch((err: any) => {
+        record.logs.push(`[${new Date().toISOString()}] Could not delete the Kubernetes Job: ${err.message}`);
+      });
+    }
+    return record;
+  }
+
   private static async executeOnK8s(record: K8sJobExecutionRecord, cpu: number, memoryMb: number) {
     try {
       const manifest = `
@@ -277,6 +299,16 @@ spec:
       record.logs.push(`[${new Date().toISOString()}] Applied Kubernetes Job manifest to cluster.`);
 
       await execAsync(`kubectl apply -f "${tempPath}"`);
+      // The job may have been cancelled while the manifest was being applied. Its delete
+      // then ran before the Job existed, so delete it now and do not mark it running (M1.2).
+      if ((record.status as K8sJobExecutionRecord['status']) === 'cancelled') {
+        record.logs.push(`[${new Date().toISOString()}] Cancelled while the manifest was being applied; deleting the Kubernetes Job.`);
+        await execAsync(`kubectl delete job ${record.k8sJobName} -n carbonroute-jobs --ignore-not-found`).catch((err: any) => {
+          record.logs.push(`[${new Date().toISOString()}] Could not delete the Kubernetes Job: ${err.message}`);
+        });
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        return;
+      }
       record.status = 'running';
       const startTime = new Date();
       record.startedAt = startTime.toISOString();
@@ -284,6 +316,10 @@ spec:
 
       // Poll pod completion
       const checkInterval = setInterval(async () => {
+        if (record.status === 'cancelled') {
+          clearInterval(checkInterval);
+          return;
+        }
         try {
           const { stdout } = await execAsync(`kubectl get job ${record.k8sJobName} -n carbonroute-jobs -o json`);
           const parsed = JSON.parse(stdout);
@@ -324,6 +360,7 @@ spec:
     );
 
     setTimeout(() => {
+      if (record.status === 'cancelled') return;
       record.status = 'running';
       const startTime = new Date();
       record.startedAt = startTime.toISOString();
@@ -336,6 +373,10 @@ spec:
       let currentEpoch = 0;
 
       const interval = setInterval(() => {
+        if (record.status === 'cancelled') {
+          clearInterval(interval);
+          return;
+        }
         currentEpoch++;
         const pct = Math.round((currentEpoch / totalEpochs) * 100);
         record.logs.push(
