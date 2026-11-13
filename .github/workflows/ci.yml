@@ -106,3 +106,69 @@ jobs:
 
       - name: FastAPI CORS settings tests (M1.9)
         run: python -m unittest discover -s fastapi_service/tests -v
+
+  docker:
+    name: Docker images (build and smoke test, no push)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Decoy files that must NEVER reach an image (.dockerignore). They are created only in
+      # this throwaway runner; the values are random and not secrets of any deployment.
+      - name: Plant decoy .env and local database files
+        run: |
+          echo "DECOY_SECRET=$(openssl rand -hex 16)" > .env
+          echo '{"decoy":true}' > database/carbonroute.db.json
+          echo '{"decoy":true}' > database/carbonroute.scheduling.db.json
+
+      - name: Build backend image
+        run: docker build -f docker/Dockerfile.backend -t carbonroute-backend:ci .
+
+      - name: Build frontend image
+        run: docker build -f docker/Dockerfile.frontend -t carbonroute-frontend:ci .
+
+      - name: No .env or local database inside the images
+        run: |
+          docker run --rm --entrypoint sh carbonroute-backend:ci -c 'test ! -e /app/.env && test ! -e /app/database/carbonroute.db.json && test ! -e /app/database/carbonroute.scheduling.db.json && test -e /app/database/schema.sql'
+          docker run --rm --entrypoint sh carbonroute-frontend:ci -c 'test ! -e /usr/share/nginx/html/.env'
+          echo "images contain no .env and no local database"
+
+      - name: Backend (production mode) and frontend (nginx) run together
+        run: |
+          docker network create crnet
+          mkdir -p /tmp/crdb
+          docker run -d --name backend --network crnet \
+            -e NODE_ENV=production \
+            -e JWT_SECRET="$(openssl rand -base64 48)" \
+            -e ADMIN_PASSWORD="$(openssl rand -base64 18)" \
+            -e CORS_ORIGIN=http://localhost:8080 \
+            -e TRUST_PROXY=1 \
+            -e CARBONROUTE_DB_FILE=/app/database/carbonroute.db.json \
+            -v /tmp/crdb:/app/database \
+            carbonroute-backend:ci
+          docker run -d --name frontend --network crnet -p 8080:80 carbonroute-frontend:ci
+          for i in $(seq 1 30); do curl -fsS http://localhost:8080/api/health && break; sleep 1; done
+          echo; echo "API reachable through nginx on the same origin:"
+          curl -fsS http://localhost:8080/api/health
+          echo; echo "SPA deep link served by nginx:"
+          curl -fsS -o /dev/null -w "%{http_code}\n" http://localhost:8080/results
+          test -e /tmp/crdb/carbonroute.db.json && echo "database written to the mounted volume"
+          echo "Unauthenticated job list is refused:"
+          test "$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/jobs)" = "401"
+          docker logs backend 2>&1 | tail -20
+          docker rm -f backend frontend
+
+      - name: Production mode refuses to start without JWT_SECRET
+        run: |
+          set +e
+          docker run --rm -e NODE_ENV=production carbonroute-backend:ci
+          code=$?
+          set -e
+          test "$code" -ne 0 && echo "refused to start (exit $code)"
+
+      - name: Compose file is valid
+        run: |
+          cp .env.example .env
+          docker compose -f docker/docker-compose.yml config --quiet && echo "compose config valid"

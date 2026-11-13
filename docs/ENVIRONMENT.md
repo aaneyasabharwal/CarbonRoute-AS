@@ -37,7 +37,8 @@ printed.
 | Variable | Default | Purpose |
 |---|---|---|
 | `VITE_API_URL` | `http://localhost:5000` on localhost, otherwise `https://carbonroute.onrender.com` | Backend base URL (with or without `/api`). Set `/api` for same-origin deployments behind a proxy (the Docker image does). |
-| `GITHUB_PAGES` | unset | `true` builds with the `/CarbonRoute/` base path for GitHub Pages. |
+| `GITHUB_PAGES` | unset | `true` builds for GitHub Pages under `/<repository>/` (from `GITHUB_REPOSITORY`, default `CarbonRoute-AS`). |
+| `PAGES_BASE_PATH` | unset | Overrides the Pages base path (e.g. `/` for a custom domain). |
 
 The hosted frontend's default backend (`https://carbonroute.onrender.com`) must list the frontend's
 origin in its `CORS_ORIGIN`.

@@ -45,6 +45,56 @@ export async function collectOnce(client: Client, zones: string[], run: number, 
   return { runAt, ok, failed, file };
 }
 
+/** Lock file that stops a second collector from writing into the same folder (P7). */
+export const LOCK_FILE = '.collector.lock';
+
+function processAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err: any) {
+    return err?.code === 'EPERM'; // exists but belongs to another user
+  }
+}
+
+/**
+ * Takes the folder lock. Returns a release function, or an error message when another live
+ * collector holds it. A lock left by a process that no longer exists (crash, sleep, reboot) is
+ * replaced. Collected data files are never touched.
+ */
+export function acquireCollectorLock(outDir: string, pid = process.pid, now = () => new Date()): { release: () => void } | { error: string } {
+  const file = path.join(outDir, LOCK_FILE);
+  const content = JSON.stringify({ pid, startedAt: now().toISOString() });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      fs.writeFileSync(file, content, { flag: 'wx' });
+      return {
+        release: () => {
+          try {
+            if (JSON.parse(fs.readFileSync(file, 'utf8')).pid === pid) fs.unlinkSync(file);
+          } catch {
+            /* already gone */
+          }
+        },
+      };
+    } catch (err: any) {
+      if (err?.code !== 'EEXIST') throw err;
+      let holder: { pid?: number; startedAt?: string } = {};
+      try {
+        holder = JSON.parse(fs.readFileSync(file, 'utf8'));
+      } catch {
+        /* unreadable lock: treat as stale */
+      }
+      if (holder.pid && holder.pid !== pid && processAlive(holder.pid)) {
+        return { error: `Another collector (pid ${holder.pid}, started ${holder.startedAt ?? 'unknown'}) is writing to ${outDir}. Not starting a second one.` };
+      }
+      fs.unlinkSync(file); // stale
+    }
+  }
+  return { error: `Could not take the collector lock in ${outDir}.` };
+}
+
 export async function runCollector(
   client: Client,
   opts: CollectorOptions,
@@ -57,10 +107,26 @@ export async function runCollector(
     return 2;
   }
   fs.mkdirSync(opts.outDir, { recursive: true });
-  for (let run = 1; run <= opts.runs; run++) {
-    const r = await collectOnce(client, opts.zones, run, opts.outDir, deps.now);
-    log(`[collector] run ${run}/${opts.runs} at ${r.runAt}: ${r.ok} ok, ${r.failed} failed`);
-    if (run < opts.runs) await sleep(opts.intervalMs);
+  const lock = acquireCollectorLock(opts.outDir);
+  if ('error' in lock) {
+    log(lock.error);
+    return 3;
+  }
+  const release = () => lock.release();
+  const onInterrupt = () => {
+    release();
+    process.exit(130);
+  };
+  process.once('SIGINT', onInterrupt);
+  try {
+    for (let run = 1; run <= opts.runs; run++) {
+      const r = await collectOnce(client, opts.zones, run, opts.outDir, deps.now);
+      log(`[collector] run ${run}/${opts.runs} at ${r.runAt}: ${r.ok} ok, ${r.failed} failed`);
+      if (run < opts.runs) await sleep(opts.intervalMs);
+    }
+  } finally {
+    process.off('SIGINT', onInterrupt);
+    release();
   }
   return 0;
 }

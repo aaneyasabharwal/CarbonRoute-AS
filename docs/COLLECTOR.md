@@ -20,6 +20,12 @@ npm run collect -- --out ../../CarbonRoute-AS-data/em-collection --zones DE,GB,U
   or printed.
 - Output is outside the repository. Never move it into the repository or commit it.
 
+- **Folder lock (P7).** `npm run collect` takes `<out>/.collector.lock` (process id and start time).
+  A second collector pointed at the same folder refuses to start (exit code 3) while the first is
+  alive; a lock left behind by a process that no longer exists (crash, reboot) is replaced. The lock
+  never touches the `.jsonl` files. The collector started on 2026-11-13 (pid 18848) is a wrapper
+  script that predates the lock, so check the process list before starting `npm run collect`.
+
 ## Checking that it is healthy
 
 1. Exactly one collector process is running (two would double-count calls and interleave lines):
@@ -32,6 +38,19 @@ npm run collect -- --out ../../CarbonRoute-AS-data/em-collection --zones DE,GB,U
    ```
    It prints records, failed calls, realized hours, missing hours and measured share per zone.
 
+## Backing up
+
+Copy, never move, and verify:
+
+```bash
+D=../../CarbonRoute-AS-data; B=$D/backups/em-collection-$(date -u +%Y%m%dT%H%MZ)
+mkdir -p $B && cp -p $D/em-collection/*.jsonl $B/
+(cd $D/em-collection && sha256sum *.jsonl) | diff - <(cd $B && sha256sum *.jsonl) && echo verified
+```
+
+Backup taken 2026-11-13 19:52 UTC: `backups/em-collection-20261113T1952Z` (70 records, checksums
+verified).
+
 ## Restarting or resuming safely
 
 The collector keeps no state besides the output files, so resuming is starting it again.
@@ -39,7 +58,9 @@ The collector keeps no state besides the output files, so resuming is starting i
 1. Check step 1 above. **Do not start a second collector** while one is running.
 2. Do not delete, rename or edit existing `.jsonl` files. New runs append to the file of the current
    UTC date (a new file starts at 00:00 UTC).
-3. Start it again with the same `--out` folder (command above). Run numbers start again at 1; this is
+3. Start it again with the same `--out` folder. For the 7 days the model needs, from `backend/`:
+   `npm run collect -- --out ../../CarbonRoute-AS-data/em-collection --runs 168 --interval-min 60`
+   (1,680 calls over 7 days, 10 per hour, inside the 120/hour and 1,500/day budget). Run numbers start again at 1; this is
    expected and harmless, because every record carries its `runAt` timestamp and all analyses use
    timestamps, not run numbers.
 4. Keep the computer awake while collecting (sleep stops the process; on wake it does not catch up).

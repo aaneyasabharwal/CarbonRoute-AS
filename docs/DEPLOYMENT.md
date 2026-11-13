@@ -117,15 +117,17 @@ Data and secrets (P6 audit):
   `LOCAL_STORAGE_DIR=/app/storage/uploads`. Without them the compiled code would write the database to
   `/database` inside the container, outside the mounted volume, and lose it when the container is
   recreated.
-- The Docker build was not run during the P6 verification (Docker is not installed on the verification
-  machine); the configuration was reviewed by reading it.
+- Docker is not installed on the development machine, so images have **not** been built or run
+  locally. Since P7 the CI job `Docker images` builds both images on GitHub's runners, checks that
+  no `.env` or local database is inside them, runs the backend in production mode with throwaway
+  secrets behind the nginx frontend, and validates the compose file. Nothing is pushed to a registry.
 
 ## 5. Current hosted setup and prerequisites
 
 - **Frontend**: GitHub Pages, deployed by `.github/workflows/deploy-pages.yml` **only on pushes to
   `main`** (the remediation work is on `fix/prototype-flaws` and has not been deployed). Built with
-  `GITHUB_PAGES=true` (base path `/CarbonRoute/`, which must match the name of the repository that hosts
-  Pages: on this fork, `CarbonRoute-AS`, the base path would have to change); it calls `https://carbonroute.onrender.com` unless
+  `GITHUB_PAGES=true`. The base path follows the repository that builds it (`/CarbonRoute-AS/` here,
+  from `GITHUB_REPOSITORY`; override with `PAGES_BASE_PATH`), fixed in P7; it calls `https://carbonroute.onrender.com` unless
   `VITE_API_URL` is set at build time.
 - **Backend**: Render (`https://carbonroute.onrender.com`). Before deploying the remediated backend:
   set `NODE_ENV=production`, a new `JWT_SECRET`, `ADMIN_PASSWORD` (if the database is new),
@@ -138,4 +140,6 @@ Data and secrets (P6 audit):
 - **Result files** (`BENCHMARK_RESULTS_DIR`, `ML_RESULTS_DIR`) are not in the repository; the hosted
   Results page is empty unless they are copied to the server.
 
-See [ENVIRONMENT.md](ENVIRONMENT.md) for every variable.
+See [ENVIRONMENT.md](ENVIRONMENT.md) for every variable and
+[DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md) for blockers, the credential-rotation plan and the
+staging checklist.

@@ -346,3 +346,39 @@ describe('P6: reproducible demo (runDemo)', () => {
     await expect(runDemo(recs, 'sha', fs.mkdtempSync(path.join(os.tmpdir(), 'cr-demo-')), {})).rejects.toThrow(/old enough/);
   });
 });
+
+describe('P7: collector folder lock (no duplicate collectors)', () => {
+  const client = {
+    isConfigured: () => true,
+    getForecast: async () => ({ ok: true }),
+    getHistory: async () => ({ observations: [] }),
+  } as any;
+
+  it('refuses to start while a live collector holds the lock, and leaves data files untouched', async () => {
+    const { runCollector, LOCK_FILE } = await import('../../src/scripts/collectElectricityMaps');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cr-lock-'));
+    fs.writeFileSync(path.join(dir, 'collection-2026-11-13.jsonl'), '{"existing":true}\n');
+    // The parent of the test process is alive and is not this process: "another running collector".
+    fs.writeFileSync(path.join(dir, LOCK_FILE), JSON.stringify({ pid: process.ppid, startedAt: "earlier" }));
+    const logs: string[] = [];
+    const code = await runCollector(client, { zones: ['DE'], runs: 1, intervalMs: 0, outDir: dir }, { log: (m) => logs.push(m), sleep: async () => {} });
+    expect(code).toBe(3);
+    expect(logs.join(' ')).toMatch(/Another collector/);
+    expect(fs.readFileSync(path.join(dir, 'collection-2026-11-13.jsonl'), 'utf8')).toBe('{"existing":true}\n');
+    expect(fs.existsSync(path.join(dir, LOCK_FILE))).toBe(true); // not removed: it belongs to the other collector
+  });
+
+  it('replaces a stale lock from a process that no longer exists, appends, and releases the lock', async () => {
+    const { runCollector, LOCK_FILE } = await import('../../src/scripts/collectElectricityMaps');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cr-lock-'));
+    const day = new Date(T0).toISOString().slice(0, 10);
+    fs.writeFileSync(path.join(dir, `collection-${day}.jsonl`), '{"existing":true}\n');
+    fs.writeFileSync(path.join(dir, LOCK_FILE), JSON.stringify({ pid: 2 ** 22 + 4321, startedAt: 'before a crash' }));
+    const code = await runCollector(client, { zones: ['DE'], runs: 1, intervalMs: 0, outDir: dir }, { log: () => {}, sleep: async () => {}, now: () => new Date(T0) });
+    expect(code).toBe(0);
+    const lines = fs.readFileSync(path.join(dir, `collection-${day}.jsonl`), 'utf8').trim().split('\n');
+    expect(lines[0]).toBe('{"existing":true}'); // existing data preserved; new records appended
+    expect(lines.length).toBe(3);
+    expect(fs.existsSync(path.join(dir, LOCK_FILE))).toBe(false);
+  });
+});

@@ -1,10 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { pagesBase } from './src/config/pagesBase';
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: process.env.GITHUB_PAGES === 'true' ? '/CarbonRoute/' : '/',
+  // GitHub Pages serves the site under /<repository>/ (see src/config/pagesBase.ts).
+  base: pagesBase(process.env),
   server: {
     port: 5173,
     proxy: {

@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   SlidersHorizontal,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { api, resolveFileUrl } from '../services/api';
 import { Resource } from '../types';
 import { RESOURCE_CATEGORIES } from '../data/resourcesData';
@@ -217,13 +218,14 @@ export const ResourcesPage: React.FC = () => {
             </p>
           </div>
           <div className="pt-2">
-            <a
-              href="/admin"
+            {/* Router link: a plain href="/admin" ignores the GitHub Pages base path (P7). */}
+            <Link
+              to="/admin"
               className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold hover:bg-emerald-400 text-xs font-mono transition-colors shadow-sm"
             >
               <ShieldCheck className="w-4 h-4" />
               <span>Go to Admin Panel &rarr;</span>
-            </a>
+            </Link>
           </div>
         </div>
       ) : filteredResources.length === 0 ? (
@@ -381,13 +383,13 @@ export const ResourcesPage: React.FC = () => {
           </div>
         </div>
 
-        <a
-          href="/admin"
+        <Link
+          to="/admin"
           className="px-3.5 py-2 rounded-lg bg-slate-900 border border-slate-700 hover:border-emerald-500/50 text-slate-300 hover:text-white text-xs font-mono flex items-center space-x-1.5 shrink-0 transition-colors"
         >
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
           <span>Admin Portal &rarr;</span>
-        </a>
+        </Link>
       </div>
 
       {/* PDF / Document In-Browser Preview Modal */}
