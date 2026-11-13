@@ -1,263 +1,251 @@
-import React, { useState } from 'react';
-import {
-  LayoutDashboard,
-  Cpu,
-  Sliders,
-  Zap,
-  Activity,
-  BarChart3,
-  ShieldCheck,
-  Compass,
-  Clock,
-  AlertCircle,
-  Play,
-  Layers,
-  Sparkles,
-  Info,
-} from 'lucide-react';
+/**
+ * Dashboard (P8). Replaces the former "UI architecture preview" (placeholder panels with no data).
+ * Every value comes from the backend; a section whose request fails says so and shows no numbers.
+ *  - My jobs: counts by status and the most recent jobs (signed-in users).
+ *  - Latest replay benchmark: CarbonRoute vs Immediate per declared runtime CV, read with the same
+ *    rule as the research report (a difference is only "lower" when its interval excludes 0).
+ *  - Forecast-error model status (never an accuracy unless a model was evaluated).
+ *  - Live data provider configuration and call budget; execution mode (Kubernetes or simulated).
+ */
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { LayoutDashboard, History, BarChart3, BrainCircuit, PlugZap, Server, Cpu } from 'lucide-react';
+import { api } from '../services/api';
+import type { BenchmarkResultDetail, JobSummary, MlEvaluationListItem } from '../types';
+import { EmptyState, ErrorState, LoadingState, SignInRequired } from '../components/StateViews';
+
+type Load<T> = { state: 'loading' } | { state: 'ok'; data: T } | { state: 'empty' } | { state: 'error'; message: string; auth?: boolean };
+
+const fmt = (x: number | null | undefined, dp = 2) => (x === null || x === undefined || !Number.isFinite(x) ? 'n/a' : x.toFixed(dp));
+const pct = (x: number | null | undefined) => (x === null || x === undefined ? 'n/a' : `${(x * 100).toFixed(1)}%`);
+
+/** Same rule as the research report generator (backend/src/scripts/researchReport.ts). */
+export function readDifference(ci: { estimate: number | null; low: number | null; high: number | null } | undefined | null): string {
+  if (!ci || ci.estimate === null) return 'not available';
+  if (ci.low === null || ci.high === null) return 'no interval (too few snapshots)';
+  if (ci.low <= 0 && ci.high >= 0) return 'no evidence of a difference';
+  return ci.high < 0 ? 'lower than Immediate in this sample' : 'higher than Immediate in this sample';
+}
+
+const Card: React.FC<{ title: string; icon: React.ElementType; children: React.ReactNode; label: string }> = ({ title, icon: Icon, children, label }) => (
+  <section aria-label={label} className="p-5 rounded-2xl border border-slate-800 bg-slate-900/40 space-y-3">
+    <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+      <Icon className="w-4 h-4 text-emerald-300" aria-hidden="true" /> {title}
+    </h2>
+    {children}
+  </section>
+);
 
 export const DashboardPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<string>('workload');
+  const signedIn = api.hasSession();
+  const [jobs, setJobs] = useState<Load<JobSummary[]>>({ state: 'loading' });
+  const [bench, setBench] = useState<Load<BenchmarkResultDetail>>({ state: 'loading' });
+  const [ml, setMl] = useState<Load<MlEvaluationListItem>>({ state: 'loading' });
+  const [provider, setProvider] = useState<Load<any>>({ state: 'loading' });
+  const [cluster, setCluster] = useState<Load<{ isAvailable: boolean; message: string }>>({ state: 'loading' });
 
-  const dashboardSections = [
-    { id: 'workload', name: 'Submit Workload', icon: Cpu },
-    { id: 'experiment', name: 'Configure Experiment', icon: Sliders },
-    { id: 'policy', name: 'Scheduling Policy', icon: Zap },
-    { id: 'forecast', name: 'Forecast Uncertainty', icon: Activity },
-    { id: 'results', name: 'Results', icon: BarChart3 },
-    { id: 'risk', name: 'Risk Calibration', icon: ShieldCheck },
-    { id: 'benchmark', name: 'Benchmark Comparison', icon: Compass },
-  ];
+  useEffect(() => {
+    (async () => {
+      const [p, c] = await Promise.all([api.getProviderStatus(), api.getClusterHealth()]);
+      setProvider(p.success && p.data ? { state: 'ok', data: p.data } : { state: 'error', message: p.message || 'Provider status unavailable.' });
+      setCluster(c.success && c.data ? { state: 'ok', data: c.data } : { state: 'error', message: c.message || 'Cluster status unavailable.' });
+    })();
+    if (!signedIn) return;
+    (async () => {
+      const j = await api.listJobs();
+      setJobs(j.success && j.data ? (j.data.length ? { state: 'ok', data: j.data } : { state: 'empty' }) : { state: 'error', message: j.message || 'Could not load jobs.', auth: j.authRequired });
+    })();
+    (async () => {
+      const list = await api.listBenchmarks();
+      if (!list.success || !list.data) return setBench({ state: 'error', message: list.message || 'Could not load benchmarks.', auth: list.authRequired });
+      if (!list.data.length) return setBench({ state: 'empty' });
+      const one = await api.getBenchmark(list.data[0].id);
+      setBench(one.success && one.data ? { state: 'ok', data: one.data } : { state: 'error', message: one.message || 'Could not load the benchmark.' });
+    })();
+    (async () => {
+      const list = await api.listMlEvaluations();
+      if (!list.success || !list.data) return setMl({ state: 'error', message: list.message || 'Could not load model evaluations.' });
+      setMl(list.data.length ? { state: 'ok', data: list.data[0] } : { state: 'empty' });
+    })();
+  }, [signedIn]);
+
+  const authLost = [jobs, bench].some((l) => l.state === 'error' && l.auth);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
-      {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6">
+      <header className="flex flex-wrap items-end justify-between gap-3 pb-4 border-b border-slate-800">
         <div>
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono mb-2">
-            <Clock className="w-3.5 h-3.5" />
-            <span>Coming During Development (Weeks 14–16)</span>
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-mono">
-            CarbonRoute Scheduling Dashboard
+          <h1 className="text-3xl font-extrabold text-white tracking-tight font-mono flex items-center gap-3">
+            <LayoutDashboard className="w-7 h-7 text-emerald-400" aria-hidden="true" /> Dashboard
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Interactive control interface for workload submission, policy evaluation, risk calibration, and live benchmark execution.
-          </p>
+          <p className="text-sm text-slate-400 mt-1">Current state of your jobs, the latest experiment results and the platform, from the backend.</p>
         </div>
-
-        <div className="flex items-center space-x-2 text-xs font-mono text-amber-400 bg-amber-950/40 px-3 py-1.5 rounded-lg border border-amber-800/60">
-          <Info className="w-4 h-4" />
-          <span>UI Architecture Preview</span>
+        <div className="flex gap-2 text-xs">
+          <Link to="/prototype" className="px-3 py-2 rounded-lg bg-emerald-500 text-slate-950 font-bold hover:bg-emerald-400">Schedule a job</Link>
+          <Link to="/jobs" className="px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800">My jobs</Link>
+          <Link to="/results" className="px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800">Results</Link>
         </div>
-      </div>
+      </header>
 
-      {/* Development Status Notice */}
-      <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 text-xs font-mono text-slate-300 flex items-start space-x-3">
-        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <strong className="text-white block">Academic Integrity Notice:</strong>
-          <p className="text-slate-400">
-            In accordance with research evaluation standards, no simulated or fabricated results are displayed ahead of the simulation engine integration in Phase 8 (Week 14).
-          </p>
-        </div>
-      </div>
-
-      {/* Navigation Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-3 text-xs font-mono">
-        {dashboardSections.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-3.5 py-2 rounded-lg border transition-all flex items-center space-x-2 ${
-                isActive
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 font-bold'
-                  : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:text-white'
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              <span>{tab.name}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* 1. Submit Workload */}
-      {activeTab === 'workload' && (
-        <div className="glass-card rounded-2xl p-8 border border-slate-800 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white font-mono flex items-center space-x-2">
-              <Cpu className="w-5 h-5 text-emerald-400" />
-              <span>1. Submit Batch Workload Specification</span>
-            </h2>
-            <span className="px-2.5 py-0.5 rounded text-[10px] font-mono bg-amber-950 text-amber-300 border border-amber-800">
-              Coming During Development
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs font-mono opacity-80">
-            <div className="space-y-1">
-              <label className="text-slate-400">Workload Type</label>
-              <input
-                type="text"
-                disabled
-                placeholder="ML Training / Data Transformation"
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-500 cursor-not-allowed"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-slate-400">Estimated Duration (Hours)</label>
-              <input
-                type="number"
-                disabled
-                placeholder="4"
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-500 cursor-not-allowed"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-slate-400">Hard Deadline (Hours)</label>
-              <input
-                type="number"
-                disabled
-                placeholder="16"
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-500 cursor-not-allowed"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 2. Configure Experiment */}
-      {activeTab === 'experiment' && (
-        <div className="glass-card rounded-2xl p-8 border border-slate-800 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white font-mono flex items-center space-x-2">
-              <Sliders className="w-5 h-5 text-teal-400" />
-              <span>2. Configure Simulation Experiment</span>
-            </h2>
-            <span className="px-2.5 py-0.5 rounded text-[10px] font-mono bg-amber-950 text-amber-300 border border-amber-800">
-              Coming During Development
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono opacity-80">
-            <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
-              <span className="text-white font-bold block">Cloud Regions</span>
-              <p className="text-slate-400 text-[11px]">US-East, Europe-North, US-West grid zones</p>
-            </div>
-            <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
-              <span className="text-white font-bold block">Capacity Limits</span>
-              <p className="text-slate-400 text-[11px]">Dynamic spot node availability constraints</p>
-            </div>
-            <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
-              <span className="text-white font-bold block">Simulation Horizon</span>
-              <p className="text-slate-400 text-[11px]">24h to 168h discrete-time simulation window</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3. Scheduling Policy */}
-      {activeTab === 'policy' && (
-        <div className="glass-card rounded-2xl p-8 border border-slate-800 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white font-mono flex items-center space-x-2">
-              <Zap className="w-5 h-5 text-emerald-400" />
-              <span>3. Policy Selection &amp; Constraint Config</span>
-            </h2>
-            <span className="px-2.5 py-0.5 rounded text-[10px] font-mono bg-amber-950 text-amber-300 border border-amber-800">
-              Coming During Development
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs font-mono opacity-80">
-            {['Immediate', 'Earliest Deadline First', 'Cost-Aware', 'Deterministic Carbon', 'CarbonRoute (Proposed)', 'Oracle Reference'].map((pol) => (
-              <div key={pol} className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 text-slate-300">
-                {pol}
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card title="Live carbon data" icon={PlugZap} label="Live data provider">
+          {provider.state === 'loading' ? (
+            <LoadingState label="Loading provider status…" />
+          ) : provider.state === 'error' ? (
+            <ErrorState message={provider.message} />
+          ) : provider.state === 'ok' ? (
+            <div className="text-xs text-slate-300 space-y-1" data-testid="provider-status">
+              <div>
+                Electricity Maps: <strong className={provider.data.configured ? 'text-emerald-300' : 'text-amber-300'}>{provider.data.configured ? 'configured' : 'not configured (only the synthetic demo trace is available)'}</strong>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+              {provider.data.callBudget && (
+                <div>
+                  Server call budget: {provider.data.callBudget.lastHour}/{provider.data.callBudget.maxPerHour} this hour, {provider.data.callBudget.lastDay}/{provider.data.callBudget.maxPerDay} in 24 h
+                </div>
+              )}
+              <div className="text-slate-500">History window {provider.data.historyWindowHours} h; past ranges {provider.data.pastRangeAvailable ? 'available' : 'not in this plan'}.</div>
+            </div>
+          ) : null}
+        </Card>
 
-      {/* 4. Forecast Uncertainty */}
-      {activeTab === 'forecast' && (
-        <div className="glass-card rounded-2xl p-8 border border-slate-800 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white font-mono flex items-center space-x-2">
-              <Activity className="w-5 h-5 text-cyan-400" />
-              <span>4. Forecast Uncertainty &amp; Error Variance</span>
-            </h2>
-            <span className="px-2.5 py-0.5 rounded text-[10px] font-mono bg-amber-950 text-amber-300 border border-amber-800">
-              Coming During Development
-            </span>
-          </div>
+        <Card title="Execution" icon={Server} label="Execution mode">
+          {cluster.state === 'loading' ? (
+            <LoadingState label="Checking for a cluster…" />
+          ) : cluster.state === 'error' ? (
+            <ErrorState message={cluster.message} />
+          ) : cluster.state === 'ok' ? (
+            <div className="text-xs text-slate-300" data-testid="execution-mode">
+              <strong className={cluster.data.isAvailable ? 'text-emerald-300' : 'text-amber-300'}>{cluster.data.isAvailable ? 'Kubernetes' : 'Simulated'}</strong>: {cluster.data.message}
+            </div>
+          ) : null}
+        </Card>
+      </div>
 
-          <div className="p-8 text-center bg-slate-950 rounded-xl border border-slate-800 text-slate-500 font-mono text-xs">
-            Multi-horizon error distribution curves and variance bounds will be rendered here upon Phase 4 module integration.
-          </div>
-        </div>
-      )}
+      {!signedIn || authLost ? (
+        <SignInRequired what="your jobs and experiment results" />
+      ) : (
+        <>
+          <Card title="My jobs" icon={History} label="My jobs summary">
+            {jobs.state === 'loading' ? (
+              <LoadingState label="Loading jobs…" />
+            ) : jobs.state === 'error' ? (
+              <ErrorState message={jobs.message} />
+            ) : jobs.state === 'empty' ? (
+              <EmptyState title="No jobs yet">
+                <p>
+                  <Link to="/prototype" className="text-emerald-300 underline">Schedule a job</Link> to see it here.
+                </p>
+              </EmptyState>
+            ) : jobs.state === 'ok' ? (
+              <JobsSummary jobs={jobs.data} />
+            ) : null}
+          </Card>
 
-      {/* 5. Results */}
-      {activeTab === 'results' && (
-        <div className="glass-card rounded-2xl p-8 border border-slate-800 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white font-mono flex items-center space-x-2">
-              <BarChart3 className="w-5 h-5 text-indigo-400" />
-              <span>5. Simulation Results</span>
-            </h2>
-            <span className="px-2.5 py-0.5 rounded text-[10px] font-mono bg-amber-950 text-amber-300 border border-amber-800">
-              Coming During Development
-            </span>
-          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <Card title="Latest replay benchmark" icon={BarChart3} label="Latest benchmark">
+              {bench.state === 'loading' ? (
+                <LoadingState label="Loading benchmark…" />
+              ) : bench.state === 'error' ? (
+                <ErrorState message={bench.message} />
+              ) : bench.state === 'empty' ? (
+                <EmptyState title="No benchmark yet">
+                  <p>Run <code>npm run benchmark</code> in <code>backend/</code>.</p>
+                </EmptyState>
+              ) : bench.state === 'ok' ? (
+                <BenchmarkHeadline b={bench.data} />
+              ) : null}
+            </Card>
 
-          <div className="p-8 text-center bg-slate-950 rounded-xl border border-slate-800 text-slate-500 font-mono text-xs">
-            Actual metrics (Carbon gCO2eq, Cost, Delay, Deadline Violations) will populate dynamically during benchmarking.
+            <Card title="Forecast-error model" icon={BrainCircuit} label="Model status">
+              {ml.state === 'loading' ? (
+                <LoadingState label="Loading model status…" />
+              ) : ml.state === 'error' ? (
+                <ErrorState message={ml.message} />
+              ) : ml.state === 'empty' ? (
+                <EmptyState title="No model evaluation yet" />
+              ) : ml.state === 'ok' ? (
+                <div className="text-xs text-slate-300 space-y-1" data-testid="ml-status">
+                  <div className="font-bold text-slate-100">
+                    {ml.data.status === 'insufficient-data' ? 'Not trained: not enough data yet' : ml.data.status === 'evaluated-promoted' ? 'Evaluated: beat the baselines (not used for scheduling)' : 'Evaluated: did not beat the baselines'}
+                  </div>
+                  <div>
+                    {ml.data.dataset.rows} forecast/realized pairs ({ml.data.dataset.measuredRows} measured) over {ml.data.dataset.spanDays} days.
+                  </div>
+                  <Link to="/results" className="text-emerald-300 underline">Details</Link>
+                </div>
+              ) : null}
+            </Card>
           </div>
-        </div>
-      )}
-
-      {/* 6. Risk Calibration */}
-      {activeTab === 'risk' && (
-        <div className="glass-card rounded-2xl p-8 border border-slate-800 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white font-mono flex items-center space-x-2">
-              <ShieldCheck className="w-5 h-5 text-emerald-400" />
-              <span>6. Risk Calibration &amp; Reliability Diagrams</span>
-            </h2>
-            <span className="px-2.5 py-0.5 rounded text-[10px] font-mono bg-amber-950 text-amber-300 border border-amber-800">
-              Coming During Development
-            </span>
-          </div>
-
-          <div className="p-8 text-center bg-slate-950 rounded-xl border border-slate-800 text-slate-500 font-mono text-xs">
-            Brier score graphs, reliability plots, and ECE curves will be generated from repeated multi-seed evaluations in Phase 5.
-          </div>
-        </div>
-      )}
-
-      {/* 7. Benchmark Comparison */}
-      {activeTab === 'benchmark' && (
-        <div className="glass-card rounded-2xl p-8 border border-slate-800 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white font-mono flex items-center space-x-2">
-              <Compass className="w-5 h-5 text-teal-400" />
-              <span>7. Reproducible Benchmark Comparison</span>
-            </h2>
-            <span className="px-2.5 py-0.5 rounded text-[10px] font-mono bg-amber-950 text-amber-300 border border-amber-800">
-              Coming During Development
-            </span>
-          </div>
-
-          <div className="p-8 text-center bg-slate-950 rounded-xl border border-slate-800 text-slate-500 font-mono text-xs">
-            Side-by-side comparative matrices against 5 baseline solvers and Oracle regret bounds will be displayed upon Week 15 benchmark execution.
-          </div>
-        </div>
+        </>
       )}
     </div>
   );
 };
+
+const STATUS_ORDER = ['scheduled', 'running', 'completed', 'failed', 'interrupted', 'infeasible', 'cancelled', 'pending'];
+
+const JobsSummary: React.FC<{ jobs: JobSummary[] }> = ({ jobs }) => {
+  const counts = new Map<string, number>();
+  for (const j of jobs) counts.set(j.status, (counts.get(j.status) ?? 0) + 1);
+  const recent = [...jobs].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 5);
+  return (
+    <div className="space-y-3 text-xs" data-testid="jobs-summary">
+      <div className="flex flex-wrap gap-2">
+        <span className="px-2 py-1 rounded bg-slate-800 text-slate-100">{jobs.length} total</span>
+        {STATUS_ORDER.filter((s) => counts.has(s)).map((s) => (
+          <span key={s} className="px-2 py-1 rounded border border-slate-700 text-slate-300">
+            {s} {counts.get(s)}
+          </span>
+        ))}
+      </div>
+      <ul className="divide-y divide-slate-800">
+        {recent.map((j) => (
+          <li key={j.id} className="py-1.5 flex justify-between gap-2">
+            <span className="text-slate-200 truncate">{j.name || j.id}</span>
+            <span className="text-slate-400 shrink-0">
+              {j.zone ?? 'n/a'} · {j.status}
+              {j.latestDecision?.dataMode === 'demo' ? ' · synthetic' : ''}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <Link to="/jobs" className="text-emerald-300 underline">All jobs</Link>
+    </div>
+  );
+};
+
+const BenchmarkHeadline: React.FC<{ b: BenchmarkResultDetail }> = ({ b }) => (
+  <div className="text-xs text-slate-300 space-y-2" data-testid="benchmark-headline">
+    <div className="text-slate-400">
+      {b.dataset.snapshots} real forecast snapshots, {b.dataset.realizedIntervals} realized values ({pct(b.dataset.measuredShare)} measured), synthetic workloads. Run {b.createdAt.slice(0, 16).replace('T', ' ')} UTC.
+    </div>
+    <table className="w-full text-left" aria-label="CarbonRoute vs Immediate">
+      <thead className="text-slate-500">
+        <tr>
+          <th className="py-1 pr-2">Runtime CV</th>
+          <th className="py-1 pr-2">Δ vs Immediate [95% CI]</th>
+          <th className="py-1 pr-2">Reading</th>
+          <th className="py-1">Violations (simulated)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {b.scenarios.map((s) => {
+          const cr = s.policies.find((p) => p.policyId === 'carbonroute_uncertainty');
+          const ci = cr?.diffVsImmediateClusterCI;
+          return (
+            <tr key={s.runtimeCv} className="border-t border-slate-800">
+              <td className="py-1 pr-2">{s.runtimeCv}</td>
+              <td className="py-1 pr-2">{ci ? `${fmt(ci.estimate)} [${fmt(ci.low)}, ${fmt(ci.high)}]` : 'n/a (older result)'}</td>
+              <td className="py-1 pr-2">{ci ? readDifference(ci) : 'not reported'}</td>
+              <td className="py-1">{pct(cr?.deadlineViolationRate)}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+    <div className="text-slate-500 flex items-start gap-1">
+      <Cpu className="w-3 h-3 mt-0.5 shrink-0" aria-hidden="true" />
+      Negative = cleaner than Immediate (gCO2eq/kWh, realized). Short data periods are not statistically conclusive; see Results.
+    </div>
+  </div>
+);

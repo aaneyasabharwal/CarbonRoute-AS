@@ -1286,6 +1286,18 @@ export const api = {
     }
   },
 
+  /** Public provider status: whether live data is configured and the server's call budget (no secrets). */
+  async getProviderStatus(): Promise<ApiResponse<{ configured: boolean; historyWindowHours: number; pastRangeAvailable: boolean; callBudget?: { lastHour: number; lastDay: number; maxPerHour: number; maxPerDay: number } }>> {
+    try {
+      const res = await fetch(`${API_BASE}/carbon/provider`);
+      const json = await res.json().catch(() => null);
+      if (res.ok && json && json.success) return json;
+      return { success: false, message: json?.message || `Provider status failed (${res.status})` };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error loading provider status.' };
+    }
+  },
+
   async recordExperiment(expData: any): Promise<ApiResponse<ExperimentRecord>> {
     try {
       const res = await fetch(`${API_BASE}/experiments`, {

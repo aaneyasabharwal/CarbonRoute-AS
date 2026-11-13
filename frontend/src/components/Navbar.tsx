@@ -21,6 +21,7 @@ import {
   ArrowRight,
   Shield,
   Sparkles,
+  LayoutDashboard,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -35,6 +36,7 @@ export const Navbar: React.FC = () => {
     { name: 'Project', path: '/project', icon: Compass },
     { name: 'How It Works', path: '/how-it-works', icon: Play },
     { name: 'Architecture', path: '/architecture', icon: Layers },
+    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Prototype', path: '/prototype', icon: Cpu, highlight: true },
     { name: 'My Jobs', path: '/jobs', icon: History },
     { name: 'Results', path: '/results', icon: BarChart3 },
