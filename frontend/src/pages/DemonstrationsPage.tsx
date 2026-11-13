@@ -103,7 +103,7 @@ export const DemonstrationsPage: React.FC = () => {
                 <span className="text-[10px] font-mono text-emerald-400 font-bold block uppercase">Step 02</span>
                 <h4 className="font-bold text-white font-mono">CarbonRoute API</h4>
                 <p className="text-slate-400 text-[11px] leading-relaxed">
-                  API ingests workload, queries regional forecast model, and pulls calibrated error variance.
+                  API ingests workload, queries the regional forecast and computes deadline risk from the declared runtime variability.
                 </p>
               </div>
 
@@ -151,7 +151,7 @@ export const DemonstrationsPage: React.FC = () => {
     "estimatedDeadlineRisk": 0.048,
     "riskTolerance": 0.05
   },
-  "explanation": "Shifted +4h to capture offshore wind peak while maintaining calibrated deadline violation risk <= 5%."
+  "explanation": "Shifted +4h to capture offshore wind peak while keeping modelled deadline-miss risk <= 5% (illustrative example)."
 }`}
                 </pre>
               </div>

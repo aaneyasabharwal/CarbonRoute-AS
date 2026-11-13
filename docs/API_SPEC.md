@@ -119,7 +119,7 @@ A scheduling request that fails before a decision exists (e.g. the provider is u
 ## 5. Scheduling & Feasibility Simulation
 
 ### `POST /scheduler/simulate`
-Simulates scheduling decisions under identical carbon forecasts with Low vs High forecast uncertainty.
+Public feasibility demonstration: the same engine and the same forecast, evaluated with two **declared runtime variabilities** (CV 0.05 and 0.25), showing how the deadline-risk constraint changes the decision. It uses the **synthetic demo trace** (no provider call) and does not model carbon-forecast uncertainty.
 - **Request Body**:
   ```json
   {
@@ -129,4 +129,15 @@ Simulates scheduling decisions under identical carbon forecasts with Low vs High
   }
   ```
 - **Response `200 OK`**:
-  Returns time slot profiles, Scenario A (Low Uncertainty) decision, Scenario B (High Uncertainty) decision, and risk calibration rationale.
+  Returns the candidate windows, Scenario A (CV 0.05) and Scenario B (CV 0.25) decisions with their rationale, and `riskModel: "declared-runtime-cv"`. No fallback values are returned on error.
+
+## 6. Health
+
+### `GET /health`
+Public. Service status and version; no secrets.
+
+## 7. Offline scripts (not HTTP)
+
+`npm run collect`, `coverage`, `benchmark`, `ml` and `demo` in `backend/` (after `npm run build`). See
+[COLLECTOR.md](COLLECTOR.md), [EXPERIMENTS.md](EXPERIMENTS.md), [ML.md](ML.md) and [DEMO.md](DEMO.md).
+Their results are read by `GET /results/benchmarks` and `GET /results/ml`.

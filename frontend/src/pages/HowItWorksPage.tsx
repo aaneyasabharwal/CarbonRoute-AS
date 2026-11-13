@@ -42,37 +42,36 @@ export const HowItWorksPage: React.FC = () => {
     {
       step: '02',
       title: 'Carbon Grid Signal Ingestion',
-      subtitle: 'Querying live marginal intensity or calibrated local traces',
+      subtitle: 'Querying live forecasts, or the labelled synthetic demo trace',
       icon: Activity,
       badge: 'Grid Ingestion',
       color: 'text-sky-400',
       description:
-        'The scheduler queries regional grid carbon intensity forecasts I(t) across a 24-hour horizon. Real grid feeds are obtained via the Electricity Maps REST API or fallback to pre-calibrated hourly ISO profiles (CAISO, ERCOT, Germany, Northern India) when offline.',
+        'The scheduler queries regional grid carbon intensity forecasts I(t) across a 24-hour horizon. Real forecasts come from the Electricity Maps REST API. Synthetic hourly profiles (CAISO, ERCOT, Germany, Northern India) are used only in explicit demo mode and are labelled synthetic.',
       math: 'I_{\\text{forecast}}(t) \\in [g\\text{CO}_2\\text{eq}/\\text{kWh}], \\quad t \\in [t_0, t_0 + 24\\text{h}]',
       details: [
         'Connects to live Electricity Maps API with zone identifier (e.g. US-CAL-CISO).',
-        'Detects missing API key or offline mode and activates Calibrated Local Demo Trace Mode without throwing errors.',
+        'A missing API key or provider failure is reported as an error; nothing is silently replaced by synthetic data.',
         'Extracts hourly carbon intensity points and establishes the temporal intensity envelope.',
       ],
       output: '24-hour hourly carbon intensity time-series vector.',
     },
     {
       step: '03',
-      title: 'Horizon Uncertainty Quantification',
-      subtitle: 'Modeling forecast variance expansion over time',
+      title: 'Forecast Uncertainty (not part of deadline risk)',
+      subtitle: 'Why carbon-forecast error does not enter the deadline risk',
       icon: GitBranch,
       badge: 'Uncertainty Modeling',
       color: 'text-purple-400',
       description:
-        'Grid carbon forecasts are inherently non-deterministic. As scheduling delay into the future increases, forecast error standard deviation sigma(t) widens according to a power-law horizon dispersion model.',
-      math: '\\sigma(t) = \\sigma_0 \\cdot \\left(1 + \\beta \\cdot (t - t_0)^\\gamma\\right)',
+        'Carbon-forecast error changes how much CO2 a window emits, not whether the job finishes on time. An earlier version used the forecast standard deviation as a time uncertainty; that was dimensionally invalid and was removed.',
+      math: '\\bar{C}(t) = \\frac{1}{d}\\sum_{h=t}^{t+d-1} \\hat{C}(h)',
       details: [
-        'sigma_0 is the immediate baseline error standard deviation (calibrated to ~15 gCO2/kWh).',
-        'beta represents the horizon growth velocity parameter.',
-        'gamma is the dispersion power exponent (default gamma = 0.5 for square-root diffusion).',
-        '95% confidence intervals are calculated as mu(t) +/- 1.96 * sigma(t).',
+        'Electricity Maps forecasts carry no uncertainty; the demo trace band is synthetic.',
+        'Forecast error is measured after the fact (MAE, RMSE, bias by lead time) on collected data.',
+        'A forecast-error correction model exists but is not trained yet: insufficient data.',
       ],
-      output: 'Hour-by-hour standard deviation vector and confidence intervals.',
+      output: 'Mean forecast intensity of every candidate window.',
     },
     {
       step: '04',
@@ -99,14 +98,14 @@ export const HowItWorksPage: React.FC = () => {
       badge: 'Risk Quantification',
       color: 'text-rose-400',
       description:
-        'CarbonRoute computes the exact probability that shifting a workload will cause a deadline breach due to forecast drift or workload variance using Chebyshev erfc tail approximation.',
-      math: 'P(\\text{violation}) = \\frac{1}{2} \\operatorname{erfc}\\left(\\frac{S(t)}{\\sqrt{2} \\cdot \\sigma_{\\text{slack}}}\\right)',
+        'The runtime is modelled as normal with the declared coefficient of variation cv. With cv = 0 (the default) the risk is 0 or 1.',
+      math: 'P_{\\text{miss}}(t) = 1 - \\Phi\\left(\\frac{D - t - d}{cv \\cdot d}\\right)',
       details: [
-        'Unlike deterministic schedulers that assume future runtime is exact, CarbonRoute models the tail probability of delay.',
-        'When slack is large relative to sigma, violation risk approaches 0.0%.',
-        'When slack collapses, violation probability rapidly escalates toward 50% and beyond.',
+        'cv is declared by the user, not learned from recorded runtimes.',
+        'When slack is large relative to cv * d, the risk approaches 0.',
+        'With zero slack the risk is 50%; start delays are not modelled.',
       ],
-      output: 'Empirically calibrated deadline violation risk for every candidate slot.',
+      output: 'Model-based deadline-miss risk for every candidate slot (not empirically calibrated).',
     },
     {
       step: '06',
@@ -121,7 +120,7 @@ export const HowItWorksPage: React.FC = () => {
       details: [
         'Immediate: dispatches at t=0 (0% savings, 0% risk baseline).',
         'EDF: dispatches immediately or based on earliest deadline.',
-        'Deterministic Carbon: blindly seeks min carbon intensity, frequently selecting slots with dangerous >30% risk.',
+        'Deterministic Carbon: picks the lowest forecast window and ignores deadline risk.',
         'CarbonAware Baseline: applies simple heuristic shifting.',
         'CarbonRoute: balances emissions reduction with hard risk threshold.',
       ],
@@ -138,11 +137,11 @@ export const HowItWorksPage: React.FC = () => {
         'CarbonRoute selects the optimal dispatch hour t* that minimizes expected emissions E[Carbon(t)] strictly subject to the condition that deadline breach risk does not exceed the user tolerance tau.',
       math: 't^* = \\arg\\min_{t \\in \\mathcal{T}_{\\text{feasible}}} \\mathbb{E}[C(t)] \\quad \\text{subject to } P(\\text{violation}(t)) \\le \\tau',
       details: [
-        'If the deterministic absolute minimum has risk > tau, CarbonRoute rejects it in favor of the lowest-carbon slot that remains safe.',
+        'If the lowest-carbon window has risk > tau, CarbonRoute picks the lowest-carbon window within tau; if none exists the result is INFEASIBLE_RISK (no fallback).',
         'Calculates projected percentage carbon savings vs. Immediate baseline.',
         'Generates formal scheduling decision record with full mathematical audit trail.',
       ],
-      output: 'Optimal scheduled start slot t* and certified risk assessment.',
+      output: 'Recommended start slot t* (or an explicit infeasible result) with its explanation.',
     },
     {
       step: '08',
@@ -152,7 +151,7 @@ export const HowItWorksPage: React.FC = () => {
       badge: 'Container Orchestration',
       color: 'text-blue-400',
       description:
-        'When the scheduled dispatch time arrives, the K8s Connector generates a complete Kubernetes batch/v1 Job YAML with container image, resource limits, carbon metadata labels, and environment parameters.',
+        'When the user dispatches the job, the K8s Connector generates a complete Kubernetes batch/v1 Job YAML with container image, resource limits, carbon metadata labels, and environment parameters.',
       math: '\\text{apiVersion: batch/v1, kind: Job, spec: \\{ backoffLimit: 2, restartPolicy: Never \\}}',
       details: [
         'Configures container image (e.g. ghcr.io/carbonroute/workload-synthetic:latest).',
@@ -165,7 +164,7 @@ export const HowItWorksPage: React.FC = () => {
     {
       step: '09',
       title: 'Execution Dispatch & Sandbox Fallback',
-      subtitle: 'Resilient pod execution with live container log streaming',
+      subtitle: 'Kubernetes submission when a cluster is reachable, otherwise simulated',
       icon: Terminal,
       badge: 'Execution Layer',
       color: 'text-emerald-400',
@@ -175,10 +174,10 @@ export const HowItWorksPage: React.FC = () => {
       details: [
         'Checks cluster connectivity using Kubernetes API client.',
         'If cluster is online: creates Job resource in carbonroute-jobs namespace.',
-        'If cluster is offline: marks clusterMode as "offline_fallback" and executes local process sandbox.',
-        'Streams live container progress: [Epoch 1/5], [Epoch 2/5] ... to UI log terminal.',
+        'If no cluster is reachable: clusterMode is "offline_fallback" and the execution is simulated; no workload process runs.',
+        'Dispatch happens when the user clicks Dispatch, not automatically at the recommended time.',
       ],
-      output: 'Real-time streamed container execution logs and completion status.',
+      output: 'Execution record (Kubernetes or simulated) and its log lines.',
     },
     {
       step: '10',
@@ -188,15 +187,14 @@ export const HowItWorksPage: React.FC = () => {
       badge: 'Accounting & Audit',
       color: 'text-teal-400',
       description:
-        'Upon workload completion, the system records actual elapsed runtime, pulls realized grid carbon intensity for the execution window, and calculates true empirical carbon savings compared to what would have been emitted if dispatched immediately.',
+        'After the scheduled window has passed, the user collects realized carbon intensity from the provider for the scheduled and Immediate windows and compares it with the forecast.',
       math: '\\Delta C = C_{\\text{immediate}} - C_{\\text{realized}} = \\int_0^{\\Delta t} I(t) dt - \\int_{t^*}^{t^*+\\Delta t} I(t) dt',
       details: [
-        'Calculates actual kWh consumed based on CPU/RAM allocation and runtime.',
-        'Computes realized carbon emissions in grams CO2eq.',
-        'Quantifies genuine carbon reduction percentage against Immediate baseline.',
-        'Persists execution telemetry to the benchmark experiments database.',
+        'Energy is an assumed model (0.125 kW per vCPU), not a measurement.',
+        'Each observation is labelled measured or provider estimate.',
+        'Realized emissions are reported only when measured energy exists (none yet).',
       ],
-      output: 'Final verified carbon reduction percentage and execution report.',
+      output: 'Downloadable forecast-vs-observed report.',
     },
   ];
 

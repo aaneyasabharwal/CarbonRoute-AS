@@ -94,7 +94,7 @@ export const ProjectPage: React.FC = () => {
       name: 'Uncertainty-Aware (CarbonRoute)',
       category: 'Proposed Core',
       desc: 'Formally models forecast error variance and shifts workloads toward lower-carbon windows while enforcing P(deadline violation | decision) <= tau.',
-      tradeoff: 'Robust carbon savings with statistically calibrated, guaranteed SLA risk bounds.',
+      tradeoff: 'Carbon-aware placement under an explicit deadline-risk budget (risk not yet calibrated).',
     },
     {
       name: 'Realized-Data Oracle',
@@ -192,7 +192,7 @@ export const ProjectPage: React.FC = () => {
           <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
             <div className="font-bold text-teal-400 font-mono">Deadline Assurance</div>
             <p className="text-slate-400 leading-relaxed">
-              Production workloads cannot tolerate arbitrary delays. CarbonRoute formalizes deadline-miss probability calibration to guarantee SLA compliance.
+              Production workloads cannot tolerate arbitrary delays. CarbonRoute bounds the modelled deadline-miss probability by the user's tolerance; calibrating that probability is planned work.
             </p>
           </div>
         </div>

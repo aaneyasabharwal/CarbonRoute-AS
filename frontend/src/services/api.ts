@@ -1118,6 +1118,8 @@ export const api = {
     jobData?: Partial<WorkloadJob>;
     region?: string;
     uncertaintyMultiplier?: number;
+    /** Declared runtime coefficient of variation, 0-1 (0 = deterministic). */
+    runtimeCv?: number;
     mode?: 'live' | 'demo';
     dataSource?: 'live' | 'demo';
   }): Promise<ApiResponse<SchedulingDecisionResponse>> {

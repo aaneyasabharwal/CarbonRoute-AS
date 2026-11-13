@@ -19,6 +19,14 @@ services:
       - NODE_ENV=production
       - PORT=5000
       - STORAGE_TYPE=local
+      # Inside the image the compiled code lives in /app/dist, so the default database path
+      # would be /database (outside the volume). Point both stores at the mounted folders.
+      - CARBONROUTE_DB_FILE=/app/database/carbonroute.db.json
+      - LOCAL_STORAGE_DIR=/app/storage/uploads
+      # The browser reaches the API through nginx on http://localhost (same origin), and nginx
+      # forwards the client address, so rate limits need TRUST_PROXY.
+      - CORS_ORIGIN=http://localhost
+      - TRUST_PROXY=1
     volumes:
       - ../storage/uploads:/app/storage/uploads
       - ../database:/app/database

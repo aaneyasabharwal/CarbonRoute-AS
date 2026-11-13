@@ -36,12 +36,12 @@ export function renderSummary(result: BenchmarkResult & { gitCommit: string | nu
   for (const s of result.scenarios) {
     lines.push('', `## Policies, declared runtime CV ${s.runtimeCv}`, '');
     lines.push(`Workloads ${s.workloads}; infeasible ${s.infeasible}; with at least one policy window not yet fully observed ${s.pendingRealized} (those windows are not scored; see Scored per policy); oracle available ${s.oracleAvailable}.`, '');
-    lines.push('| Policy | Decisions | Scored | Mean realized intensity [95% CI] | Δ vs Immediate [95% CI] | Mean delay h | Violation rate | Regret vs oracle | Est. emissions g (assumed energy) |', '|---|---|---|---|---|---|---|---|---|');
+    lines.push('| Policy | Decisions | Scored | Mean realized intensity [95% CI] | Δ vs Immediate [95% CI, cluster over snapshots] (clusters) | Mean delay h | Violation rate | Regret vs oracle | Est. emissions g (assumed energy) |', '|---|---|---|---|---|---|---|---|---|');
     for (const p of s.policies) {
       const ci = p.realizedIntensityCI;
-      const d = p.diffVsImmediateCI;
+      const d = p.diffVsImmediateClusterCI ?? p.diffVsImmediateCI;
       lines.push(
-        `| ${p.policyId} | ${p.decisions} | ${p.scored} | ${fmt(p.meanRealizedIntensity)} [${fmt(ci.low)}, ${fmt(ci.high)}] | ${fmt(d.estimate)} [${fmt(d.low)}, ${fmt(d.high)}] | ${fmt(p.meanDelayHours)} | ${fmt(p.deadlineViolationRate, 3)} | ${fmt(p.meanRegretVsOracle)} | ${fmt(p.meanEstimatedEmissionsGrams, 1)} |`
+        `| ${p.policyId} | ${p.decisions} | ${p.scored} | ${fmt(p.meanRealizedIntensity)} [${fmt(ci.low)}, ${fmt(ci.high)}] | ${fmt(d.estimate)} [${fmt(d.low)}, ${fmt(d.high)}] (${(d as any).clusters ?? 'n/a'}) | ${fmt(p.meanDelayHours)} | ${fmt(p.deadlineViolationRate, 3)} | ${fmt(p.meanRegretVsOracle)} | ${fmt(p.meanEstimatedEmissionsGrams, 1)} |`
       );
     }
   }

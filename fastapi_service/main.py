@@ -1,6 +1,11 @@
 """
 CarbonRoute FastAPI Scheduling & Execution Backend
 UCS503 Software Engineering Final-Year Project — Team TriFlux
+
+LEGACY / NOT USED (P6 audit, 2026-11): the frontend and all results use the Node.js backend.
+This service still implements the deadline-risk model that was removed from the backend in P1
+(the carbon forecast standard deviation used as a time uncertainty, audit C1), and its demo
+profiles are synthetic. Do not use its outputs as results. See docs/SCHEDULING_METHODOLOGY.md.
 """
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks

@@ -55,14 +55,14 @@ export const SystemDesignPage: React.FC = () => {
       trigger: 'Scheduler requests intensity profile for scheduling window [t_now, t_now + 24h].',
       mainFlow: [
         'CarbonService queries Electricity Maps API endpoint /v3/carbon-intensity/forecast.',
-        'If API key is missing or quota exceeded, system engages Calibrated Local Demo Trace Mode without crashing.',
+        'If the API key is missing or the quota is exceeded, the request fails with a clear error (no silent synthetic substitute).',
         'Extracts hourly forecast points: I_forecast(t) in gCO2eq/kWh.',
         'UncertaintyService applies horizon error scaling: sigma(t) = sigma_0 * (1 + beta * (t - t_0)^gamma).',
         'Computes 95% confidence intervals [mu(t) - 1.96*sigma(t), mu(t) + 1.96*sigma(t)].',
         'Returns calibrated forecast envelope { dataMode, points: [HourlyCarbonPoint] } to Decision Engine.',
       ],
       exceptions: [
-        'E1: Grid API rate-limit/timeout -> Immediate fallback to deterministic local calibrated ISO profile with "DATA_MODE: DEMO" badge.',
+        'E1: Grid API rate-limit/timeout -> error returned (QUOTA_GUARD / provider error); the user may switch to demo mode, labelled synthetic.',
       ],
       postconditions: '24-hour mean carbon forecast and hourly uncertainty standard deviation matrix available in memory.',
     },
@@ -108,7 +108,7 @@ export const SystemDesignPage: React.FC = () => {
       exceptions: [
         'E1: Cluster unavailable -> Explicitly sets clusterMode = "offline_fallback" and executes via local runner without failure.',
       ],
-      postconditions: 'Workload completed, container logs captured, and final verified carbon reduction recorded.',
+      postconditions: 'Execution recorded (Kubernetes or simulated); forecast vs observed intensity available after collection.',
     },
   ];
 

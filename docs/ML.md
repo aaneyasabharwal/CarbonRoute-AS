@@ -90,6 +90,11 @@ Collecting hourly, the training thresholds are reachable after roughly 7 days. T
 trial key expires around 26–27 November 2026, and the plan only exposes the last 24 h of history, so
 collection must continue without gaps until then.
 
+Latest run (2026-11-13 19:23 UTC, 6 collection runs): still **insufficient-data**. 105 pairs
+(46 measured) over 0.21 days, lead 0–5 h; split 30 / 2 / 7. No model was fitted. Provider forecast
+error over all pairs MAE 23.44 (17.41 against measured values only, n = 46). Collection status and
+restart instructions: [COLLECTOR.md](COLLECTOR.md).
+
 ## How the pipeline itself was validated
 
 On **synthetic test fixtures** (seeded, clearly separated from real data, never reported as results):
