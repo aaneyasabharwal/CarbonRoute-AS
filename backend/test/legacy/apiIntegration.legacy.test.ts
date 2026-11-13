@@ -67,7 +67,11 @@ describe('[legacy] tests/api_integration_test.js', () => {
     expect(res.body.data.length).toBeGreaterThanOrEqual(10);
   });
 
-  it('Feasibility Decision Simulation (POST /api/scheduler/simulate): scenarios A and B differ', async () => {
+  // P1 (audit C1): this divergence came from the removed deadline-risk model (carbon sigma used
+  // as time). With runtime-only risk the default inputs give the same decision in both
+  // scenarios; the corrected demonstration is tested in test/scheduling/engine.test.ts.
+  // Remove this it.fails when the original /tests scripts are retired (proposed task M0.7).
+  it.fails('[original check, fails] Feasibility Decision Simulation (POST /api/scheduler/simulate): scenarios A and B differ', async () => {
     const res = await request(app)
       .post('/api/scheduler/simulate')
       .send({ durationHours: 2, deadlineHours: 12, riskTolerance: 0.1 });

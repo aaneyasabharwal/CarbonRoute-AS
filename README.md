@@ -19,7 +19,7 @@ The Prototype Milestone implements an integrated, verifiable end-to-end software
 [Regional Carbon Forecast] (Electricity Maps API / Calibrated 24h ISO Traces)
         │
         ▼
-[Horizon Uncertainty & Risk Model] (sigma(t) dispersion & Chebyshev erfc tail risk)
+[Deadline-Risk Check] (deterministic, or declared runtime variability; see docs/SCHEDULING_METHODOLOGY.md)
         │
         ▼
 [5 Schedulers Evaluated] (Immediate, EDF, Deterministic, Baseline, CarbonRoute)
@@ -111,7 +111,7 @@ The original script below is kept until the ported tests are reviewed. It requir
 node tests/prototype_vertical_slice_test.cjs
 ```
 
-**Results:**
+**Results (historical, before P1; the risk functions in Steps 2-3 were removed as invalid, see docs/SCHEDULING_METHODOLOGY.md):**
 ```
 🧪 CarbonRoute: Prototype Milestone Vertical Slice Verification
   ✅ PASS: Step 1: Carbon forecast returns 24 calibrated hourly points with confidence bounds

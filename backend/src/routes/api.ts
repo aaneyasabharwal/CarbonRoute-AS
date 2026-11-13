@@ -50,6 +50,7 @@ import {
   listJobs,
   getJobDetails,
   cancelJob,
+  getJobOracle,
 } from '../controllers/prototypeController';
 import { requireJobAccess } from '../services/jobAccess';
 import { buildRateLimiters } from '../middleware/rateLimit';
@@ -154,6 +155,7 @@ router.post('/jobs/:id/cancel', ...jobAccess, limit.jobWrites, cancelJob);
 router.post('/jobs/:id/observations', ...jobAccess, limit.jobWrites, collectJobObservations);
 router.get('/jobs/:id/observations', ...jobAccess, getJobObservations);
 router.get('/jobs/:id/report', ...jobAccess, getJobReport);
+router.get('/jobs/:id/oracle', ...jobAccess, getJobOracle);
 
 router.get('/carbon/forecast', ...liveCarbon, getCarbonForecast);
 router.get('/carbon/forecast/snapshot', ...liveCarbon, getCarbonForecastSnapshot);

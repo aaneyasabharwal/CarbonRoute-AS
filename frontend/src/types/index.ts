@@ -120,8 +120,9 @@ export interface FeasibilityScenario {
   uncertaintyLevel: string;
   selectedStartHour: number;
   selectedWindow: string;
-  predictedCarbonAtStart: number;
-  estimatedViolationRisk: number;
+  /** null when the scenario has no feasible window (no fallback is invented). */
+  predictedCarbonAtStart: number | null;
+  estimatedViolationRisk: number | null;
   riskToleranceSatisfied: boolean;
   decisionRationale: string;
 }
@@ -379,7 +380,10 @@ export interface SchedulingDecisionResponse {
   reason?: string;
   decisionId?: string;
   snapshotId?: string | null;
-  riskModel?: 'synthetic-demo-uncertainty' | 'deterministic-no-uncertainty-data';
+  /** P1: deadline risk from declared runtime variability only (none declared = deterministic). */
+  riskModel?: 'deterministic' | 'declared-runtime-cv';
+  runtimeCv?: number;
+  unavailablePolicies?: { policyId: string; policyName: string; reason: string }[];
   recommendedWindow?: { startUtc: string; endUtc: string };
   timeline?: {
     arrivalAt: string;

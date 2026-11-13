@@ -1060,126 +1060,20 @@ export const api = {
     riskTolerance: number,
     region?: string
   ): Promise<ApiResponse<FeasibilityResult>> {
+    // M2.5 (audit H4): no client-side result is generated. If the backend cannot answer, the
+    // demonstration reports that instead of showing numbers that were never computed.
     try {
       const res = await fetch(`${API_BASE}/scheduler/simulate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ durationHours, deadlineHours, riskTolerance, region }),
       });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.data) return json;
-      }
-    } catch {}
-
-    // Dynamic Mathematical Fallback (Chebyshev erfc tail risk approximation)
-    const baseCurve = [310, 325, 340, 330, 290, 240, 190, 160, 150, 180, 260, 330];
-    const erfc = (x: number): number => {
-      if (x >= 8.0) return 0;
-      if (x <= -8.0) return 2.0;
-      const z = Math.abs(x);
-      const t = 1.0 / (1.0 + 0.5 * z);
-      const ans =
-        t *
-        Math.exp(
-          -z * z -
-            1.26551223 +
-            t *
-              (1.00002368 +
-                t *
-                  (0.37409196 +
-                    t *
-                      (0.09678418 +
-                        t *
-                          (-0.18628806 +
-                            t *
-                              (0.27886807 +
-                                t *
-                                  (-1.13520398 +
-                                    t *
-                                      (1.48851587 +
-                                        t * (-0.82215223 + t * 0.17087277))))))))
-        );
-      return x >= 0 ? ans : 2.0 - ans;
-    };
-
-    const calcRisk = (h: number, dur: number, ddl: number, mult: number) => {
-      const finish = h + dur;
-      const slack = ddl - finish;
-      if (slack < 0) return { stdDev: 40 * mult, violationRisk: 1.0 };
-      const sigmaTime = Math.max(0.25, (0.15 * dur + 0.12 * Math.sqrt(h)) * mult);
-      const z = slack / sigmaTime;
-      const risk = Math.max(0.0001, Math.min(1.0, 0.5 * erfc(z / Math.SQRT2)));
-      return { stdDev: Math.round(sigmaTime * 10), violationRisk: Math.round(risk * 1000) / 1000 };
-    };
-
-    const timeSlots: TimeSlotCarbon[] = [];
-    for (let h = 0; h < 12; h++) {
-      let sum = 0;
-      for (let w = h; w < h + durationHours; w++) {
-        sum += baseCurve[w % baseCurve.length];
-      }
-      const avgCarbon = Math.round(sum / durationHours);
-      const rLow = calcRisk(h, durationHours, deadlineHours, 0.7);
-      const rHigh = calcRisk(h, durationHours, deadlineHours, 2.4);
-      timeSlots.push({
-        hour: h,
-        predictedCarbon: avgCarbon,
-        uncertaintyLow: rLow,
-        uncertaintyHigh: rHigh,
-      });
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success && json.data) return json;
+      return { success: false, message: json?.message || `Feasibility demonstration failed (${res.status})` };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'The feasibility demonstration needs the backend, which is not reachable.' };
     }
-
-    const maxStart = deadlineHours - durationHours;
-    const feasibleSlots = timeSlots.filter((s) => s.hour <= maxStart);
-    const candA = feasibleSlots.filter((s) => s.uncertaintyLow.violationRisk <= riskTolerance);
-    const slotA = candA.length > 0
-      ? candA.reduce((min, cur) => (cur.predictedCarbon < min.predictedCarbon ? cur : min), candA[0])
-      : feasibleSlots[0];
-
-    const candB = feasibleSlots.filter((s) => s.uncertaintyHigh.violationRisk <= riskTolerance);
-    const slotB = candB.length > 0
-      ? candB.reduce((min, cur) => (cur.predictedCarbon < min.predictedCarbon ? cur : min), candB[0])
-      : feasibleSlots[0];
-
-    return {
-      success: true,
-      data: {
-        input: { durationHours, deadlineHours, riskTolerance, region: region || 'US-CAL-CISO' },
-        timeSlots,
-        scenarios: {
-          scenarioA: {
-            name: 'Low Forecast Uncertainty (High Confidence)',
-            predictedCarbonCurve: 'Solar duck curve with midday low',
-            uncertaintyLevel: `Low (sigma ~ ${slotA.uncertaintyLow.stdDev})`,
-            selectedStartHour: slotA.hour,
-            selectedWindow: `T+${slotA.hour}:00 to T+${slotA.hour + durationHours}:00`,
-            predictedCarbonAtStart: slotA.predictedCarbon,
-            estimatedViolationRisk: slotA.uncertaintyLow.violationRisk,
-            riskToleranceSatisfied: slotA.uncertaintyLow.violationRisk <= riskTolerance,
-            decisionRationale: `Delaying to T+${slotA.hour}:00 achieves ${slotA.predictedCarbon} gCO2/kWh with ${(slotA.uncertaintyLow.violationRisk * 100).toFixed(1)}% risk, well below ${(riskTolerance * 100).toFixed(0)}% tolerance.`,
-          },
-          scenarioB: {
-            name: 'High Forecast Uncertainty (Low Confidence)',
-            predictedCarbonCurve: 'Solar duck curve with midday low',
-            uncertaintyLevel: `High (sigma ~ ${slotB.uncertaintyHigh.stdDev})`,
-            selectedStartHour: slotB.hour,
-            selectedWindow: `T+${slotB.hour}:00 to T+${slotB.hour + durationHours}:00`,
-            predictedCarbonAtStart: slotB.predictedCarbon,
-            estimatedViolationRisk: slotB.uncertaintyHigh.violationRisk,
-            riskToleranceSatisfied: slotB.uncertaintyHigh.violationRisk <= riskTolerance,
-            decisionRationale:
-              slotB.hour < slotA.hour
-                ? `High uncertainty increases late window risk to ${(slotA.uncertaintyHigh.violationRisk * 100).toFixed(1)}% (exceeding ${(riskTolerance * 100).toFixed(0)}%). CarbonRoute shifts execution earlier to T+${slotB.hour}:00 to guarantee completion within risk limits.`
-                : `CarbonRoute selects window T+${slotB.hour}:00 satisfying the risk bound.`,
-          },
-        },
-        feasibilityConclusion:
-          slotA.hour !== slotB.hour
-            ? `Mathematical Proof: Identical carbon forecast produces different scheduling decisions (T+${slotA.hour} vs T+${slotB.hour}) due to horizon forecast uncertainty.`
-            : `Both scenarios satisfy the ${(riskTolerance * 100).toFixed(0)}% risk constraint at T+${slotA.hour}.`,
-      },
-    };
   },
 
   // Prototype & Scheduling Methods

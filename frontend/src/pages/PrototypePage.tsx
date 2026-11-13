@@ -1003,9 +1003,9 @@ export const PrototypePage: React.FC = () => {
               <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-xs font-mono text-emerald-300">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
                 <span>
-                  {decision.riskModel === 'deterministic-no-uncertainty-data'
-                    ? 'Deadline check: window finishes before the deadline'
-                    : `Synthetic demo risk model: P(violation) ≤ ${(riskTolerance * 100).toFixed(0)}%`}
+                  {decision.riskModel === 'declared-runtime-cv'
+                    ? `Deadline risk from declared runtime variability (CV ${decision.runtimeCv}): P(miss) ≤ ${(riskTolerance * 100).toFixed(0)}%`
+                    : 'Deadline check: window finishes before the deadline (deterministic runtime)'}
                 </span>
               </div>
             </div>

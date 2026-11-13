@@ -1,5 +1,35 @@
+/**
+ * Scheduling engine (P1: audited and corrected).
+ *
+ * Evaluates the single-job policies on ONE forecast, over hourly start slots t (hours after
+ * the forecast start) for a job of d whole hours:
+ *
+ *   window(t)    = slots t .. t+d-1, average forecast intensity I(t) (exact, not rounded)
+ *   candidates   = t in [arrival, min(H, D) - d]   (H = forecast length, D = deadline slot)
+ *   deadline risk P(miss | t) from declared runtime variability only (uncertaintyService)
+ *   feasible(t)  = window has no missing values AND P(miss | t) <= tau
+ *
+ * Policies (all on the same candidates):
+ *   immediate             t = arrival
+ *   edf                   identical to immediate for a single job (labelled as such)
+ *   deterministic_carbon  argmin I(t) over gap-free candidates, ignoring risk (Greedy)
+ *   carbon_aware_baseline earliest gap-free candidate within a static safety buffer whose
+ *                         I(t) <= 25th percentile of those candidates; else their minimum
+ *   carbonroute_uncertainty argmin I(t) over FEASIBLE candidates (ties: earliest).
+ *                         If none is feasible the result is INFEASIBLE_RISK: there is no
+ *                         "safety fallback" that recommends a window over the tolerance.
+ *
+ * Not in the engine:
+ *   - cost_aware: no electricity-price provider is configured, so it is reported UNAVAILABLE.
+ *   - oracle: hindsight evaluation on REALIZED data only (src/evaluation/oracle.ts); it is
+ *     never used to make a decision.
+ *
+ * Nothing is filled in: a missing forecast value makes every window containing it
+ * REJECTED_DATA_GAP, and windows never wrap around the end of the forecast.
+ */
 import { CarbonForecastData, HourlyCarbonPoint } from './carbonService';
-import { UncertaintyService } from './uncertaintyService';
+import { UncertaintyService, MAX_RUNTIME_CV } from './uncertaintyService';
+import { energyAssumption } from './energyModel';
 
 export interface WorkloadJob {
   id: string;
@@ -13,6 +43,8 @@ export interface WorkloadJob {
   memoryMb: number;
   region: string;
   riskTolerance: number; // tau in (0, 1), e.g. 0.05 (5%)
+  /** Declared runtime coefficient of variation (0 = deterministic runtime). */
+  runtimeCv?: number;
   status?: 'pending' | 'scheduled' | 'running' | 'completed' | 'failed' | 'cancelled';
   createdAt: string;
   /** User who registered the job (M1.2). */
@@ -27,38 +59,50 @@ export interface PolicyEvaluationResult {
   selectedEndHour: number;
   selectedWindow: string;
   predictedCarbon: number; // Window average carbon intensity in gCO2eq/kWh (legacy alias)
-  predictedCarbonIntensity: number; // Window average carbon intensity in gCO2eq/kWh
-  estimatedWorkloadEmissionsGrams: number; // Estimated workload emissions in gCO2eq
-  carbonIntensityUnit: string; // 'gCO2eq/kWh'
-  workloadEmissionsUnit: string; // 'gCO2eq'
-  estimatedDeadlineRisk: number; // e.g. 0.04 (4%)
+  predictedCarbonIntensity: number; // Window average forecast intensity, gCO2eq/kWh (2 dp)
+  estimatedWorkloadEmissionsGrams: number; // forecast intensity x ASSUMED energy, gCO2eq
+  carbonIntensityUnit: string;
+  workloadEmissionsUnit: string;
+  estimatedDeadlineRisk: number; // P(miss) for this window
   waitingTimeHours: number;
   isFeasible: boolean;
   schedulerOverheadMs: number;
   rationale: string;
+  /** Set when this policy necessarily picks the same window as another (e.g. EDF = Immediate). */
+  equivalentTo?: string;
 }
+
+export interface UnavailablePolicy {
+  policyId: string;
+  policyName: string;
+  reason: string;
+}
+
+export type WindowClassification =
+  | 'RECOMMENDED'
+  | 'FEASIBLE'
+  | 'REJECTED_HIGH_RISK'
+  | 'REJECTED_DEADLINE_BREACH'
+  | 'REJECTED_DATA_GAP';
 
 export interface CandidateWindowEvaluation {
   slotIndex: number;
   startHour: number;
   endHour: number;
   windowLabel: string;
-  predictedCarbonIntensity: number; // gCO2eq/kWh
-  predictedCarbonImpactGrams: number; // estimated total grams CO2
-  stdDev: number | null; // forecast uncertainty sigma; null when the data provides none
+  predictedCarbonIntensity: number; // gCO2eq/kWh (2 dp); NaN only for REJECTED_DATA_GAP
+  predictedCarbonImpactGrams: number; // forecast intensity x assumed energy
+  /** Average forecast (carbon) standard deviation when the provider gives one; null otherwise. Not used for deadline risk. */
+  stdDev: number | null;
   uncertaintyRange: string;
-  deadlineRisk: number; // decimal probability
-  deadlineRiskPct: string; // e.g. "4.0%"
+  deadlineRisk: number;
+  deadlineRiskPct: string;
   slackHours: number;
   waitingTimeHours: number;
   isFeasible: boolean;
   meetsDeadline: boolean;
-  classification:
-    | 'RECOMMENDED'
-    | 'FEASIBLE'
-    | 'REJECTED_HIGH_RISK'
-    | 'REJECTED_DEADLINE_BREACH';
-  classificationLabel: string; // "RECOMMENDED" | "FEASIBLE BUT NOT OPTIMAL" | "REJECTED — HIGH DEADLINE RISK" | "REJECTED — MISSES DEADLINE"
+  classification: WindowClassification;
+  classificationLabel: string;
   reason: string;
 }
 
@@ -70,18 +114,23 @@ export interface ResearchInsightLowestVsSafest {
   explanation: string;
 }
 
-export interface SchedulingDecisionResponse {
+export type RiskModel = 'deterministic' | 'declared-runtime-cv';
+
+interface EngineCommon {
   job: WorkloadJob;
   carbonSource: string;
   dataMode: 'live' | 'demo';
   region: string;
-  /**
-   * How deadline risk was computed: with the synthetic demo trace's uncertainty, or
-   * deterministically (window fits before the deadline or not) when the forecast has none.
-   */
-  riskModel: 'synthetic-demo-uncertainty' | 'deterministic-no-uncertainty-data';
+  /** How deadline risk was computed (see uncertaintyService). */
+  riskModel: RiskModel;
+  runtimeCv: number;
   candidateWindows: CandidateWindowEvaluation[];
   evaluatedPolicies: PolicyEvaluationResult[];
+  unavailablePolicies: UnavailablePolicy[];
+}
+
+export interface SchedulingDecisionResponse extends EngineCommon {
+  status: 'RECOMMENDED';
   recommendedDecision: PolicyEvaluationResult;
   comparisonSummary: {
     carbonSavingsVsImmediatePct: number;
@@ -91,432 +140,324 @@ export interface SchedulingDecisionResponse {
   researchInsight?: ResearchInsightLowestVsSafest;
 }
 
+export interface SchedulingInfeasibleResponse extends EngineCommon {
+  status: 'INFEASIBLE_RISK' | 'NO_FEASIBLE_WINDOW';
+  reason: string;
+  recommendedDecision: null;
+}
+
+export type EngineOutcome = SchedulingDecisionResponse | SchedulingInfeasibleResponse;
+
+export class EngineInfeasibleError extends Error {
+  constructor(public readonly outcome: SchedulingInfeasibleResponse) {
+    super(outcome.reason);
+    this.name = 'EngineInfeasibleError';
+  }
+}
+
+const round2 = (x: number) => Math.round(x * 100) / 100;
+const round1 = (x: number) => Math.round(x * 10) / 10;
+const pct = (p: number) => `${(p * 100).toFixed(1)}%`;
+const label = (s: number, e: number) => `T+${s}:00 → T+${e}:00`;
+
+/** Engine options. A plain number (the removed uncertaintyMultiplier) is ignored. */
+export interface EngineOptions {
+  runtimeCv?: number;
+}
+
 export class SchedulerService {
+  /** Evaluates every policy; returns an explicit infeasible outcome instead of a fallback. */
+  public static evaluatePolicies(
+    job: WorkloadJob,
+    forecast: CarbonForecastData | HourlyCarbonPoint[],
+    options: EngineOptions | number = {}
+  ): EngineOutcome {
+    const started = performance.now();
+    const opts: EngineOptions = typeof options === 'number' ? {} : options || {};
+    const points: HourlyCarbonPoint[] = Array.isArray(forecast) ? forecast : forecast.hourlyProfile || [];
+    const carbonSource = Array.isArray(forecast) ? 'Prepared Carbon Trace' : forecast.source || 'Prepared Carbon Trace';
+    const dataMode: 'live' | 'demo' = Array.isArray(forecast) ? 'demo' : forecast.dataMode || 'demo';
+    const region = Array.isArray(forecast) ? job.region : forecast.region || job.region;
+
+    const dur = Number(job.durationHours);
+    if (!Number.isInteger(dur) || dur < 1) throw new Error('durationHours must be a positive whole number of hours.');
+    const arrival = Number(job.arrivalHour) || 0;
+    if (!Number.isInteger(arrival) || arrival < 0) throw new Error('arrivalHour must be a non-negative whole number.');
+    const deadline = Number(job.deadlineHours);
+    if (!Number.isFinite(deadline)) throw new Error('deadlineHours must be a number.');
+    const tau = Number(job.riskTolerance);
+    if (!(tau > 0 && tau < 1)) throw new Error('riskTolerance must be between 0 and 1 (exclusive).');
+    const cvInput = opts.runtimeCv ?? job.runtimeCv ?? 0;
+    if (!(Number.isFinite(cvInput) && cvInput >= 0 && cvInput <= MAX_RUNTIME_CV)) {
+      throw new Error(`runtimeCv must be between 0 and ${MAX_RUNTIME_CV}.`);
+    }
+    const runtimeCv = Number(cvInput);
+    const riskModel: RiskModel = runtimeCv > 0 ? 'declared-runtime-cv' : 'deterministic';
+    const energyKwh = energyAssumption(job.cpu, dur).energyKwh;
+
+    const value = (i: number): number | null => {
+      const p = points[i];
+      const v = p ? (p.predictedCarbon ?? p.carbonIntensity) : undefined;
+      return typeof v === 'number' && Number.isFinite(v) ? v : null;
+    };
+    const sigmaAt = (i: number): number | null => {
+      const p = points[i];
+      const s = p ? (p.stdDev ?? p.uncertaintyStdDev) : null;
+      return typeof s === 'number' && Number.isFinite(s) ? s : null;
+    };
+    const windowStats = (t: number): { avg: number | null; sigma: number | null } => {
+      let sum = 0;
+      let sumSigma = 0;
+      let sigmaComplete = true;
+      for (let h = t; h < t + dur; h++) {
+        const v = value(h);
+        if (v === null) return { avg: null, sigma: null };
+        sum += v;
+        const s = sigmaAt(h);
+        if (s === null) sigmaComplete = false;
+        else sumSigma += s;
+      }
+      return { avg: sum / dur, sigma: sigmaComplete ? sumSigma / dur : null };
+    };
+
+    // ---- Candidate windows (no wrap-around, no fill-in) ----
+    const lastStart = Math.min(points.length, Math.floor(deadline)) - dur;
+    const candidates: (CandidateWindowEvaluation & { exactAvg: number | null })[] = [];
+    for (let t = arrival; t <= lastStart; t++) {
+      const { avg, sigma } = windowStats(t);
+      const end = t + dur;
+      const risk = UncertaintyService.deadlineRisk(t, dur, deadline, runtimeCv).violationRisk;
+      const slack = deadline - end;
+      let classification: WindowClassification;
+      let reason: string;
+      if (avg === null) {
+        classification = 'REJECTED_DATA_GAP';
+        reason = 'The forecast has a missing value in this window; nothing is filled in, so the window is not evaluated.';
+      } else if (risk > tau) {
+        classification = 'REJECTED_HIGH_RISK';
+        reason = `Deadline-miss risk ${pct(risk)} exceeds the ${pct(tau)} tolerance.`;
+      } else {
+        classification = 'FEASIBLE';
+        reason = `Feasible: ${round2(avg)} gCO2eq/kWh forecast, ${pct(risk)} deadline-miss risk (tolerance ${pct(tau)}).`;
+      }
+      candidates.push({
+        slotIndex: t,
+        startHour: t,
+        endHour: end,
+        windowLabel: label(t, end),
+        predictedCarbonIntensity: avg === null ? NaN : round2(avg),
+        predictedCarbonImpactGrams: avg === null ? NaN : round1(avg * energyKwh),
+        stdDev: sigma === null ? null : round2(sigma),
+        uncertaintyRange:
+          avg === null
+            ? 'missing forecast data'
+            : sigma === null
+              ? `${round2(avg)} gCO2eq/kWh (no forecast uncertainty available)`
+              : `${round2(avg)} ± ${round2(sigma)} gCO2eq/kWh (synthetic σ)`,
+        deadlineRisk: risk,
+        deadlineRiskPct: pct(risk),
+        slackHours: slack,
+        waitingTimeHours: t - arrival,
+        isFeasible: classification === 'FEASIBLE',
+        meetsDeadline: end <= deadline,
+        classification,
+        classificationLabel: classification === 'FEASIBLE' ? 'FEASIBLE' : classification.replace(/_/g, ' '),
+        reason,
+        exactAvg: avg,
+      });
+    }
+
+    const strip = (c: (typeof candidates)[number]): CandidateWindowEvaluation => {
+      const { exactAvg: _ignored, ...rest } = c;
+      return rest;
+    };
+    const unavailablePolicies: UnavailablePolicy[] = [
+      {
+        policyId: 'cost_aware',
+        policyName: 'Cost-Aware',
+        reason: 'No electricity-price data provider is configured, so cost cannot be evaluated (dependency D7).',
+      },
+      {
+        policyId: 'oracle',
+        policyName: 'Oracle (hindsight)',
+        reason: 'Offline evaluation only: it needs realized observations for every candidate window and is never used to schedule. See GET /api/jobs/:id/oracle.',
+      },
+    ];
+    const common = (): EngineCommon => ({
+      job,
+      carbonSource,
+      dataMode,
+      region,
+      riskModel,
+      runtimeCv,
+      candidateWindows: candidates.map(strip),
+      evaluatedPolicies: [],
+      unavailablePolicies,
+    });
+
+    const gapFree = candidates.filter((c) => c.exactAvg !== null);
+    if (gapFree.length === 0) {
+      const reason =
+        candidates.length === 0
+          ? `No start slot exists: a ${dur} h job arriving at slot ${arrival} cannot finish by slot ${deadline} within the ${points.length}-hour forecast.`
+          : 'Every candidate window contains missing forecast data; nothing is filled in.';
+      return { ...common(), status: 'NO_FEASIBLE_WINDOW', reason, recommendedDecision: null };
+    }
+
+    const byLowest = (a: (typeof candidates)[number], b: (typeof candidates)[number]) =>
+      (a.exactAvg as number) - (b.exactAvg as number) || a.startHour - b.startHour;
+    const policyFrom = (
+      c: (typeof candidates)[number],
+      meta: Pick<PolicyEvaluationResult, 'policyId' | 'policyName' | 'category' | 'rationale'> & { equivalentTo?: string }
+    ): PolicyEvaluationResult => ({
+      ...meta,
+      selectedStartHour: c.startHour,
+      selectedEndHour: c.endHour,
+      selectedWindow: `T+${c.startHour}:00 to T+${c.endHour}:00`,
+      predictedCarbon: c.predictedCarbonIntensity,
+      predictedCarbonIntensity: c.predictedCarbonIntensity,
+      estimatedWorkloadEmissionsGrams: c.predictedCarbonImpactGrams,
+      carbonIntensityUnit: 'gCO2eq/kWh',
+      workloadEmissionsUnit: 'gCO2eq',
+      estimatedDeadlineRisk: c.deadlineRisk,
+      waitingTimeHours: c.waitingTimeHours,
+      isFeasible: c.isFeasible,
+      schedulerOverheadMs: 0,
+    });
+
+    const policies: PolicyEvaluationResult[] = [];
+    const first = candidates[0]; // slot = arrival
+    if (first.exactAvg === null) {
+      unavailablePolicies.push(
+        { policyId: 'immediate', policyName: 'Immediate Execution', reason: 'The window starting at arrival has missing forecast data.' },
+        { policyId: 'edf', policyName: 'Earliest Deadline First (EDF)', reason: 'Same window as Immediate, which has missing forecast data.' }
+      );
+    } else {
+      policies.push(
+        policyFrom(first, {
+          policyId: 'immediate',
+          policyName: 'Immediate Execution',
+          category: 'Baseline',
+          rationale: 'Starts at arrival without waiting. Reference baseline.',
+        }),
+        policyFrom(first, {
+          policyId: 'edf',
+          policyName: 'Earliest Deadline First (EDF)',
+          category: 'Baseline',
+          equivalentTo: 'immediate',
+          rationale:
+            'With a single job there is nothing to order, so EDF starts at arrival exactly like Immediate. EDF only differs when several jobs compete (queue mode, not implemented).',
+        })
+      );
+    }
+
+    const greedy = [...gapFree].sort(byLowest)[0];
+    policies.push(
+      policyFrom(greedy, {
+        policyId: 'deterministic_carbon',
+        policyName: 'Deterministic Carbon-Aware (Greedy)',
+        category: 'Deterministic',
+        rationale: `Picks the lowest forecast window before the deadline (${greedy.windowLabel}, ${greedy.predictedCarbonIntensity} gCO2eq/kWh) and ignores deadline risk.`,
+      })
+    );
+
+    // CarbonAware baseline: static buffer, threshold over the windows it may choose from.
+    const plannedSlack = Math.floor(deadline) - (arrival + dur);
+    const staticBuffer = Math.max(1, Math.min(3, Math.round(plannedSlack * 0.25)));
+    const bufferedLast = Math.max(arrival, Math.floor(deadline) - dur - staticBuffer);
+    const eligible = gapFree.filter((c) => c.startHour <= bufferedLast);
+    const pool = eligible.length > 0 ? eligible : [gapFree[0]];
+    const sortedAvgs = pool.map((c) => c.exactAvg as number).sort((a, b) => a - b);
+    const threshold = sortedAvgs[Math.floor(sortedAvgs.length * 0.25)];
+    const baselinePick = pool.find((c) => (c.exactAvg as number) <= threshold) ?? [...pool].sort(byLowest)[0];
+    policies.push(
+      policyFrom(baselinePick, {
+        policyId: 'carbon_aware_baseline',
+        policyName: 'CarbonAware Baseline',
+        category: 'Baseline',
+        rationale: `Heuristic: earliest window starting by T+${bufferedLast} (a ${staticBuffer} h safety buffer before the deadline) whose forecast is at or below the 25th percentile of those windows (${round2(threshold)} gCO2eq/kWh). Chose ${baselinePick.windowLabel}.`,
+      })
+    );
+
+    const feasible = gapFree.filter((c) => c.isFeasible);
+    const overheadMs = Number((performance.now() - started).toFixed(2));
+    if (feasible.length === 0) {
+      const minRisk = Math.min(...gapFree.map((c) => c.deadlineRisk));
+      return {
+        ...common(),
+        evaluatedPolicies: policies.map((p) => ({ ...p, schedulerOverheadMs: overheadMs })),
+        status: 'INFEASIBLE_RISK',
+        reason: `No window meets the ${pct(tau)} deadline-risk tolerance (lowest risk among windows: ${pct(minRisk)}). No recommendation is made; relax the deadline or the tolerance, or declare a smaller runtime variability if it is justified.`,
+        recommendedDecision: null,
+      };
+    }
+
+    const best = [...feasible].sort(byLowest)[0];
+    best.classification = 'RECOMMENDED';
+    best.classificationLabel = 'RECOMMENDED';
+    best.reason = 'Lowest forecast intensity among windows that meet the deadline and the risk tolerance.';
+    const carbonRoute = policyFrom(best, {
+      policyId: 'carbonroute_uncertainty',
+      policyName: 'CarbonRoute (risk-constrained)',
+      category: 'Uncertainty-Aware',
+      rationale: `Lowest forecast window with deadline-miss risk at or below ${pct(tau)} (${riskModel === 'deterministic' ? 'deterministic runtime' : `declared runtime CV ${runtimeCv}`}): ${best.windowLabel}, ${best.predictedCarbonIntensity} gCO2eq/kWh, risk ${best.deadlineRiskPct}.`,
+    });
+    policies.push(carbonRoute);
+    const evaluatedPolicies = policies.map((p) => ({ ...p, schedulerOverheadMs: overheadMs }));
+    const recommendedDecision = evaluatedPolicies[evaluatedPolicies.length - 1];
+
+    const lowest = [...gapFree].sort(byLowest)[0];
+    const isLowestCarbonSafe = lowest.deadlineRisk <= tau;
+    const penalty = round2(Math.max(0, (best.exactAvg as number) - (lowest.exactAvg as number)));
+    const researchInsight: ResearchInsightLowestVsSafest = {
+      lowestCarbonWindow: strip(lowest),
+      recommendedWindow: strip(best),
+      isLowestCarbonSafe,
+      carbonInsurancePenaltyGramsPerKwh: penalty,
+      explanation: isLowestCarbonSafe
+        ? `The lowest forecast window (${lowest.windowLabel}, ${lowest.predictedCarbonIntensity} gCO2eq/kWh) is within the ${pct(tau)} risk tolerance, so it is recommended.`
+        : `The lowest forecast window (${lowest.windowLabel}, ${lowest.predictedCarbonIntensity} gCO2eq/kWh) leaves ${lowest.slackHours} h of slack; with the declared runtime variability (CV ${runtimeCv}) its deadline-miss risk is ${lowest.deadlineRiskPct}, above the ${pct(tau)} tolerance. The recommendation (${best.windowLabel}) costs ${penalty} gCO2eq/kWh more in forecast intensity in exchange for meeting the tolerance.`,
+    };
+
+    const immediate = evaluatedPolicies.find((p) => p.policyId === 'immediate');
+    const greedyPolicy = evaluatedPolicies.find((p) => p.policyId === 'deterministic_carbon')!;
+    return {
+      ...common(),
+      evaluatedPolicies,
+      status: 'RECOMMENDED',
+      recommendedDecision,
+      comparisonSummary: {
+        carbonSavingsVsImmediatePct:
+          immediate && immediate.predictedCarbonIntensity > 0
+            ? round1(((immediate.predictedCarbonIntensity - recommendedDecision.predictedCarbonIntensity) / immediate.predictedCarbonIntensity) * 100)
+            : 0,
+        delayPenaltyHours: recommendedDecision.waitingTimeHours,
+        riskDifferenceVsDeterministic: round1((greedyPolicy.estimatedDeadlineRisk - recommendedDecision.estimatedDeadlineRisk) * 100),
+      },
+      researchInsight,
+    };
+  }
+
   /**
-   * Evaluates all 5 scheduling policies simultaneously on the exact same workload
-   * and underlying carbon forecast trace.
+   * Original API: returns a recommendation or throws EngineInfeasibleError (no fallback).
+   * The third argument used to be an "uncertainty multiplier" for the removed risk model; a
+   * number is ignored. Pass { runtimeCv } for declared runtime variability.
    */
   public static evaluateAllPolicies(
     job: WorkloadJob,
     forecast: CarbonForecastData | HourlyCarbonPoint[],
-    uncertaintyMultiplier: number = 1.0
+    options: EngineOptions | number = {}
   ): SchedulingDecisionResponse {
-    // Normalize forecast input (support either full CarbonForecastData or raw points array)
-    const points: HourlyCarbonPoint[] = Array.isArray(forecast)
-      ? forecast
-      : forecast.hourlyProfile || [];
-    const source = Array.isArray(forecast)
-      ? 'Prepared Carbon Trace'
-      : forecast.source || 'Prepared Carbon Trace';
-    const dataMode = Array.isArray(forecast)
-      ? 'demo'
-      : forecast.dataMode || 'demo';
-    const region = Array.isArray(forecast)
-      ? job.region || 'US-CAL-CISO'
-      : forecast.region || job.region || 'US-CAL-CISO';
-
-    const horizon = points.length;
-    const dur = Math.max(1, Math.round(Number(job.durationHours) || 1));
-    const ddl = Math.min(horizon, Math.max(dur, Math.round(Number(job.deadlineHours) || dur + 2)));
-    const arrival = Math.max(0, Math.min(ddl - dur, Math.round(Number(job.arrivalHour) || 0)));
-    const tau = Math.max(0.001, Math.min(0.50, Number(job.riskTolerance) || 0.05));
-    const powerKw = Math.max(0.1, Number((((job.cpu || 2) / 2) * 0.25).toFixed(3)));
-    const energyKwh = Number((dur * powerKw).toFixed(3));
-
-    /**
-     * Helper: computes window average carbon intensity and average uncertainty
-     * for a job running continuously from hour t to t + dur - 1.
-     */
-    // Forecast uncertainty is only used when every point provides it (synthetic demo traces do;
-    // Electricity Maps forecasts do not). It is never filled in with an assumed value.
-    const hasUncertainty = points.length > 0 && points.every((p) => typeof (p.stdDev ?? p.uncertaintyStdDev) === 'number');
-    const riskModel: SchedulingDecisionResponse['riskModel'] = hasUncertainty
-      ? 'synthetic-demo-uncertainty'
-      : 'deterministic-no-uncertainty-data';
-
-    const computeWindowMetrics = (startHour: number) => {
-      let sumCarbon = 0;
-      let sumStd = 0;
-      for (let h = startHour; h < startHour + dur; h++) {
-        const pt = points[h % horizon];
-        sumCarbon += pt ? (pt.predictedCarbon ?? pt.carbonIntensity ?? 250) : 250;
-        if (hasUncertainty) sumStd += pt ? ((pt.stdDev ?? pt.uncertaintyStdDev) as number) : 0;
-      }
-      const avgCarbon = Math.round(sumCarbon / dur);
-      const avgStd: number | null = hasUncertainty ? Math.round(sumStd / dur) : null;
-      return { avgCarbon, avgStd };
-    };
-
-    // -------------------------------------------------------------
-    // POLICY 1: Immediate Execution (Naive Baseline)
-    // -------------------------------------------------------------
-    const startImm = performance.now();
-    const immSlot = arrival;
-    const { avgCarbon: immCarbon, avgStd: immStd } = computeWindowMetrics(immSlot);
-    const immRisk = UncertaintyService.calculateDeadlineRisk(
-      immSlot,
-      dur,
-      ddl,
-      immStd,
-      uncertaintyMultiplier
-    ).violationRisk;
-    const overheadImm = Number((performance.now() - startImm).toFixed(2));
-
-    const immediatePolicy: PolicyEvaluationResult = {
-      policyId: 'immediate',
-      policyName: 'Immediate Execution',
-      category: 'Baseline',
-      selectedStartHour: immSlot,
-      selectedEndHour: immSlot + dur,
-      selectedWindow: `T+${immSlot}:00 to T+${immSlot + dur}:00`,
-      predictedCarbon: immCarbon,
-      predictedCarbonIntensity: immCarbon,
-      estimatedWorkloadEmissionsGrams: Math.round(immCarbon * energyKwh),
-      carbonIntensityUnit: 'gCO2eq/kWh',
-      workloadEmissionsUnit: 'gCO2eq',
-      estimatedDeadlineRisk: immRisk,
-      waitingTimeHours: 0,
-      isFeasible: immSlot + dur <= ddl && immRisk <= tau,
-      schedulerOverheadMs: overheadImm,
-      rationale: 'Dispatches job immediately upon arrival without intentional delay. Serves as benchmark baseline.',
-    };
-
-    // -------------------------------------------------------------
-    // POLICY 2: Earliest Deadline First (EDF)
-    // -------------------------------------------------------------
-    const startEdf = performance.now();
-    const edfSlot = arrival;
-    const { avgCarbon: edfCarbon, avgStd: edfStd } = computeWindowMetrics(edfSlot);
-    const edfRisk = UncertaintyService.calculateDeadlineRisk(
-      edfSlot,
-      dur,
-      ddl,
-      edfStd,
-      uncertaintyMultiplier
-    ).violationRisk;
-    const overheadEdf = Number((performance.now() - startEdf).toFixed(2));
-
-    const edfPolicy: PolicyEvaluationResult = {
-      policyId: 'edf',
-      policyName: 'Earliest Deadline First (EDF)',
-      category: 'Baseline',
-      selectedStartHour: edfSlot,
-      selectedEndHour: edfSlot + dur,
-      selectedWindow: `T+${edfSlot}:00 to T+${edfSlot + dur}:00`,
-      predictedCarbon: edfCarbon,
-      predictedCarbonIntensity: edfCarbon,
-      estimatedWorkloadEmissionsGrams: Math.round(edfCarbon * energyKwh),
-      carbonIntensityUnit: 'gCO2eq/kWh',
-      workloadEmissionsUnit: 'gCO2eq',
-      estimatedDeadlineRisk: edfRisk,
-      waitingTimeHours: 0,
-      isFeasible: edfSlot + dur <= ddl && edfRisk <= tau,
-      schedulerOverheadMs: overheadEdf,
-      rationale: 'Prioritizes deadline safety; executes at earliest feasible arrival to maximize remaining slack buffer.',
-    };
-
-    // -------------------------------------------------------------
-    // POLICY 3: Deterministic Carbon-Aware (Greedy Minimum)
-    // -------------------------------------------------------------
-    const startDet = performance.now();
-    let bestDetSlot = arrival;
-    let minDetCarbon = Infinity;
-
-    for (let t = arrival; t <= ddl - dur; t++) {
-      const { avgCarbon } = computeWindowMetrics(t);
-      if (avgCarbon < minDetCarbon) {
-        minDetCarbon = avgCarbon;
-        bestDetSlot = t;
-      }
-    }
-    const { avgStd: detStd } = computeWindowMetrics(bestDetSlot);
-    const detRisk = UncertaintyService.calculateDeadlineRisk(
-      bestDetSlot,
-      dur,
-      ddl,
-      detStd,
-      uncertaintyMultiplier
-    ).violationRisk;
-    const overheadDet = Number((performance.now() - startDet).toFixed(2));
-    const detCarbonVal = minDetCarbon === Infinity ? immCarbon : minDetCarbon;
-
-    const detPolicy: PolicyEvaluationResult = {
-      policyId: 'deterministic_carbon',
-      policyName: 'Deterministic Carbon-Aware',
-      category: 'Deterministic',
-      selectedStartHour: bestDetSlot,
-      selectedEndHour: bestDetSlot + dur,
-      selectedWindow: `T+${bestDetSlot}:00 to T+${bestDetSlot + dur}:00`,
-      predictedCarbon: detCarbonVal,
-      predictedCarbonIntensity: detCarbonVal,
-      estimatedWorkloadEmissionsGrams: Math.round(detCarbonVal * energyKwh),
-      carbonIntensityUnit: 'gCO2eq/kWh',
-      workloadEmissionsUnit: 'gCO2eq',
-      estimatedDeadlineRisk: detRisk,
-      waitingTimeHours: bestDetSlot - arrival,
-      isFeasible: bestDetSlot + dur <= ddl && detRisk <= tau,
-      schedulerOverheadMs: overheadDet,
-      rationale: `Greedily selects the lowest predicted carbon window (T+${bestDetSlot}) without uncertainty or risk calibration.`,
-    };
-
-    // -------------------------------------------------------------
-    // POLICY 4: CarbonAware Baseline (Clean Threshold & Static Safety Margin)
-    // -------------------------------------------------------------
-    const startBase = performance.now();
-    // Conventional heuristic: reserves a static buffer (e.g. 2 hours or 25% of slack) before deadline
-    const staticBuffer = Math.max(1, Math.min(3, Math.round((ddl - (arrival + dur)) * 0.25)));
-    const maxBaseSlot = Math.max(arrival, ddl - dur - staticBuffer);
-
-    // Compute clean carbon threshold (25th percentile intensity of horizon points)
-    const sortedCarbons = points.map((p) => p.predictedCarbon ?? p.carbonIntensity ?? 250).sort((a, b) => a - b);
-    const cleanThreshold = sortedCarbons[Math.floor(sortedCarbons.length * 0.25)] || 220;
-
-    // Dispatches at the earliest window within safe buffer that meets the clean threshold
-    let bestBaseSlot = -1;
-    let minBaseCarbon = Infinity;
-    for (let t = arrival; t <= maxBaseSlot; t++) {
-      const { avgCarbon } = computeWindowMetrics(t);
-      if (avgCarbon < minBaseCarbon) {
-        minBaseCarbon = avgCarbon;
-      }
-      if (avgCarbon <= cleanThreshold && bestBaseSlot === -1) {
-        bestBaseSlot = t;
-      }
-    }
-    // If no window drops below cleanThreshold within staticBuffer, choose the minimum carbon within staticBuffer:
-    if (bestBaseSlot === -1) {
-      bestBaseSlot = arrival;
-      for (let t = arrival; t <= maxBaseSlot; t++) {
-        const { avgCarbon } = computeWindowMetrics(t);
-        if (avgCarbon === minBaseCarbon) {
-          bestBaseSlot = t;
-          break;
-        }
-      }
-    }
-
-    const { avgCarbon: baseCarbonVal, avgStd: baseStd } = computeWindowMetrics(bestBaseSlot);
-    const baseRisk = UncertaintyService.calculateDeadlineRisk(
-      bestBaseSlot,
-      dur,
-      ddl,
-      baseStd,
-      uncertaintyMultiplier
-    ).violationRisk;
-    const overheadBase = Number((performance.now() - startBase).toFixed(2));
-
-    const baselinePolicy: PolicyEvaluationResult = {
-      policyId: 'carbon_aware_baseline',
-      policyName: 'CarbonAware Baseline',
-      category: 'Baseline',
-      selectedStartHour: bestBaseSlot,
-      selectedEndHour: bestBaseSlot + dur,
-      selectedWindow: `T+${bestBaseSlot}:00 to T+${bestBaseSlot + dur}:00`,
-      predictedCarbon: baseCarbonVal,
-      predictedCarbonIntensity: baseCarbonVal,
-      estimatedWorkloadEmissionsGrams: Math.round(baseCarbonVal * energyKwh),
-      carbonIntensityUnit: 'gCO2eq/kWh',
-      workloadEmissionsUnit: 'gCO2eq',
-      estimatedDeadlineRisk: baseRisk,
-      waitingTimeHours: bestBaseSlot - arrival,
-      isFeasible: bestBaseSlot + dur <= ddl && baseRisk <= tau,
-      schedulerOverheadMs: overheadBase,
-      rationale: `Conventional heuristic: dispatches at earliest window (T+${bestBaseSlot}:00, ${baseCarbonVal} gCO2eq/kWh) satisfying clean threshold (<= ${cleanThreshold} gCO2eq/kWh) while keeping static ${staticBuffer}h safety margin.`,
-    };
-
-    // -------------------------------------------------------------
-    // FULL CANDIDATE WINDOWS EVALUATION & CLASSIFICATION
-    // Evaluates every possible execution window that can fit before the deadline
-    // -------------------------------------------------------------
-    const startCr = performance.now();
-    const candidateWindows: CandidateWindowEvaluation[] = [];
-    const maxEvaluationHour = Math.min(horizon - dur, ddl - dur);
-
-    for (let t = arrival; t <= maxEvaluationHour; t++) {
-      const { avgCarbon, avgStd } = computeWindowMetrics(t);
-      const startHour = t;
-      const endHour = t + dur;
-      const windowLabel = `T+${startHour}:00 → T+${endHour}:00`;
-      const meetsDeadline = endHour <= ddl;
-      const slackHours = ddl - endHour;
-      const waitingTimeHours = startHour - arrival;
-      const predictedCarbonImpactGrams = Math.round(avgCarbon * energyKwh);
-      const uncertaintyRange =
-        avgStd === null ? `${avgCarbon} gCO2/kWh (no forecast uncertainty available)` : `${avgCarbon} ± ${avgStd} gCO2/kWh`;
-
-      let deadlineRisk = 1.0;
-      if (meetsDeadline) {
-        deadlineRisk = UncertaintyService.calculateDeadlineRisk(
-          t,
-          dur,
-          ddl,
-          avgStd,
-          uncertaintyMultiplier
-        ).violationRisk;
-      }
-
-      let classification: CandidateWindowEvaluation['classification'];
-      let classificationLabel: string;
-      let isFeasible = false;
-      let reason = '';
-
-      if (!meetsDeadline) {
-        classification = 'REJECTED_DEADLINE_BREACH';
-        classificationLabel = 'REJECTED — MISSES DEADLINE';
-        isFeasible = false;
-        reason = `Infeasible: A ${dur}h workload starting at T+${startHour}:00 finishes at T+${endHour}:00, which breaches the T+${ddl}:00 deadline by ${Math.abs(slackHours)} hour(s).`;
-      } else if (deadlineRisk > tau) {
-        classification = 'REJECTED_HIGH_RISK';
-        classificationLabel = 'REJECTED';
-        isFeasible = false;
-        reason = `Risk exceeds ${(tau * 100).toFixed(0)}% tolerance (${(deadlineRisk * 100).toFixed(1)}% deadline-miss risk)`;
-      } else {
-        classification = 'FEASIBLE';
-        classificationLabel = 'FEASIBLE';
-        isFeasible = true;
-        reason = `Feasible option: ${avgCarbon} gCO2/kWh with ${(deadlineRisk * 100).toFixed(1)}% deadline risk (within ${(tau * 100).toFixed(0)}% tolerance)`;
-      }
-
-      candidateWindows.push({
-        slotIndex: t,
-        startHour,
-        endHour,
-        windowLabel,
-        predictedCarbonIntensity: avgCarbon,
-        predictedCarbonImpactGrams,
-        stdDev: avgStd,
-        uncertaintyRange,
-        deadlineRisk,
-        deadlineRiskPct: `${(deadlineRisk * 100).toFixed(1)}%`,
-        slackHours,
-        waitingTimeHours,
-        isFeasible,
-        meetsDeadline,
-        classification,
-        classificationLabel,
-        reason,
-      });
-    }
-
-    // -------------------------------------------------------------
-    // POLICY 5: CarbonRoute Uncertainty-Aware (Constrained Optimization)
-    // Select the lowest expected carbon window among feasible candidates
-    // -------------------------------------------------------------
-    const feasibleCandidates = candidateWindows.filter((w) => w.isFeasible);
-    let optimalCandidate: CandidateWindowEvaluation;
-
-    if (feasibleCandidates.length > 0) {
-      // Find candidate with lowest carbon intensity (tie-break earlier start)
-      optimalCandidate = feasibleCandidates.reduce((best, cur) => {
-        if (cur.predictedCarbonIntensity < best.predictedCarbonIntensity) return cur;
-        if (cur.predictedCarbonIntensity === best.predictedCarbonIntensity && cur.startHour < best.startHour) return cur;
-        return best;
-      }, feasibleCandidates[0]);
-
-      optimalCandidate.classification = 'RECOMMENDED';
-      optimalCandidate.classificationLabel = 'RECOMMENDED';
-      optimalCandidate.reason = `Lowest expected-carbon candidate among all windows satisfying the deadline and risk constraints.`;
-    } else {
-      // Safety fallback if no candidate satisfies tau: pick the deadline-compliant window with lowest risk
-      const deadlineCompliant = candidateWindows.filter((w) => w.meetsDeadline);
-      optimalCandidate = (deadlineCompliant.length > 0 ? deadlineCompliant : candidateWindows).reduce((safest, cur) => {
-        return cur.deadlineRisk < safest.deadlineRisk ? cur : safest;
-      }, candidateWindows[0]);
-
-      optimalCandidate.classification = 'RECOMMENDED';
-      optimalCandidate.classificationLabel = 'RECOMMENDED';
-      optimalCandidate.reason = `Safety fallback: No window satisfied your strict ${(tau * 100).toFixed(0)}% risk tolerance given deadline T+${ddl}:00. Selected lowest-risk candidate (T+${optimalCandidate.startHour}:00, risk: ${optimalCandidate.deadlineRiskPct}) to preserve SLA viability.`;
-    }
-
-    const overheadCr = Number((performance.now() - startCr).toFixed(2));
-
-    const carbonRoutePolicy: PolicyEvaluationResult = {
-      policyId: 'carbonroute_uncertainty',
-      policyName: 'CarbonRoute Uncertainty-Aware',
-      category: 'Uncertainty-Aware',
-      selectedStartHour: optimalCandidate.startHour,
-      selectedEndHour: optimalCandidate.endHour,
-      selectedWindow: optimalCandidate.windowLabel,
-      predictedCarbon: optimalCandidate.predictedCarbonIntensity,
-      predictedCarbonIntensity: optimalCandidate.predictedCarbonIntensity,
-      estimatedWorkloadEmissionsGrams: optimalCandidate.predictedCarbonImpactGrams,
-      carbonIntensityUnit: 'gCO2eq/kWh',
-      workloadEmissionsUnit: 'gCO2eq',
-      estimatedDeadlineRisk: optimalCandidate.deadlineRisk,
-      waitingTimeHours: optimalCandidate.waitingTimeHours,
-      isFeasible: optimalCandidate.isFeasible,
-      schedulerOverheadMs: overheadCr,
-      rationale: optimalCandidate.reason,
-    };
-
-    const evaluatedPolicies = [
-      immediatePolicy,
-      edfPolicy,
-      detPolicy,
-      baselinePolicy,
-      carbonRoutePolicy,
-    ];
-
-    const carbonSavingsPct =
-      immCarbon > 0
-        ? Number((((immCarbon - optimalCandidate.predictedCarbonIntensity) / immCarbon) * 100).toFixed(1))
-        : 0;
-
-    // -------------------------------------------------------------
-    // RESEARCH INSIGHT: Lowest Predicted Carbon vs Safest Feasible
-    // Explicitly demonstrates why the lowest-carbon window is not always the safest choice
-    // -------------------------------------------------------------
-    const lowestCarbonCandidate = candidateWindows.reduce((lowest, cur) => {
-      if (cur.predictedCarbonIntensity < lowest.predictedCarbonIntensity) return cur;
-      if (cur.predictedCarbonIntensity === lowest.predictedCarbonIntensity && cur.startHour < lowest.startHour) return cur;
-      return lowest;
-    }, candidateWindows[0]);
-
-    const isLowestCarbonSafe = lowestCarbonCandidate.deadlineRisk <= tau;
-    const carbonInsurancePenaltyGramsPerKwh = Math.max(
-      0,
-      optimalCandidate.predictedCarbonIntensity - lowestCarbonCandidate.predictedCarbonIntensity
-    );
-
-    let researchInsightExplanation = '';
-    if (!isLowestCarbonSafe) {
-      researchInsightExplanation = `The candidate window with the absolute lowest predicted grid carbon intensity is ${lowestCarbonCandidate.windowLabel} (${lowestCarbonCandidate.predictedCarbonIntensity} gCO2eq/kWh). However, due to lookahead forecast uncertainty (sigma ~ ±${lowestCarbonCandidate.stdDev} gCO2/kWh) and tight completion slack (${lowestCarbonCandidate.slackHours}h remaining before deadline T+${ddl}:00), its deadline-violation risk rises to ${lowestCarbonCandidate.deadlineRiskPct}, exceeding your ${(tau * 100).toFixed(0)}% risk tolerance. A greedy deterministic scheduler selects this risky cliff and suffers SLA breaches. In contrast, CarbonRoute rejects it and selects ${optimalCandidate.windowLabel} (${optimalCandidate.predictedCarbonIntensity} gCO2eq/kWh, ${optimalCandidate.deadlineRiskPct} risk), accepting an insurance margin of +${carbonInsurancePenaltyGramsPerKwh} gCO2eq/kWh to guarantee safe, on-time completion within your risk tolerance.`;
-    } else {
-      researchInsightExplanation = `The candidate window with the lowest predicted grid carbon intensity is ${lowestCarbonCandidate.windowLabel} (${lowestCarbonCandidate.predictedCarbonIntensity} gCO2eq/kWh). Its deadline-violation risk is ${lowestCarbonCandidate.deadlineRiskPct}, which is safely within your ${(tau * 100).toFixed(0)}% risk tolerance. CarbonRoute confirms that this window is both optimal and safe.`;
-    }
-
-    const researchInsight: ResearchInsightLowestVsSafest = {
-      lowestCarbonWindow: lowestCarbonCandidate,
-      recommendedWindow: optimalCandidate,
-      isLowestCarbonSafe,
-      carbonInsurancePenaltyGramsPerKwh,
-      explanation: researchInsightExplanation,
-    };
-
-    return {
-      job,
-      carbonSource: source,
-      dataMode,
-      region,
-      candidateWindows,
-      evaluatedPolicies,
-      recommendedDecision: carbonRoutePolicy,
-      comparisonSummary: {
-        carbonSavingsVsImmediatePct: carbonSavingsPct,
-        delayPenaltyHours: optimalCandidate.waitingTimeHours,
-        riskDifferenceVsDeterministic: Number(((detRisk - optimalCandidate.deadlineRisk) * 100).toFixed(1)),
-      },
-      researchInsight,
-      riskModel,
-    };
+    const out = SchedulerService.evaluatePolicies(job, forecast, options);
+    if (out.status !== 'RECOMMENDED') throw new EngineInfeasibleError(out);
+    return out;
   }
 }
 
-// Export top-level function matching specification
 export function evaluateAllPolicies(
   job: WorkloadJob,
   forecast: CarbonForecastData | HourlyCarbonPoint[],
-  uncertaintyMultiplier?: number
+  options?: EngineOptions | number
 ): SchedulingDecisionResponse {
-  return SchedulerService.evaluateAllPolicies(job, forecast, uncertaintyMultiplier);
+  return SchedulerService.evaluateAllPolicies(job, forecast, options);
 }
