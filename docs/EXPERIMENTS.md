@@ -1,7 +1,8 @@
 # Experiments: forecast accuracy and policy comparison
 
 This describes how CarbonRoute's experiments are run and what they can and cannot show. Results are
-produced by scripts and written outside the repository; this document does not contain results.
+produced by scripts and written outside the repository; the current results and their interpretation
+are in [RESEARCH_SUMMARY.md](RESEARCH_SUMMARY.md).
 
 ## Data
 
@@ -33,7 +34,7 @@ window). Windows not yet fully observed are not scored and are counted as `pendi
 | Metric | Definition |
 |---|---|
 | Realized intensity | Time-weighted realized gCO2eq/kWh over the chosen window |
-| Δ vs Immediate | Paired mean of (policy − Immediate) realized intensity on the same workloads, with a 95 % percentile-bootstrap interval |
+| Δ vs Immediate | Paired mean of (policy − Immediate) realized intensity on the same workloads, with a 95 % percentile-bootstrap interval that resamples **forecast snapshots** (cluster bootstrap, `diffVsImmediateClusterCI`). The older workload-level interval (`diffVsImmediateCI`) is kept in result files for comparison but is too narrow, because workloads on one snapshot are not independent. |
 | Delay | Hours between arrival and start |
 | Deadline violations | Share of workloads whose simulated runtime Normal(d, (cv·d)²) ends after the deadline; impossible when cv = 0 |
 | Regret vs Oracle | Realized intensity minus the Oracle's (hindsight best candidate), only when every candidate window is fully observed |
@@ -48,7 +49,18 @@ seed; the same inputs and seed reproduce the same numbers exactly (tested).
 cd backend && npm run build
 npm run collect -- --out ../../CarbonRoute-AS-data/em-collection --runs 25
 npm run benchmark -- --data ../../CarbonRoute-AS-data/em-collection --seed 42 --workloads 20
+npm run demo -- --data ../../CarbonRoute-AS-data/em-collection   # one job end to end, see DEMO.md
 ```
+
+## Interpreting the results
+
+- Compare policies only through the paired Δ: each policy's mean realized intensity is over the
+  workloads it could be scored on, which differ between policies.
+- An interval that excludes 0 on a few hours of data is not evidence of an effect: snapshots of
+  neighbouring hours are correlated and one afternoon is not representative.
+- Deadline violation rates come from simulated runtimes with a declared cv; they show the effect of the
+  risk constraint, not real runtime behaviour.
+- Report results by zone and for measured realized values only before drawing conclusions.
 
 ## Limitations
 

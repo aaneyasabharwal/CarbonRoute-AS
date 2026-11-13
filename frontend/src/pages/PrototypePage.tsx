@@ -59,6 +59,8 @@ export const PrototypePage: React.FC = () => {
   const [memoryMb, setMemoryMb] = useState<number>(512);
   const [region, setRegion] = useState<string>('US-CAL-CISO');
   const [riskTolerance, setRiskTolerance] = useState<number>(0.05);
+  // Declared runtime coefficient of variation (P6): 0 = deterministic runtime.
+  const [runtimeCv, setRuntimeCv] = useState<number>(0);
 
   // Regions: live = every zone the backend's Electricity Maps key can access; demo = synthetic profiles.
   const [regions, setRegions] = useState<ZoneOption[]>([]);
@@ -190,7 +192,7 @@ export const PrototypePage: React.FC = () => {
         riskTolerance,
       };
 
-      const res = await api.scheduleJob({ jobData, region, mode });
+      const res = await api.scheduleJob({ jobData, region, mode, runtimeCv });
       if (res.success && res.data && res.data.status && res.data.status !== 'RECOMMENDED') {
         setDecision(null);
         setActiveJobId(null);
@@ -573,7 +575,7 @@ export const PrototypePage: React.FC = () => {
             <span className="text-[10px] text-slate-500 block">
               {dataSourceMode === 'live'
                 ? 'Queries live forecast from Electricity Maps API v3'
-                : 'Uses calibrated research traces for offline reproducibility'}
+                : 'Uses the synthetic demo trace (labelled synthetic, not real data)'}
             </span>
           </div>
 
@@ -635,6 +637,25 @@ export const PrototypePage: React.FC = () => {
             <span className="text-[10px] text-slate-500 block">Max acceptable P(deadline violation) threshold (&tau;)</span>
           </div>
 
+          {/* Declared runtime variability (P6) */}
+          <div className="space-y-1.5">
+            <label htmlFor="runtime-cv" className="text-slate-300 font-semibold block">
+              Runtime variability (CV)
+            </label>
+            <select
+              id="runtime-cv"
+              value={runtimeCv}
+              onChange={(e) => setRuntimeCv(parseFloat(e.target.value))}
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200"
+            >
+              <option value={0}>0: runtime is exact (deterministic)</option>
+              <option value={0.1}>0.1</option>
+              <option value={0.2}>0.2</option>
+              <option value={0.3}>0.3</option>
+            </select>
+            <span className="text-[10px] text-slate-500 block">Declared by you, not learned: runtime ~ Normal(d, (CV&middot;d)&sup2;)</span>
+          </div>
+
           <div className="md:col-span-3 flex justify-end">
             <button
               type="submit"
@@ -667,7 +688,7 @@ export const PrototypePage: React.FC = () => {
             {dataSourceMode === 'live' && (
               <div className="pt-2 border-t border-rose-900/50 flex flex-wrap items-center justify-between gap-3">
                 <span className="text-slate-300 text-[11px]">
-                  Electricity Maps live API requires <code className="text-emerald-300">ELECTRICITY_MAPS_API_KEY</code> on the backend. To evaluate the schedulers offline, switch to the calibrated benchmark trace:
+                  Electricity Maps live API requires <code className="text-emerald-300">ELECTRICITY_MAPS_API_KEY</code> on the backend. To try the schedulers without it, switch to the synthetic demo trace:
                 </span>
                 <button
                   type="button"
@@ -1459,7 +1480,7 @@ export const PrototypePage: React.FC = () => {
                         <div className="pt-3 border-t border-emerald-500/20 text-[11px] text-emerald-200/90 leading-relaxed">
                           {ri.isLowestCarbonSafe
                             ? 'Selected as the mathematically optimal and safe window without requiring any carbon insurance trade-off.'
-                            : `CarbonRoute pays an intentional "carbon insurance" premium of +${ri.carbonInsurancePenaltyGramsPerKwh} gCO2eq/kWh (+${carbonDeltaGrams} gCO2eq total) to guarantee mathematical deadline safety while still capturing major emissions reductions.`}
+                            : `CarbonRoute pays an intentional "carbon insurance" premium of +${ri.carbonInsurancePenaltyGramsPerKwh} gCO2eq/kWh (+${carbonDeltaGrams} gCO2eq total) to keep the modelled deadline-miss risk within your tolerance.`}
                         </div>
                       </div>
                     </div>

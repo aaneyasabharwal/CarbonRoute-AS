@@ -1,6 +1,6 @@
 # CarbonRoute: Prototype Milestone Vertical Slice Implementation Specification
 
-> **Superseded (P1, November 2026).** The deadline-risk model described below (forecast σ divided by 100 used as a time uncertainty, horizon dispersion, uncertainty multiplier) was dimensionally invalid (audit C1) and has been removed, as have the wrap-around and fill-in behaviours. The implemented formulation is in [SCHEDULING_METHODOLOGY.md](SCHEDULING_METHODOLOGY.md). The test output below is historical and is not produced by the current code. A full documentation rewrite is planned (sprint P6).
+> **Superseded (P1, November 2026).** The deadline-risk model described below (forecast σ divided by 100 used as a time uncertainty, horizon dispersion, uncertainty multiplier) was dimensionally invalid (audit C1) and has been removed, as have the wrap-around and fill-in behaviours. The implemented formulation is in [SCHEDULING_METHODOLOGY.md](SCHEDULING_METHODOLOGY.md). The test output below is historical and is not produced by the current code. The current documentation is listed in the README (P6).
 
 **Team:** TriFlux  
 **Course:** UCS503 Final-Year Project  

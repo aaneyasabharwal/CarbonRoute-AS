@@ -582,6 +582,8 @@ export interface BenchmarkPolicySummary {
   meanRegretVsOracle: number | null;
   realizedIntensityCI: ConfidenceIntervalResult;
   diffVsImmediateCI: ConfidenceIntervalResult;
+  /** Cluster bootstrap over forecast snapshots (P6); absent in older result files. */
+  diffVsImmediateClusterCI?: ConfidenceIntervalResult & { clusters: number };
 }
 
 export interface ErrorMetricsResult {

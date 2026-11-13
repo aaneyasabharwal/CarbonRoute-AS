@@ -3,6 +3,9 @@
  * benchmark. The datasets here are small TEST FIXTURES built in code (not provider data);
  * expected values are computed by hand in the comments.
  */
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { describe, it, expect } from 'vitest';
 import { errorMetrics, bootstrapMeanCI, pairedBootstrapDiffCI, seededRandom, mean } from '../../src/evaluation/metrics';
 import { buildDataset, parseCollection, CollectionRecord } from '../../src/benchmark/dataset';
@@ -279,5 +282,67 @@ describe('collector', () => {
     const ds = buildDataset(parseCollection(fs.readFileSync(path.join(dir, 'collection-2026-11-14.jsonl'), 'utf8').split('\n')));
     expect(ds.failedRecords).toBe(2);
     expect(await runCollector({ ...client, isConfigured: () => false }, { zones: ['DE'], runs: 1, intervalMs: 0, outDir: dir }, { log: () => {} })).toBe(2);
+  });
+});
+
+describe('P6: benchmark intervals respect snapshot dependence', () => {
+  const values = Array.from({ length: 30 }, (_, i) => 200 + 100 * Math.sin(i / 3));
+  const config = { ...DEFAULT_BENCHMARK_CONFIG, workloadsPerSnapshot: 15, bootstrapIterations: 300 };
+
+  it('gives no paired interval when every workload comes from ONE forecast snapshot (one cluster)', () => {
+    const one = buildDataset([forecastRecord('TST', 0, values.slice(0, 24)), historyRecord('TST', 0, values, 31, 'measured')], ['fixture'], 'sha');
+    const s = runReplayBenchmark(one, config, { createdAt: 'fixed' }).scenarios[0];
+    const cr = s.policies.find((p) => p.policyId === 'deterministic_carbon')!;
+    expect(cr.diffVsImmediateClusterCI.n).toBe(15);
+    expect(cr.diffVsImmediateClusterCI.clusters).toBe(1);
+    expect(cr.diffVsImmediateClusterCI.low).toBeNull();
+    // The old workload-level interval claims precision from 15 workloads of a single snapshot.
+    expect(cr.diffVsImmediateCI.low).not.toBeNull();
+  });
+
+  it('counts one cluster per (zone, snapshot) and reports the same point estimate as the workload-level interval', () => {
+    const recs = [0, 1, 2, 3].flatMap((h) => [forecastRecord('AA', h, values.slice(h, h + 24)), forecastRecord('BB', h, values.slice(h, h + 24).map((v) => v + 50))]);
+    recs.push(historyRecord('AA', 0, values, 31), historyRecord('BB', 0, values.map((v) => v + 50), 31));
+    const ds = buildDataset(recs, ['fixture'], 'sha');
+    const s = runReplayBenchmark(ds, config, { createdAt: 'fixed' }).scenarios[0];
+    for (const p of s.policies) {
+      expect(p.diffVsImmediateClusterCI.clusters).toBeLessThanOrEqual(8);
+      expect(p.diffVsImmediateClusterCI.estimate).toBeCloseTo(p.diffVsImmediateCI.estimate as number, 9);
+    }
+    expect(s.policies.find((p) => p.policyId === 'immediate')!.diffVsImmediateClusterCI.clusters).toBe(8);
+  });
+});
+
+describe('P6: reproducible demo (runDemo)', () => {
+  it('replays a stored forecast and later history through the real workflow, offline and deterministically', async () => {
+    const { runDemo } = await import('../../src/scripts/runDemo');
+    const v = Array.from({ length: 30 }, (_, i) => 300 - 5 * i);
+    // Forecasts fetched at hours 0..2, history collected at hour 8 (covers hours 0..7, measured).
+    const recs = [0, 1, 2].map((h) => forecastRecord('DE', h, v.slice(h, h + 24)));
+    recs.push(historyRecord('DE', 0, v.slice(0, 8), 8, 'measured'));
+    const out1 = fs.mkdtempSync(path.join(os.tmpdir(), 'cr-demo-'));
+    const out2 = fs.mkdtempSync(path.join(os.tmpdir(), 'cr-demo-'));
+    const a = await runDemo(recs, 'fixture-sha', out1, { durationHours: 2, slackHours: 3 });
+    const b = await runDemo(recs, 'fixture-sha', out2, { durationHours: 2, slackHours: 3 });
+    expect(a.summary).toBe(b.summary);
+    const r: any = a.result;
+    // Newest snapshot whose deadline (fetch + 5 h) passed by the history collection at hour 8.
+    expect(r.dataset.snapshotFetchedAt).toBe(new Date(T0 + 2 * H + 10 * 60_000).toISOString());
+    expect(r.scheduled.status).toBe('RECOMMENDED');
+    expect(r.scheduled.provenance.dataClass).toBe('real');
+    expect(r.infeasible.status).toBe('INFEASIBLE_RISK');
+    expect(r.observationSet.status).toBe('COMPLETE');
+    expect(r.observationSet.observations.every((o: any) => o.quality === 'measured')).toBe(true);
+    expect(r.ml.status).toBe('insufficient-data');
+    expect(r.ml.testScores ?? null).toBeNull();
+    expect(fs.existsSync(path.join(out1, 'demo-job-report.html'))).toBe(true);
+    expect(a.summary).toContain('No model was fitted');
+  });
+
+  it('refuses to run when no snapshot is old enough for its window to have been observed', async () => {
+    const { runDemo } = await import('../../src/scripts/runDemo');
+    const v = Array.from({ length: 30 }, () => 100);
+    const recs = [forecastRecord('DE', 0, v.slice(0, 24)), historyRecord('DE', 0, v.slice(0, 2), 2)];
+    await expect(runDemo(recs, 'sha', fs.mkdtempSync(path.join(os.tmpdir(), 'cr-demo-')), {})).rejects.toThrow(/old enough/);
   });
 });

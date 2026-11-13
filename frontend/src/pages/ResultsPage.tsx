@@ -150,9 +150,15 @@ const RunView: React.FC<{ r: BenchmarkResultDetail }> = ({ r }) => (
                   <td className="py-2 pr-3" title={p.realizedIntensityCI.note}>
                     {fmt(p.meanRealizedIntensity)} {ci(p.realizedIntensityCI)}
                   </td>
-                  <td className="py-2 pr-3" title={p.diffVsImmediateCI.note}>
-                    {fmt(p.diffVsImmediateCI.estimate)} {ci(p.diffVsImmediateCI)} (n={p.diffVsImmediateCI.n})
-                  </td>
+                  {p.diffVsImmediateClusterCI ? (
+                    <td className="py-2 pr-3" title="Cluster bootstrap over forecast snapshots">
+                      {fmt(p.diffVsImmediateClusterCI.estimate)} {ci(p.diffVsImmediateClusterCI)} (n={p.diffVsImmediateClusterCI.n}, {p.diffVsImmediateClusterCI.clusters} snapshots)
+                    </td>
+                  ) : (
+                    <td className="py-2 pr-3" title="Older result: workloads resampled individually, so the interval is too narrow">
+                      {fmt(p.diffVsImmediateCI.estimate)} {ci(p.diffVsImmediateCI)} (n={p.diffVsImmediateCI.n}; workload-level interval, optimistic)
+                    </td>
+                  )}
                   <td className="py-2 pr-3">{fmt(p.meanDelayHours)}</td>
                   <td className="py-2 pr-3">{p.deadlineViolationRate === null ? 'n/a' : `${(p.deadlineViolationRate * 100).toFixed(1)}%`}</td>
                   <td className="py-2 pr-3">{fmt(p.meanRegretVsOracle)}</td>

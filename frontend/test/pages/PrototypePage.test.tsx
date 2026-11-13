@@ -87,6 +87,19 @@ describe('PrototypePage (M5 real-data workflow)', () => {
     expect(screen.queryByText('CarbonRoute Recommendation')).toBeNull();
   });
 
+  // P6 audit: the page never sent a runtime CV, so every decision from the UI was deterministic.
+  it('sends the declared runtime variability (0 by default, the selected value after a change)', async () => {
+    const fetchMock = backend({ status: 'INFEASIBLE', reason: 'too late', recommendation: null });
+    renderPage();
+    await screen.findByRole('alert');
+    const calls = () => fetchMock.mock.calls.filter((c) => String(c[0]) === `${API_BASE}/schedule`);
+    expect(bodyOf(calls()[0]).runtimeCv).toBe(0);
+    fireEvent.change(screen.getByLabelText('Runtime variability (CV)'), { target: { value: '0.2' } });
+    fireEvent.click(screen.getByRole('button', { name: /Evaluate 5 Schedulers/ }));
+    await waitFor(() => expect(calls().length).toBe(2));
+    expect(bodyOf(calls()[1]).runtimeCv).toBe(0.2);
+  });
+
   // Regression (defect 1, dashboard): the recommendation card uses the time-weighted forecast
   // (demo job-7f42a910: recommended 117 vs Immediate 117.33 -> 0.28%), not the engine's
   // hourly-slot saving (1.7%).

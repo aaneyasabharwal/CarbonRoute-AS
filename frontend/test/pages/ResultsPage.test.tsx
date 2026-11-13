@@ -99,12 +99,31 @@ describe('ResultsPage', () => {
     const table = screen.getByRole('table', { name: 'Policy comparison CV 0' });
     const [, imm, cr, greedy] = within(table).getAllByRole('row');
     expect(cr).toHaveTextContent('CarbonRoute (risk-constrained)');
-    expect(cr).toHaveTextContent('-30.10 [-35.20, -25.00] (n=340)');
+    // An older result file (no cluster interval): the workload-level interval is labelled optimistic.
+    expect(cr).toHaveTextContent('-30.10 [-35.20, -25.00] (n=340; workload-level interval, optimistic)');
     expect(imm).toHaveTextContent('350 / 400');
     expect(greedy).toHaveTextContent('250.00 no interval'); // one value: no interval is shown, none is invented
 
     const acc = screen.getByRole('table', { name: 'Forecast accuracy' });
     expect(within(acc).getAllByRole('row')[1]).toHaveTextContent('n/a (0)'); // GB has no measured values
+  });
+});
+
+describe('ResultsPage snapshot-cluster intervals (P6)', () => {
+  it('shows the cluster-bootstrap interval with its snapshot count when the result has one', async () => {
+    localStorage.setItem('carbonroute_token', 't');
+    const withCluster = JSON.parse(JSON.stringify(detail));
+    withCluster.scenarios[0].policies[1].diffVsImmediateClusterCI = { ...ci(-30.1, -48.0, -9.5, 340), clusters: 12 };
+    stubFetch((url) => {
+      if (url === `${API_BASE}/results/benchmarks`) return { body: { success: true, data: [item] } };
+      if (url === `${API_BASE}/results/benchmarks/${item.id}`) return { body: { success: true, data: withCluster } };
+      return undefined;
+    });
+    renderPage();
+    const table = await screen.findByRole('table', { name: 'Policy comparison CV 0' });
+    const cr = within(table).getAllByRole('row')[2];
+    expect(cr).toHaveTextContent('-30.10 [-48.00, -9.50] (n=340, 12 snapshots)');
+    expect(cr).not.toHaveTextContent('-35.20');
   });
 });
 

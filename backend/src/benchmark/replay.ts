@@ -17,7 +17,7 @@ import { SchedulerService, WorkloadJob } from '../services/schedulerService';
 import { energyAssumption } from '../services/energyModel';
 import { timeWeightedAverage } from '../evaluation/timeWeighting';
 import { evaluateOracle } from '../evaluation/oracle';
-import { bootstrapMeanCI, mean, normalSample, pairedBootstrapDiffCI, seededRandom, ConfidenceInterval } from '../evaluation/metrics';
+import { bootstrapMeanCI, mean, normalSample, pairedBootstrapDiffCI, pairedClusterBootstrapDiffCI, seededRandom, ConfidenceInterval } from '../evaluation/metrics';
 import type { CollectedDataset } from './dataset';
 
 const HOUR = 3600_000;
@@ -69,8 +69,13 @@ export interface PolicySummary {
   deadlineViolationRate: number | null;
   meanRegretVsOracle: number | null;
   realizedIntensityCI: ConfidenceInterval;
-  /** Paired: policy minus Immediate realized intensity on the same workloads (negative = cleaner). */
+  /** Paired: policy minus Immediate realized intensity on the same workloads (negative = cleaner).
+   *  Resamples WORKLOADS, which share snapshots and hours, so the interval is too narrow. Kept for
+   *  comparison with earlier results; use diffVsImmediateClusterCI. */
   diffVsImmediateCI: ConfidenceInterval;
+  /** P6: the same paired difference with a cluster bootstrap over forecast snapshots (zone and
+   *  fetch time): workloads replayed on one snapshot are resampled together. */
+  diffVsImmediateClusterCI: ConfidenceInterval & { clusters: number };
 }
 
 export interface BenchmarkResult {
@@ -199,6 +204,12 @@ export function runReplayBenchmark(dataset: CollectedDataset, config: BenchmarkC
           pairedWs.map((w) => w.policies.immediate.realizedIntensity as number),
           { iterations: config.bootstrapIterations, seed: seed + 500 }
         ),
+        diffVsImmediateClusterCI: pairedClusterBootstrapDiffCI(
+          pairedWs.map((w) => w.policies[pid].realizedIntensity as number),
+          pairedWs.map((w) => w.policies.immediate.realizedIntensity as number),
+          pairedWs.map((w) => `${w.zone}|${w.snapshotFetchedAt}`),
+          { iterations: config.bootstrapIterations, seed: seed + 700 }
+        ),
       };
     });
     return {
@@ -233,6 +244,7 @@ export function runReplayBenchmark(dataset: CollectedDataset, config: BenchmarkC
       'Deadline violations use simulated runtimes Normal(d, (cv d)^2); with cv = 0 none can occur.',
       'Realized values include provider estimates; see dataset.measuredShare.',
       'Fewer than 10 scored workloads make confidence intervals unreliable; see each interval\'s note.',
+      'Confidence intervals for the paired difference resample forecast snapshots (cluster bootstrap): workloads on one snapshot share its forecast and realized hours and are not independent. Snapshots of neighbouring hours are still correlated, so intervals may remain somewhat optimistic.',
       'Per-policy means are over the workloads that policy could be scored on, which differ between policies; compare policies with the paired "vs Immediate" difference.',
     ],
   };

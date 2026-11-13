@@ -1,0 +1,13 @@
+# Keep secrets, local data and build output out of every Docker build context (P6 audit).
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/dist
+.git
+database/*.json
+database/*.bak*
+backend/uploads
+storage/uploads/*
+!storage/uploads/presentations
+*.exe

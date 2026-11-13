@@ -26,8 +26,8 @@ The CarbonRoute platform is designed to be hosted publicly on a Linux VPS (Ubunt
                                  |                                                   |
                                  v                                                   v
                   +-----------------------------+                     +-----------------------------+
-                  | Database (JSON / SQLite /   |                     | Object Storage (AWS S3 /    |
-                  | PostgreSQL Relational Store)|                     | Cloudflare R2 / Local Disk) |
+                  | Database (JSON files,       |                     | Object Storage (AWS S3 /    |
+                  | single process)             |                     | Cloudflare R2 / Local Disk) |
                   +-----------------------------+                     +-----------------------------+
 ```
 
@@ -105,4 +105,37 @@ Docker Compose reads secrets from the repository-root `.env` (`env_file`); none 
 
 This starts:
 - `carbonroute-backend`: Express API server on port 5000
-- `carbonroute-frontend`: High-performance Nginx web server serving the compiled React bundle on port 80/443.
+- `carbonroute-frontend`: nginx serving the compiled React bundle on port 80 and proxying `/api` and
+  `/uploads` to the backend. The image is built with `VITE_API_URL=/api`, so the browser calls the API
+  on the same origin; compose sets `CORS_ORIGIN=http://localhost` and `TRUST_PROXY=1` for that setup.
+  Add HTTPS (and your public origin to `CORS_ORIGIN`) in front of it for a public deployment.
+
+Data and secrets (P6 audit):
+- `.dockerignore` keeps `.env`, `node_modules`, build output and the local JSON databases out of the
+  build context, so no user, token or job data is baked into an image.
+- Compose sets `CARBONROUTE_DB_FILE=/app/database/carbonroute.db.json` and
+  `LOCAL_STORAGE_DIR=/app/storage/uploads`. Without them the compiled code would write the database to
+  `/database` inside the container, outside the mounted volume, and lose it when the container is
+  recreated.
+- The Docker build was not run during the P6 verification (Docker is not installed on the verification
+  machine); the configuration was reviewed by reading it.
+
+## 5. Current hosted setup and prerequisites
+
+- **Frontend**: GitHub Pages, deployed by `.github/workflows/deploy-pages.yml` **only on pushes to
+  `main`** (the remediation work is on `fix/prototype-flaws` and has not been deployed). Built with
+  `GITHUB_PAGES=true` (base path `/CarbonRoute/`, which must match the name of the repository that hosts
+  Pages: on this fork, `CarbonRoute-AS`, the base path would have to change); it calls `https://carbonroute.onrender.com` unless
+  `VITE_API_URL` is set at build time.
+- **Backend**: Render (`https://carbonroute.onrender.com`). Before deploying the remediated backend:
+  set `NODE_ENV=production`, a new `JWT_SECRET`, `ADMIN_PASSWORD` (if the database is new),
+  `CORS_ORIGIN` with the Pages origin, `TRUST_PROXY=1` and `ELECTRICITY_MAPS_API_KEY` in Render's
+  environment settings, never in the repository.
+- **Persistence**: the JSON database lives on the service's disk. On a host with an ephemeral disk
+  (Render without a persistent disk) users, jobs and decisions are lost on every deploy or restart;
+  attach a persistent disk and point `CARBONROUTE_DB_FILE` at it.
+- **Single instance only**: rate limits, the provider call budget and caches are in memory.
+- **Result files** (`BENCHMARK_RESULTS_DIR`, `ML_RESULTS_DIR`) are not in the repository; the hosted
+  Results page is empty unless they are copied to the server.
+
+See [ENVIRONMENT.md](ENVIRONMENT.md) for every variable.
