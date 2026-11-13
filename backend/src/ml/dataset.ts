@@ -45,7 +45,8 @@ export function buildErrorRows(records: CollectionRecord[]): ErrorRow[] {
     const list = historyByRun.get(key) ?? [];
     for (const o of r.data.observations || []) {
       if (o.granularity !== 'hourly' || !Number.isFinite(o.carbonIntensity)) continue;
-      const k = `${r.zone}|${o.datetime}`;
+      // Keyed by the instant, not the string: "…T13:00:00Z" and "…T13:00:00.000Z" are the same hour.
+      const k = `${r.zone}|${Date.parse(o.datetime)}`;
       const prev = latest.get(k);
       if (!prev || prev.fetchedAt < o.fetchedAt) latest.set(k, { value: o.carbonIntensity, quality: o.quality, fetchedAt: o.fetchedAt });
       list.push({ t: Date.parse(o.datetime), value: o.carbonIntensity });
@@ -71,7 +72,7 @@ export function buildErrorRows(records: CollectionRecord[]): ErrorRow[] {
       const t = Date.parse(p.datetime);
       const lead = Math.round((t - fetchHour) / HOUR);
       if (lead < 0 || !Number.isFinite(p.carbonIntensity)) continue;
-      const target = latest.get(`${r.zone}|${new Date(t).toISOString()}`);
+      const target = latest.get(`${r.zone}|${t}`);
       if (!target) continue;
       rows.push({
         zone: r.zone,

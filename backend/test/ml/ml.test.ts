@@ -173,3 +173,109 @@ describe('ML results API', () => {
     }
   });
 });
+
+// ---------------- PR #13 review regressions ----------------
+
+describe('review: pairing by instant, not by string', () => {
+  it('matches observations whose timestamps lack milliseconds ("...T13:00:00Z")', () => {
+    const recs = synthetic({ days: 2, zones: ['AA'], bias: () => 0, noiseSd: 1 }).map((r) =>
+      r.kind === 'history' ? { ...r, data: { ...r.data, observations: r.data.observations.map((o: any) => ({ ...o, datetime: o.datetime.replace('.000Z', 'Z') })) } } : r
+    );
+    const plain = buildErrorRows(synthetic({ days: 2, zones: ['AA'], bias: () => 0, noiseSd: 1 }));
+    const rows = buildErrorRows(recs);
+    expect(rows.length).toBe(plain.length);
+    expect(rows.length).toBeGreaterThan(0);
+    // and the matched value is the realized value of the same zone and hour
+    expect(rows.map((r) => [r.zone, r.targetTime, r.actual])).toEqual(plain.map((r) => [r.zone, r.targetTime, r.actual]));
+  });
+});
+
+describe('review: uncertainty respects dependent rows', () => {
+  it('the cluster bootstrap is wider than a row bootstrap when each target hour is repeated', async () => {
+    const { pairedBootstrapDiffCI, pairedClusterBootstrapDiffCI } = await import('../../src/evaluation/metrics');
+    const rand = seededRandom(11);
+    const a: number[] = [];
+    const b: number[] = [];
+    const ids: number[] = [];
+    for (let h = 0; h < 40; h++) {
+      const shared = 5 * normalSample(rand); // one error per target hour, repeated 20 times
+      for (let k = 0; k < 20; k++) {
+        a.push(10 + shared);
+        b.push(10);
+        ids.push(h);
+      }
+    }
+    const naive = pairedBootstrapDiffCI(a, b, { seed: 1 });
+    const cluster = pairedClusterBootstrapDiffCI(a, b, ids, { seed: 1 });
+    expect(cluster.clusters).toBe(40);
+    expect(cluster.high! - cluster.low!).toBeGreaterThan(3 * (naive.high! - naive.low!));
+    expect(pairedClusterBootstrapDiffCI([1, 2], [0, 0], ['x', 'x']).note).toMatch(/Fewer than 2 clusters/);
+    expect(() => pairedClusterBootstrapDiffCI([1], [1], [])).toThrow();
+  });
+
+  it('the pipeline reports clusters = distinct test target hours, and measured counts per split', () => {
+    const r = runMlPipeline(synthetic({ days: 10, zones: ['AA', 'BB'], bias: (z, l) => (z === 'AA' ? 4 * l : -3 * l + 20), noiseSd: 3, seed: 5, randomTruth: true }), { createdAt: 'fixed' });
+    expect(r.status).toBe('evaluated-promoted');
+    const rows = buildErrorRows(synthetic({ days: 10, zones: ['AA', 'BB'], bias: (z, l) => (z === 'AA' ? 4 * l : -3 * l + 20), noiseSd: 3, seed: 5, randomTruth: true }));
+    const test = chronologicalSplit(rows).test;
+    expect(r.promotion!.diffCI.clusters).toBe(new Set(test.map((x) => x.targetTime)).size);
+    expect(r.split!.measured.test).toBe(test.filter((x) => x.quality === 'measured').length);
+    expect(r.split!.measured.train).toBeGreaterThan(0);
+  });
+});
+
+describe('review: promotion rule (pure function, every branch)', () => {
+  const ok = { candidateMae: 9, bestBaseline: { name: 'bias-corrected', mae: 10 }, diffCI: { n: 500, estimate: -1, low: -1.5, high: -0.5, level: 0.95, method: 'percentile-bootstrap' as const, iterations: 10, seed: 1, clusters: 48 }, measured: { rows: 100, candidateMae: 8, bestBaselineMae: 9 } };
+  it('promotes only when every condition holds', async () => {
+    const { decidePromotion } = await import('../../src/ml/pipeline');
+    expect(decidePromotion(ok).promoted).toBe(true);
+    expect(decidePromotion({ ...ok, candidateMae: 9.6 }).reasons[0]).toMatch(/96\.0% of the best baseline/);
+    expect(decidePromotion({ ...ok, diffCI: { ...ok.diffCI, high: 0.1 } }).promoted).toBe(false);
+    expect(decidePromotion({ ...ok, diffCI: { ...ok.diffCI, clusters: 12 } }).reasons[0]).toMatch(/only 12 independent target hours/);
+    // better overall but WORSE on measured values: not promoted
+    const worseMeasured = decidePromotion({ ...ok, measured: { rows: 100, candidateMae: 9.5, bestBaselineMae: 9 } });
+    expect(worseMeasured.promoted).toBe(false);
+    expect(worseMeasured.reasons[0]).toMatch(/on measured values only/);
+    // too few measured rows: allowed, but the reliance on estimates is stated
+    const fewMeasured = decidePromotion({ ...ok, measured: { rows: 5, candidateMae: null, bestBaselineMae: null } });
+    expect(fewMeasured.promoted).toBe(true);
+    expect(fewMeasured.reasons.join(' ')).toMatch(/Measured-only check not possible: 5 measured test rows/);
+  });
+});
+
+describe('review: guards', () => {
+  it('no scheduling code imports the ML module', () => {
+    const src = path.join(__dirname, '..', '..', 'src');
+    const offenders: string[] = [];
+    const walk = (d: string) => {
+      for (const f of fs.readdirSync(d)) {
+        const p = path.join(d, f);
+        if (fs.statSync(p).isDirectory()) walk(p);
+        else if (/\.ts$/.test(f) && !p.includes(`${path.sep}ml${path.sep}`) && !p.includes(`${path.sep}scripts${path.sep}`) && /from '(\.\.?\/)+ml\//.test(fs.readFileSync(p, 'utf8'))) offenders.push(path.relative(src, p));
+      }
+    };
+    walk(src);
+    expect(offenders).toEqual([]);
+  });
+
+  it('anomaly flags say they are not confirmed failures', () => {
+    const rep = residualAnomalies(buildErrorRows(synthetic({ days: 2, zones: ['AA'], bias: () => 0, noiseSd: 2 })));
+    expect(rep.interpretation).toMatch(/NOT confirmed provider failures/);
+  });
+
+  it('the API refuses reports whose scores the pipeline could not have produced', async () => {
+    const auth = (await createAndLoginUser(app)).auth;
+    const dir = process.env.ML_RESULTS_DIR!;
+    fs.mkdirSync(dir, { recursive: true });
+    const insufficient = runMlPipeline(synthetic({ days: 1, zones: ['AA'], bias: () => 0, noiseSd: 1 }).filter((x) => x.run <= 3), { createdAt: '2026-11-13T20:00:00.000Z' });
+    const forged = { ...insufficient, testScores: [{ model: 'ridge-error-correction', all: { n: 4, mae: 1, rmse: 1, bias: 0 }, measuredOnly: { n: 0, mae: null, rmse: null, bias: null } }] };
+    fs.writeFileSync(path.join(dir, 'ml-2026-11-13T20-00-00-000Z.json'), JSON.stringify(forged));
+    const evaluatedWithoutScores = { ...insufficient, status: 'evaluated-promoted' };
+    fs.writeFileSync(path.join(dir, 'ml-2026-11-13T21-00-00-000Z.json'), JSON.stringify(evaluatedWithoutScores));
+    expect((await request(app).get('/api/results/ml/ml-2026-11-13T20-00-00-000Z').set(auth)).status).toBe(404);
+    expect((await request(app).get('/api/results/ml/ml-2026-11-13T21-00-00-000Z').set(auth)).status).toBe(404);
+    const ids = (await request(app).get('/api/results/ml').set(auth)).body.data.map((x: any) => x.id);
+    expect(ids).not.toContain('ml-2026-11-13T20-00-00-000Z');
+    expect(ids).not.toContain('ml-2026-11-13T21-00-00-000Z');
+  });
+});

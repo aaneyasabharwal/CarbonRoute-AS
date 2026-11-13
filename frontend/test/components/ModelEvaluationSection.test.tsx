@@ -71,3 +71,21 @@ describe('ModelEvaluationSection', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('cannot read ml results');
   });
 });
+
+describe('ModelEvaluationSection (PR #13 review)', () => {
+  it('never renders model scores for an insufficient-data report, even if a stored file contains some', async () => {
+    backend({
+      ...base,
+      status: 'insufficient-data',
+      statusReasons: ['No model was fitted.'],
+      split: null,
+      testScores: [{ model: 'ridge-error-correction', all: { n: 4, mae: 1, rmse: 1, bias: 0 }, measuredOnly: { n: 0, mae: null, rmse: null, bias: null } }],
+      anomalies: { ...base.anomalies, interpretation: 'Unsupervised statistical screening flags for manual review. They are NOT confirmed provider failures or data errors, and no detection accuracy is claimed.' },
+    });
+    render(<ModelEvaluationSection />);
+    const el = await screen.findByTestId('ml-evaluation');
+    expect(screen.queryByRole('table', { name: 'Model test scores' })).toBeNull();
+    expect(el).not.toHaveTextContent('ridge-error-correction');
+    expect(el).toHaveTextContent('NOT confirmed provider failures');
+  });
+});

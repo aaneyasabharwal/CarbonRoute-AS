@@ -70,7 +70,7 @@ const ModelView: React.FC<{ m: MlEvaluation }> = ({ m }) => (
       Provider forecast error (descriptive, not a model): MAE {fmt(m.providerErrorAllRows.all.mae)} vs all realized values;
       <DataQualityBadge quality="measured" /> only: MAE {fmt(m.providerErrorAllRows.measuredOnly.mae)} (n={m.providerErrorAllRows.measuredOnly.n})
     </div>
-    {m.testScores && (
+    {m.status !== 'insufficient-data' && m.testScores && (
       <table className="w-full text-left" aria-label="Model test scores">
         <thead className="text-slate-400 border-b border-slate-800">
           <tr>
@@ -96,6 +96,9 @@ const ModelView: React.FC<{ m: MlEvaluation }> = ({ m }) => (
         </tbody>
       </table>
     )}
-    <div className="text-slate-500">Anomaly flags: {m.anomalies.method}. {m.anomalies.zones.map((z) => `${z.zone} ${z.status}`).join(' · ')}</div>
+    <div className="text-slate-500">
+      Anomaly flags ({m.anomalies.method}): {m.anomalies.interpretation || 'Unsupervised screening flags, not confirmed failures.'}{' '}
+      {m.anomalies.zones.map((z) => `${z.zone} ${z.status}`).join(' · ')}
+    </div>
   </div>
 );

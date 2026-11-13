@@ -76,7 +76,13 @@ function readMl(id: string): any | null {
   if (path.dirname(file) !== mlResultsDir() || !fs.existsSync(file)) return null;
   try {
     const r = JSON.parse(fs.readFileSync(file, 'utf8'));
-    return r && r.kind === 'carbonroute-ml-evaluation' ? r : null;
+    if (!r || r.kind !== 'carbonroute-ml-evaluation') return null;
+    // P5 review: never serve model scores that the pipeline could not have produced. An
+    // insufficient-data report has no fitted model, so any scores in it are not real.
+    const evaluated = r.status === 'evaluated-promoted' || r.status === 'evaluated-not-promoted';
+    if (!evaluated && (r.testScores || r.candidate || r.promotion)) return null;
+    if (evaluated && (!Array.isArray(r.testScores) || !r.candidate || !r.promotion)) return null;
+    return r;
   } catch {
     return null;
   }

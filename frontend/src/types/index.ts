@@ -628,6 +628,6 @@ export interface MlEvaluation extends MlEvaluationListItem {
   providerErrorAllRows: { all: ErrorMetricsResult; measuredOnly: ErrorMetricsResult };
   split: { train: number; validation: number; test: number; droppedForGap: number } | null;
   testScores: { model: string; all: ErrorMetricsResult; measuredOnly: ErrorMetricsResult }[] | null;
-  anomalies: { method: string; zones: { zone: string; rows: number; status: string; flagged: unknown[] }[] };
+  anomalies: { method: string; interpretation?: string; zones: { zone: string; rows: number; status: string; flagged: unknown[] }[] };
   notes: string[];
 }

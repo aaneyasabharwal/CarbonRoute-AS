@@ -15,8 +15,12 @@ const median = (v: number[]) => {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
 
+export const ANOMALY_INTERPRETATION =
+  'Unsupervised statistical screening flags for manual review. They are NOT confirmed provider failures or data errors, and no detection accuracy is claimed.';
+
 export interface AnomalyReport {
   method: 'robust-z of forecast error per zone (median / MAD), unsupervised';
+  interpretation: typeof ANOMALY_INTERPRETATION;
   threshold: number;
   zones: { zone: string; rows: number; status: 'ok' | 'insufficient-data' | 'zero-spread'; flagged: { targetTime: string; leadHours: number; error: number; z: number; quality: string }[] }[];
 }
@@ -25,6 +29,7 @@ export function residualAnomalies(rows: ErrorRow[], threshold = ANOMALY_Z): Anom
   const zones = [...new Set(rows.map((r) => r.zone))].sort();
   return {
     method: 'robust-z of forecast error per zone (median / MAD), unsupervised',
+    interpretation: ANOMALY_INTERPRETATION,
     threshold,
     zones: zones.map((zone) => {
       const zr = rows.filter((r) => r.zone === zone);

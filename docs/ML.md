@@ -21,7 +21,10 @@ One row per (forecast snapshot, forecast hour) whose realized value has been col
   collection run, for an hour that had ended (`assertNoLeakage` checks this).
 
 Targets keep their quality: **measured** or **provider estimate**. Metrics are reported for all
-realized values and for measured values only.
+realized values and for measured values only, and each split reports how many of its rows are
+measured. Training uses both (the target's quality is not known when the forecast is issued, so it
+cannot be a feature); promotion additionally requires no degradation on measured values.
+Observations are matched to forecasts by zone and by the hour as an instant (not as a string).
 
 **Splits** are chronological by fetch time (60 % train, 20 % validation, 20 % test). A row is kept in
 an earlier split only if its target hour ended before the next split begins, so no later split
@@ -42,9 +45,20 @@ Fixed in code before any evaluation:
 
 - **Training thresholds:** at least 500 training, 100 validation and 200 test rows, spanning at least
   7 days. Below them the status is `insufficient-data` and **no model is fitted**.
-- **Promotion:** the candidate's test MAE must be ≤ 95 % of the best baseline's, and the 95 % paired
-  bootstrap interval of (|candidate error| − |baseline error|) must lie entirely below 0. Otherwise
-  the status is `evaluated-not-promoted`.
+- **Promotion** (all must hold, otherwise `evaluated-not-promoted`):
+  - the candidate's test MAE is ≤ 95 % of the best baseline's;
+  - the 95 % interval of the paired difference (|candidate error| − |baseline error|) lies entirely
+    below 0, computed by a **cluster bootstrap over target hours**, with at least 30 distinct target
+    hours in the test period;
+  - when the test period has ≥ 30 **measured** rows, the candidate is not worse than the best baseline
+    on measured values alone (otherwise the report states that the result relies on provider estimates).
+- **Amendment (PR #13 review, 2026-11-13).** The first version resampled individual rows and checked
+  only pooled values. The review found that the same target hour is predicted by up to 24 snapshots,
+  so rows are not independent (a row bootstrap gives intervals that are far too narrow), and that
+  pooling lets provider estimates decide promotion. The rule was amended before any evaluation had
+  run: every run on real data so far was `insufficient-data`.
+- Rows of the same target hour are still correlated with neighbouring hours; the cluster interval
+  does not model that serial correlation and may remain somewhat optimistic.
 - Promotion only means "better than the baselines on the held-out test period". The model is **not**
   used by the scheduler (that would be roadmap task M12.8, with its own review).
 
@@ -52,7 +66,8 @@ Fixed in code before any evaluation:
 
 Unsupervised screening: a robust z-score of the provider's forecast error per zone
 (|e − median| / (1.4826·MAD) > 3.5), only for zones with at least 30 rows. There are no labelled
-anomalies, so this is not a validated detector and no accuracy is claimed for it.
+anomalies, so this is not a validated detector and no accuracy is claimed for it. Every report and the
+Results page state that flags are **not confirmed provider failures or data errors**.
 
 ## Running
 
