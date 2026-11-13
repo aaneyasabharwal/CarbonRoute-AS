@@ -66,6 +66,12 @@ export const JobsPage: React.FC = () => {
     const res = await api.getJobOracle(id);
     setOracle(res.success && res.data ? { state: 'ok', data: res.data } : { state: 'error', message: res.message || 'Hindsight evaluation failed.' });
   };
+  const collect = async (id: string) => {
+    setActionError(null);
+    const res = await api.collectObservations(id);
+    if (!res.success) return setActionError(res.message || 'Observation collection failed.');
+    await loadDetails(id);
+  };
   const download = async (id: string, format: 'html' | 'json') => {
     setActionError(null);
     const res = await api.downloadReport(id, format);
@@ -140,6 +146,7 @@ export const JobsPage: React.FC = () => {
               actionError={actionError}
               onCancel={() => cancel(details.data.id)}
               onOracle={() => runOracle(details.data.id)}
+              onCollect={() => collect(details.data.id)}
               onDownload={(f) => download(details.data.id, f)}
             />
           )}
@@ -167,8 +174,9 @@ const Details: React.FC<{
   actionError: string | null;
   onCancel: () => void;
   onOracle: () => void;
+  onCollect: () => void;
   onDownload: (f: 'html' | 'json') => void;
-}> = ({ d, oracle, actionError, onCancel, onOracle, onDownload }) => {
+}> = ({ d, oracle, actionError, onCancel, onOracle, onCollect, onDownload }) => {
   const dec = d.decision;
   const names = Object.fromEntries((dec?.policies || []).map((p) => [p.policyId, p.policyName]));
   return (
@@ -220,8 +228,17 @@ const Details: React.FC<{
 
       <section aria-label="Observations" className="p-4 rounded-xl border border-slate-800 space-y-2 text-xs">
         <h3 className="font-bold text-slate-100 text-sm">Observed carbon intensity</h3>
+        {dec?.status === 'RECOMMENDED' && (
+          <button type="button" onClick={onCollect} className="px-3 py-1.5 rounded border border-slate-700 text-slate-200 hover:bg-slate-800">
+            {d.observations ? 'Check observations again' : 'Collect observations'}
+          </button>
+        )}
         {!d.observations ? (
-          <p className="text-slate-400">No observations collected yet. Use the Prototype page after the window has ended.</p>
+          <p className="text-slate-400">
+            {dec?.status === 'RECOMMENDED'
+              ? 'No observations collected yet. Values exist only after the scheduled window has ended, and the provider keeps them for 24 hours.'
+              : 'There is no scheduled window to observe.'}
+          </p>
         ) : (
           <>
             <p className="text-slate-300">

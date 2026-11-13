@@ -156,3 +156,42 @@ describe('JobsPage', () => {
     for (const c of fetchMock.mock.calls) expect(new Headers((c[1] as RequestInit | undefined)?.headers).get('Authorization')).toBe('Bearer t');
   });
 });
+
+describe('JobsPage observations (P4 review)', () => {
+  it('collects observations for any listed job from this page, instead of pointing to the Prototype page', async () => {
+    localStorage.setItem('carbonroute_token', 't');
+    let collected = false;
+    const fetchMock = stubFetch((url, init) => {
+      if (url === `${API_BASE}/jobs`) return { body: { success: true, data: [summary] } };
+      if (url === `${API_BASE}/jobs/job-abc12345`) return { body: { success: true, data: { ...details, observations: collected ? details.observations : null } } };
+      if (url === `${API_BASE}/jobs/job-abc12345/observations` && init?.method === 'POST') {
+        collected = true;
+        return { body: { success: true, data: { collected: { status: 'COMPLETE' } } } };
+      }
+      return undefined;
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: /Nightly ETL/ }));
+    const obs = await screen.findByRole('region', { name: 'Observations' });
+    expect(obs).toHaveTextContent('Values exist only after the scheduled window has ended');
+    expect(obs).not.toHaveTextContent('Prototype page');
+    fireEvent.click(within(obs).getByRole('button', { name: 'Collect observations' }));
+    await waitFor(() => expect(screen.getByRole('region', { name: 'Observations' }).querySelector('[data-quality="measured"]')).toHaveTextContent('Measured 1'));
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).endsWith('/observations') && (c[1] as RequestInit)?.method === 'POST')).toBe(true);
+  });
+
+  it('a failed collection is shown as an error, not as data', async () => {
+    localStorage.setItem('carbonroute_token', 't');
+    stubFetch((url, init) => {
+      if (url === `${API_BASE}/jobs`) return { body: { success: true, data: [summary] } };
+      if (url === `${API_BASE}/jobs/job-abc12345`) return { body: { success: true, data: { ...details, observations: null } } };
+      if (url.endsWith('/observations') && init?.method === 'POST') return { status: 503, body: { success: false, message: 'Electricity Maps did not respond' } };
+      return undefined;
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: /Nightly ETL/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Collect observations' }));
+    expect(await screen.findByText('Electricity Maps did not respond')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Observations' }).querySelector('[data-quality="measured"]')).toBeNull();
+  });
+});

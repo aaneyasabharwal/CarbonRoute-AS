@@ -88,7 +88,9 @@ describe('ResultsPage', () => {
     const run = await screen.findByTestId('benchmark-run');
     expect(run).toHaveTextContent('40.0% measured (the rest are provider estimates)');
     expect(run.querySelector('[data-quality="synthetic"]')).toHaveTextContent('Synthetic workloads');
-    expect(run).toHaveTextContent('50 not yet fully observed (not scored)');
+    // P4 review: pending counts workloads with ANY unobserved policy window; it must not claim they are unscored.
+    expect(run).toHaveTextContent('50 with at least one policy window not yet fully observed (those windows are not scored; see Scored / decisions per policy)');
+    expect(run).not.toHaveTextContent('not yet fully observed (not scored)');
     expect(run).toHaveTextContent('offline evaluation only');
 
     const table = screen.getByRole('table', { name: 'Policy comparison CV 0' });

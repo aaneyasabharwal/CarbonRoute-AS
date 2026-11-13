@@ -32,6 +32,10 @@ interface ExplainInput {
   evaluatedPolicies: PolicyEvaluationResult[];
   unavailablePolicies: UnavailablePolicy[];
   recommendedDecision: PolicyEvaluationResult | null;
+  /** Wall-clock deadline text (e.g. "2026-11-14 06:40 UTC"); defaults to the slot index. */
+  deadlineLabel?: string;
+  /** What the intensities in the text are (shown so readers can match them to tables). */
+  intensityBasis?: string;
 }
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
@@ -45,7 +49,7 @@ export function explainDecision(o: ExplainInput): DecisionExplanation {
     rejectedDataGap: c.filter((w) => w.classification === 'REJECTED_DATA_GAP').length,
   };
   const constraints = [
-    { name: 'Deadline', value: `the window must end by slot T+${o.deadlineHours} (${o.durationHours} h job)` },
+    { name: 'Deadline', value: `the window must end by ${o.deadlineLabel ?? `slot T+${o.deadlineHours}`} (${o.durationHours} h job)` },
     { name: 'Deadline-miss risk', value: `at most ${pct(o.riskTolerance)}` },
     {
       name: 'Risk model',
@@ -88,6 +92,7 @@ export function explainDecision(o: ExplainInput): DecisionExplanation {
       return { policyId: p.policyId, relation };
     });
 
+  if (o.intensityBasis) constraints.push({ name: 'Intensities in this explanation', value: o.intensityBasis });
   return {
     objective: 'Minimise forecast carbon intensity of the run window, subject to the deadline and the deadline-miss risk tolerance.',
     constraints,

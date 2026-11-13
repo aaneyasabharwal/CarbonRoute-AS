@@ -17,6 +17,7 @@ import { assessEmissions, evaluateForecast, hourlyIntervals, windowIntensity } f
 import { timeWeightedAverage, parseZonedTimestamp } from '../evaluation/timeWeighting';
 import { validateWorkloadSpec } from './workloadSpec';
 import { energyAssumption } from './energyModel';
+import { explainDecision } from './explain';
 import { MAX_RUNTIME_CV } from './uncertaintyService';
 
 export const ENGINE_VERSION = 'carbonroute-engine-2026-11-p1';
@@ -229,7 +230,20 @@ export async function scheduleWorkflow(
       candidateWindows: outcome.candidateWindows,
       evaluatedPolicies: outcome.evaluatedPolicies,
       unavailablePolicies: outcome.unavailablePolicies,
-      explanation: outcome.explanation,
+      explanation: explainDecision({
+        status: outcome.status,
+        reason: outcome.reason,
+        riskModel: outcome.riskModel,
+        runtimeCv: outcome.runtimeCv,
+        riskTolerance: tau,
+        deadlineHours: deadlineHoursFromStart,
+        durationHours: dur,
+        candidateWindows: outcome.candidateWindows,
+        evaluatedPolicies: outcome.evaluatedPolicies,
+        unavailablePolicies: outcome.unavailablePolicies,
+        recommendedDecision: null,
+        deadlineLabel: `${iso(deadline).slice(0, 16).replace('T', ' ')} UTC`,
+      }),
     });
   }
   const result: SchedulingDecisionResponse = outcome;
@@ -262,6 +276,30 @@ export async function scheduleWorkflow(
     return { ...c, startUtc: w.startUtc, endUtc: w.endUtc };
   });
   const rec = policies.find((p) => p.policyId === result.recommendedDecision.policyId)!;
+
+  // P4 review: the explanation quotes the SAME values the decision shows (time-weighted forecast
+  // over each policy's wall-clock window, and the deadline in UTC), not hourly-slot averages,
+  // so its numbers match the policy comparison exactly.
+  const utc = (ms: number) => `${iso(ms).slice(0, 16).replace('T', ' ')} UTC`;
+  const asShown = (p: (typeof policies)[number]) => ({
+    ...p,
+    predictedCarbonIntensity: p.forecastIntensityTimeWeighted ?? p.predictedCarbonIntensity,
+    selectedWindow: `${utc(Date.parse(p.selectedStartUtc))} to ${utc(Date.parse(p.selectedEndUtc))}`,
+  });
+  const explanation = explainDecision({
+    status: 'RECOMMENDED',
+    riskModel: result.riskModel,
+    runtimeCv: result.runtimeCv,
+    riskTolerance: tau,
+    deadlineHours: deadlineHoursFromStart,
+    durationHours: dur,
+    candidateWindows: result.candidateWindows,
+    evaluatedPolicies: policies.map(asShown),
+    unavailablePolicies: result.unavailablePolicies,
+    recommendedDecision: asShown(rec),
+    deadlineLabel: utc(deadline),
+    intensityBasis: 'forecast, time-weighted over each window as scheduled (UTC); the same values as the policy comparison',
+  });
   if (!rec.meetsDeadline) {
     // Should be impossible by construction; never return an infeasible recommendation.
     throw new WorkflowError(500, 'Internal error: the recommended window does not meet the deadline.');
@@ -272,6 +310,7 @@ export async function scheduleWorkflow(
 
   const response = {
     ...result,
+    explanation,
     status: 'RECOMMENDED' as const,
     job: { ...engineJob, ...job },
     evaluatedPolicies: policies,

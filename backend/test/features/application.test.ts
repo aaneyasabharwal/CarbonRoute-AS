@@ -161,3 +161,59 @@ describe('failed scheduling attempts leave nothing behind (P4)', () => {
     expect(jobs[0].status).toBe('infeasible');
   });
 });
+
+describe('P4 review: the explanation quotes the same numbers as the policy comparison', () => {
+  it('with a mid-hour arrival, every relation equals the difference of the displayed (time-weighted) values, and the deadline is in UTC', async () => {
+    const { scheduleWorkflow } = await import('../../src/services/schedulingWorkflow');
+    const { SchedulingStore } = await import('../../src/models/schedulingStore');
+    const os = await import('os');
+    const store = new SchedulingStore(path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'carbonroute-expl-')), 's.json'));
+    const H = 3600_000;
+    const now = Math.floor(Date.now() / H) * H + 40 * 60_000; // 40 minutes into the hour
+    const out: any = await scheduleWorkflow(
+      { name: 'mid-hour', commandOrImage: 'busybox', isContainerImage: true, zone: 'BENCHMARK-RESEARCH', durationHours: 2, cpu: 2, memoryMb: 128, riskTolerance: 0.05, deadlineAt: new Date(now + 12 * H).toISOString(), mode: 'demo' },
+      { store, now: () => now }
+    );
+    expect(out.status).toBe('RECOMMENDED');
+    const shown = Object.fromEntries(out.evaluatedPolicies.map((p: any) => [p.policyId, p.forecastIntensityTimeWeighted]));
+    const imm = out.evaluatedPolicies.find((p: any) => p.policyId === 'immediate');
+    // The Immediate window starts mid-hour, so its time-weighted value differs from the slot average.
+    expect(imm.forecastIntensityTimeWeighted).not.toBe(imm.predictedCarbonIntensity);
+    const recValue = shown.carbonroute_uncertainty;
+    for (const rel of out.explanation.policies) {
+      const m = /^([\d.]+) gCO2eq\/kWh (higher|lower)/.exec(rel.relation);
+      if (!m) continue;
+      const expected = Math.abs(shown[rel.policyId] - recValue).toFixed(2);
+      expect(m[1], rel.policyId).toBe(expected);
+    }
+    expect(out.explanation.summary).toContain(String(recValue));
+    expect(out.explanation.constraints[0].value).toMatch(/^the window must end by \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC \(2 h job\)$/);
+    expect(out.explanation.constraints.find((c: any) => c.name === 'Intensities in this explanation').value).toMatch(/time-weighted/);
+    // The stored job details give the table the same values.
+    const stored = store.latestDecisionForJob(out.job.id)!.result;
+    expect(stored.explanation).toEqual(out.explanation);
+  });
+});
+
+describe('P4 review: admin access to enriched job details', () => {
+  it('an admin sees another user\'s explanation and comparison (with the owner name); another user gets 404', async () => {
+    const { loginAsTestAdmin } = await import('../support/auth');
+    const owner = (await createAndLoginUser(app)).auth;
+    const stranger = (await createAndLoginUser(app)).auth;
+    const admin = { Authorization: `Bearer ${await loginAsTestAdmin(app)}` };
+    const deadlineAt = new Date(Date.now() + 10 * 3600_000).toISOString();
+    const sched = await request(app)
+      .post('/api/schedule')
+      .set(owner)
+      .send({ mode: 'demo', jobData: { name: 'owned', commandOrImage: 'busybox', durationHours: 1, cpu: 1, riskTolerance: 0.05, region: 'BENCHMARK-RESEARCH', deadlineAt } });
+    const id = sched.body.data.job.id;
+    const asAdmin = await request(app).get(`/api/jobs/${id}`).set(admin);
+    expect(asAdmin.status).toBe(200);
+    expect(asAdmin.body.data.owner).toBeTruthy();
+    expect(asAdmin.body.data.decision.explanation).toEqual(sched.body.data.explanation);
+    expect(asAdmin.body.data.decision.policies.length).toBe(5);
+    const asStranger = await request(app).get(`/api/jobs/${id}`).set(stranger);
+    expect(asStranger.status).toBe(404);
+    expect(JSON.stringify(asStranger.body)).not.toContain('owned');
+  });
+});

@@ -121,8 +121,8 @@ const RunView: React.FC<{ r: BenchmarkResultDetail }> = ({ r }) => (
           {s.runtimeCv === 0 ? ' (deterministic runtime)' : ''}
         </h2>
         <p className="text-xs text-slate-400">
-          {s.workloads} workloads · {s.infeasible} without a CarbonRoute recommendation · {s.pendingRealized} not yet fully observed (not scored) · hindsight Oracle available
-          for {s.oracleAvailable} (offline evaluation only).
+          {s.workloads} workloads · {s.infeasible} without a CarbonRoute recommendation · {s.pendingRealized} with at least one policy window not yet fully
+          observed (those windows are not scored; see Scored / decisions per policy) · hindsight Oracle available for {s.oracleAvailable} (offline evaluation only).
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left" aria-label={`Policy comparison CV ${s.runtimeCv}`}>
