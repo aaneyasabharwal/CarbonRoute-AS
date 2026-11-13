@@ -2,11 +2,20 @@ const http = require('http');
 
 const PORT = 5000;
 
+// Credentials come from the environment (never hardcoded): ADMIN_USERNAME (default "admin") and ADMIN_PASSWORD.
+function adminCredentials() {
+  if (!process.env.ADMIN_PASSWORD) {
+    console.error("Set ADMIN_PASSWORD (and optionally ADMIN_USERNAME) to the running server's admin credentials.");
+    process.exit(2);
+  }
+  return { username: process.env.ADMIN_USERNAME || "admin", password: process.env.ADMIN_PASSWORD };
+}
+
 async function testVersionUpload() {
   console.log('Testing Presentation Version Upload and Permanent Archive Preservation...');
 
   // 1. Log in as admin
-  const loginPayload = JSON.stringify({ username: 'admin', password: 'CarbonRoute2026!Secure' });
+  const loginPayload = JSON.stringify(adminCredentials());
   const loginRes = await fetchJson('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

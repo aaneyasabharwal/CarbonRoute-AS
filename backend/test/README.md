@@ -30,7 +30,8 @@ Every file passes when run on its own (`npx vitest run <file>`), together, and i
 
 | Folder | Contents |
 |---|---|
-| `test/legacy/` | Characterization tests ported from the original scripts in `/tests`, plus the default-admin seeding test, which uses its own empty temporary database and never contains the default password (`*.legacy.test.ts`). |
+| `test/legacy/` | Characterization tests ported from the original scripts in `/tests` (`*.legacy.test.ts`). |
+| `test/security/` | M1.1 credential handling: JWT secret resolution, initial-admin seeding from the environment, password rotation script, and a scan that no formerly published secret remains in tracked files. Passwords are generated at run time. |
 | `test/features/` | Tests for existing behaviour that must be preserved, plus `[legacy]` blocks for audit-flagged behaviour. |
 | `test/isolation/` | Tests proving the suite is isolated from real data and from other test files. |
 | `test/support/` | Test environment and authentication fixtures. |

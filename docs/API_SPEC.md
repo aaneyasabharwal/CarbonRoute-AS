@@ -13,7 +13,7 @@ Authenticates an administrator or evaluator.
   ```json
   {
     "username": "admin",
-    "password": "CarbonRoute2026!Secure"
+    "password": "<your admin password>"
   }
   ```
 - **Response `200 OK`**:
