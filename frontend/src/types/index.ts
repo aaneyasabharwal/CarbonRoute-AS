@@ -460,4 +460,6 @@ export interface ApiResponse<T> {
   data?: T;
   token?: string;
   user?: User;
+  /** True when the backend answered 401: the user must sign in (again). */
+  authRequired?: boolean;
 }

@@ -68,7 +68,7 @@ CarbonRoute never labels an estimate as measured. A history point without an exp
 | `GET /api/carbon/history?zone=&granularity=` | Last 24 h, each point labelled |
 | `GET /api/carbon/power-breakdown?zone=` | Latest generation mix |
 | `GET /api/carbon/provider` | Provider configuration and verified limits (no secrets) |
-| `POST /api/schedule` | Schedule a job (`jobData.deadlineAt` ISO UTC); returns all policies, the recommendation or `INFEASIBLE`, and stores the snapshot and decision |
+| `POST /api/schedule` | (Sign-in required for every `/api/schedule` and `/api/jobs` route; see API_SPEC.md section 4.) Schedule a job (`jobData.deadlineAt` ISO UTC); returns all policies, the recommendation or `INFEASIBLE`, and stores the snapshot and decision |
 | `POST /api/jobs/:id/dispatch` | Execute (Kubernetes) or simulate the job; records the scheduled window |
 | `POST /api/jobs/:id/observations` | Collect observations for the scheduled window |
 | `GET /api/jobs/:id/report` | Report as JSON, or `?format=html` as a downloadable file |

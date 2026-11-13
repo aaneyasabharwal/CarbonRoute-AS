@@ -44,8 +44,8 @@ export interface CarbonObservationPanelProps {
   collecting: boolean;
   error: string | null;
   onCollect: () => void;
-  reportHtmlUrl: string;
-  reportJsonUrl: string;
+  /** Downloads the report with the sign-in token (reports are owner/admin only, M1.2). */
+  onDownloadReport: (format: 'html' | 'json') => void;
 }
 
 export const CarbonObservationPanel: React.FC<CarbonObservationPanelProps> = ({
@@ -55,8 +55,7 @@ export const CarbonObservationPanel: React.FC<CarbonObservationPanelProps> = ({
   collecting,
   error,
   onCollect,
-  reportHtmlUrl,
-  reportJsonUrl,
+  onDownloadReport,
 }) => {
   const set = result?.collected ?? result?.observationSet ?? null;
   const ev = result?.evaluation ?? null;
@@ -80,12 +79,12 @@ export const CarbonObservationPanel: React.FC<CarbonObservationPanelProps> = ({
           <RefreshCw className={`w-4 h-4 ${collecting ? 'animate-spin' : ''}`} />
           {set ? 'Check observations again' : 'Collect carbon observations'}
         </button>
-        <a href={reportHtmlUrl} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800">
+        <button type="button" onClick={() => onDownloadReport('html')} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800">
           <Download className="w-4 h-4" /> Download report (HTML)
-        </a>
-        <a href={reportJsonUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800">
+        </button>
+        <button type="button" onClick={() => onDownloadReport('json')} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800">
           <FileJson className="w-4 h-4" /> Report data (JSON)
-        </a>
+        </button>
         <span className="text-slate-500">Job {jobId}</span>
       </div>
 

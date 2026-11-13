@@ -27,6 +27,14 @@ export interface StoredJob {
   /** Latest allowed completion time (UTC). */
   deadlineAt: string;
   createdAt: string;
+  /**
+   * User who owns the job (M1.2). Jobs stored before M1.2 have no owner and are visible
+   * only to administrators.
+   */
+  ownerId?: string;
+  /** Set when the job was cancelled (M1.2). */
+  cancelledAt?: string;
+  cancelledBy?: string;
 }
 
 export interface StoredSnapshot extends ForecastSnapshot {
@@ -161,6 +169,17 @@ export class SchedulingStore {
   }
   getJob(id: string): StoredJob | undefined {
     return this.data.jobs.find((j) => j.id === id);
+  }
+  /** One entry per job id (its latest record), oldest first. */
+  listJobs(): StoredJob[] {
+    const latest = new Map<string, StoredJob>();
+    for (const j of this.data.jobs) latest.set(j.id, j);
+    return [...latest.values()];
+  }
+  /** Marks every stored record of a job as cancelled. */
+  markJobCancelled(id: string, by: string, at = new Date().toISOString()): void {
+    for (const j of this.data.jobs) if (j.id === id) Object.assign(j, { cancelledAt: at, cancelledBy: by });
+    this.save();
   }
 
   // Forecast snapshots

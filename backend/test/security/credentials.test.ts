@@ -47,6 +47,8 @@ afterEach(() => {
     if (saved[k] === undefined) delete process.env[k];
     else process.env[k] = saved[k];
   }
+  // (dotenv only fills variables that are absent, so "unset" below means an empty string:
+  // that keeps a developer's real .env values out of these tests.)
   vi.restoreAllMocks();
   vi.resetModules();
 });
@@ -55,10 +57,7 @@ afterEach(() => {
 async function freshDb(env: Partial<Record<(typeof KEYS)[number], string | undefined>>) {
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'carbonroute-test-seed-')), 'db.json');
   process.env.CARBONROUTE_DB_FILE = file;
-  for (const [k, v] of Object.entries(env)) {
-    if (v === undefined) delete process.env[k];
-    else process.env[k] = v;
-  }
+  for (const [k, v] of Object.entries(env)) process.env[k] = v ?? '';
   vi.resetModules();
   const mod = await import('../../src/models/db');
   return { db: mod.db, file };

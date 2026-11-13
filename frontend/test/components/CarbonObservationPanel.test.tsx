@@ -115,8 +115,7 @@ const renderPanel = (r: JobObservationsResult | null, extra: Partial<React.Compo
       collecting={false}
       error={null}
       onCollect={() => {}}
-      reportHtmlUrl="http://x/report?format=html"
-      reportJsonUrl="http://x/report"
+      onDownloadReport={() => {}}
       {...extra}
     />
   );
@@ -208,11 +207,16 @@ describe('CarbonObservationPanel', () => {
     expect(screen.getByTestId('window-intensity')).toHaveTextContent('Mixed: measured and provider estimates');
   });
 
-  it('collect button and report links', () => {
+  it('collect button and report download buttons', () => {
     const onCollect = vi.fn();
-    renderPanel(null, { onCollect });
+    const onDownloadReport = vi.fn();
+    renderPanel(null, { onCollect, onDownloadReport });
     fireEvent.click(screen.getByRole('button', { name: /Collect carbon observations/ }));
     expect(onCollect).toHaveBeenCalled();
-    expect(screen.getByRole('link', { name: /Download report \(HTML\)/ })).toHaveAttribute('href', 'http://x/report?format=html');
+    // M1.2: reports need the sign-in token, so they are downloaded by the app, not plain links.
+    expect(screen.queryByRole('link', { name: /Download report/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Download report \(HTML\)/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Report data \(JSON\)/ }));
+    expect(onDownloadReport.mock.calls).toEqual([['html'], ['json']]);
   });
 });

@@ -28,6 +28,8 @@ export class WorkflowError extends Error {
 
 export interface ScheduleInput {
   jobId?: string;
+  /** User who owns the job (M1.2). */
+  ownerId?: string;
   name: string;
   commandOrImage: string;
   isContainerImage: boolean;
@@ -122,6 +124,7 @@ export async function scheduleWorkflow(
 
   const job: StoredJob = store.addJob({
     id: input.jobId,
+    ...(input.ownerId ? { ownerId: input.ownerId } : {}),
     name: input.name,
     commandOrImage: input.commandOrImage,
     isContainerImage: input.isContainerImage,

@@ -47,7 +47,11 @@ import {
   getCarbonForecastSnapshot,
   getCarbonPowerBreakdown,
   getCarbonProviderStatus,
+  listJobs,
+  getJobDetails,
+  cancelJob,
 } from '../controllers/prototypeController';
+import { requireJobAccess } from '../services/jobAccess';
 import { authenticateToken, requireAdmin, requireTeamMemberOrAdmin, optionalAuth } from '../middleware/auth';
 import { uploadMiddleware } from '../middleware/upload';
 import { db } from '../models/db';
@@ -118,15 +122,22 @@ router.post('/scheduler/simulate', simulateFeasibilityDecision);
 // ==========================================
 // CarbonRoute Prototype Milestone API Routes
 // ==========================================
-router.post('/jobs', submitJob);
-router.post('/schedule', scheduleJob);
-router.get('/jobs/:id/status', getJobStatus);
-router.get('/jobs/:id/results', getJobResults);
-router.get('/jobs/:id/manifest', getJobManifest);
-router.post('/jobs/:id/dispatch', dispatchJobToExecution);
-router.post('/jobs/:id/observations', collectJobObservations);
-router.get('/jobs/:id/observations', getJobObservations);
-router.get('/jobs/:id/report', getJobReport);
+//
+// Job routes (M1.2): every route requires a valid access token. Routes with a job id also
+// require access to that job (its owner, or an administrator); otherwise 404.
+const jobAccess = [authenticateToken, requireJobAccess];
+router.get('/jobs', authenticateToken, listJobs);
+router.post('/jobs', authenticateToken, submitJob);
+router.post('/schedule', authenticateToken, scheduleJob);
+router.get('/jobs/:id', ...jobAccess, getJobDetails);
+router.get('/jobs/:id/status', ...jobAccess, getJobStatus);
+router.get('/jobs/:id/results', ...jobAccess, getJobResults);
+router.get('/jobs/:id/manifest', ...jobAccess, getJobManifest);
+router.post('/jobs/:id/dispatch', ...jobAccess, dispatchJobToExecution);
+router.post('/jobs/:id/cancel', ...jobAccess, cancelJob);
+router.post('/jobs/:id/observations', ...jobAccess, collectJobObservations);
+router.get('/jobs/:id/observations', ...jobAccess, getJobObservations);
+router.get('/jobs/:id/report', ...jobAccess, getJobReport);
 
 router.get('/carbon/forecast', getCarbonForecast);
 router.get('/carbon/forecast/snapshot', getCarbonForecastSnapshot);
@@ -137,8 +148,8 @@ router.get('/carbon/provider', getCarbonProviderStatus);
 router.get('/carbon/regions', getAvailableRegions);
 router.get('/cluster/health', getClusterHealth);
 
-router.post('/experiments', recordExperiment);
-router.get('/experiments', getExperiments);
+router.post('/experiments', authenticateToken, recordExperiment);
+router.get('/experiments', authenticateToken, getExperiments);
 
 // Audit Logs (Admin only)
 router.get('/admin/audit-logs', authenticateToken, requireAdmin, (_req, res) => {

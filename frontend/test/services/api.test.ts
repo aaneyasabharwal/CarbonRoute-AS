@@ -2,7 +2,7 @@
  * Tests for src/services/api.ts (the frontend's only HTTP client).
  * fetch is always stubbed; no test reaches a real backend.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { api, API_BASE, BACKEND_URL, resolveFileUrl, normalizePresentation } from '../../src/services/api';
 import type { PresentationVersion } from '../../src/types';
 import { stubFetch, bodyOf } from '../support/fetch';
@@ -178,5 +178,77 @@ describe('[legacy] client-side fallbacks when the backend is unreachable', () =>
     const res = await api.updateTeamMember('team-2', { bio: 'changed' });
     expect(res.success).toBe(true);
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('job requests are authenticated (M1.2)', () => {
+  const header = (call: unknown[]) => new Headers((call[1] as RequestInit | undefined)?.headers).get('Authorization');
+
+  it('every job, schedule and experiment call sends the stored token', async () => {
+    localStorage.setItem('carbonroute_token', 'tok-1');
+    const fetchMock = stubFetch(() => ({ body: { success: true, data: {} } }));
+    await api.submitJob({ name: 'j' });
+    await api.scheduleJob({ jobData: { name: 'j' } });
+    await api.dispatchJob('job-1');
+    await api.getJobStatus('job-1');
+    await api.getJobResults('job-1');
+    await api.getJobManifest('job-1', 2);
+    await api.collectObservations('job-1');
+    await api.recordExperiment({ note: 'x' });
+    await api.getExperiments();
+    expect(fetchMock.mock.calls).toHaveLength(9);
+    for (const call of fetchMock.mock.calls) expect(header(call)).toBe('Bearer tok-1');
+    localStorage.removeItem('carbonroute_token');
+  });
+
+  it('a 401 is reported as "sign in required" and a rejected token is removed', async () => {
+    localStorage.setItem('carbonroute_token', 'expired');
+    stubFetch(() => ({
+      status: 401,
+      body: { success: false, code: 'UNAUTHENTICATED', message: 'Your session has expired. Please sign in again.' },
+    }));
+    const res = await api.scheduleJob({ jobData: { name: 'j' } });
+    expect(res).toEqual({ success: false, authRequired: true, message: 'Your session has expired. Please sign in again.' });
+    expect(localStorage.getItem('carbonroute_token')).toBeNull();
+    expect(api.hasSession()).toBe(false);
+  });
+
+  it('without any token the message asks the user to sign in', async () => {
+    stubFetch(() => ({ status: 401, body: { success: false, code: 'UNAUTHENTICATED', message: 'Authentication required. Sign in ...' } }));
+    const res = await api.getJobStatus('job-1');
+    expect(res.authRequired).toBe(true);
+    expect(res.message).toMatch(/^Sign in to schedule and inspect jobs/);
+  });
+
+  it('a job the user may not access is a plain failure (404), not a sign-in prompt', async () => {
+    localStorage.setItem('carbonroute_token', 'tok-2');
+    stubFetch(() => ({ status: 404, body: { success: false, code: 'JOB_NOT_FOUND', message: 'Job not found.' } }));
+    const res = await api.getJobStatus('job-x');
+    expect(res).toEqual({ success: false, message: 'Job not found.' });
+    expect(localStorage.getItem('carbonroute_token')).toBe('tok-2');
+    localStorage.removeItem('carbonroute_token');
+  });
+
+  it('downloadReport fetches the report with the token and saves it as a file', async () => {
+    localStorage.setItem('carbonroute_token', 'tok-3');
+    const fetchMock = stubFetch(() => ({ body: { success: true, data: { jobId: 'job-1' } } }));
+    const createUrl = vi.fn(() => 'blob:report');
+    const revokeUrl = vi.fn();
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: createUrl, revokeObjectURL: revokeUrl }));
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const res = await api.downloadReport('job-1', 'json');
+    expect(res.success).toBe(true);
+    expect(String(fetchMock.mock.calls[0][0])).toBe(`${API_BASE}/jobs/job-1/report`);
+    expect(header(fetchMock.mock.calls[0])).toBe('Bearer tok-3');
+    expect(createUrl).toHaveBeenCalled();
+    expect(click).toHaveBeenCalled();
+    click.mockRestore();
+    localStorage.removeItem('carbonroute_token');
+  });
+
+  it('downloadReport asks the user to sign in on 401', async () => {
+    stubFetch(() => ({ status: 401, body: { success: false, code: 'UNAUTHENTICATED' } }));
+    const res = await api.downloadReport('job-1', 'html');
+    expect(res.authRequired).toBe(true);
   });
 });

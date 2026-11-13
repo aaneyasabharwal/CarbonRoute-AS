@@ -8,14 +8,48 @@ import { schedulingStore } from '../models/schedulingStore';
 import { electricityMaps } from '../carbon/electricityMaps';
 import { ProviderError } from '../carbon/types';
 import { K8sConnector } from '../services/k8sConnector';
+import { AuthRequest, isAdmin } from '../middleware/auth';
+import { db } from '../models/db';
+import {
+  registeredJobs,
+  findJob,
+  canAccessJob,
+  allJobs,
+  jobSummary,
+  jobStatus,
+  auditAdminOverride,
+  JobRef,
+  JobRequest,
+  JOB_NOT_FOUND,
+} from '../services/jobAccess';
 
-// In-memory store for registered jobs & experiments
-const registeredJobs = new Map<string, WorkloadJob>();
 // Experiment records submitted through the API (in memory). The two pre-filled
 // "Completed" records with invented realized-carbon values were removed (audit C2, task M2.2).
+// Since M1.2 each record has an owner and is visible only to its owner and administrators.
 const experimentRecords: any[] = [];
 
-export const submitJob = (req: Request, res: Response) => {
+/** Job fields as a WorkloadJob-like object, whether the job was registered or only stored. */
+function jobAsWorkload(job: JobRef): WorkloadJob | { id: string; [k: string]: any } {
+  if (job.registered) return job.registered;
+  const s = job.stored!;
+  return {
+    id: s.id,
+    name: s.name,
+    commandOrImage: s.commandOrImage,
+    isContainerImage: s.isContainerImage,
+    cpu: s.cpu,
+    memoryMb: s.memoryMb,
+    region: s.zone,
+    durationHours: s.durationHours,
+    riskTolerance: s.riskTolerance,
+    deadlineAt: s.deadlineAt,
+    ownerId: s.ownerId,
+  };
+}
+
+const JOB_CANCELLED = { success: false, code: 'JOB_CANCELLED', message: 'This job has been cancelled.' } as const;
+
+export const submitJob = (req: AuthRequest, res: Response) => {
   try {
     const {
       name,
@@ -51,6 +85,8 @@ export const submitJob = (req: Request, res: Response) => {
       riskTolerance: Number(riskTolerance),
       status: 'pending',
       createdAt: new Date().toISOString(),
+      // Owner is always the authenticated caller; a client-supplied ownerId is ignored.
+      ownerId: req.user!.id,
     };
 
     registeredJobs.set(job.id, job);
@@ -83,21 +119,38 @@ function sendError(res: Response, error: any, fallbackStatus = 500) {
  * recommendation that meets the deadline (or an explicit INFEASIBLE result), and stores
  * the job, the exact forecast snapshot and the decision.
  */
-export const scheduleJob = async (req: Request, res: Response) => {
+export const scheduleJob = async (req: AuthRequest, res: Response) => {
   const { jobId, jobData, region = 'US-CAL-CISO', uncertaintyMultiplier = 1.0 } = req.body || {};
+  const user = req.user!;
   let source: any;
-  if (jobId && registeredJobs.has(jobId)) {
-    source = registeredJobs.get(jobId);
-  } else if (jobData) {
-    source = { ...jobData, id: jobData.id || `job-${uuidv4().substring(0, 8)}` };
+  let ownerId: string | undefined = user.id;
+  let existing: JobRef | null = null;
+  if (jobId) {
+    // Scheduling an existing job requires access to it (same 404 whether missing or not yours).
+    existing = findJob(String(jobId));
+    if (!existing || !canAccessJob(user, existing.ownerId)) return res.status(404).json(JOB_NOT_FOUND);
+    source = jobAsWorkload(existing);
+  } else if (jobData && typeof jobData === 'object') {
+    // A client may only reuse the id of a job it can access. Any other requested id is
+    // ignored and a new server-generated id is used, so ids cannot be chosen or hijacked.
+    const requested = jobData.id ? findJob(String(jobData.id)) : null;
+    if (requested && !canAccessJob(user, requested.ownerId)) return res.status(404).json(JOB_NOT_FOUND);
+    existing = requested;
+    source = { ...jobData, id: requested ? requested.id : `job-${uuidv4().substring(0, 8)}` };
   } else {
     return res.status(400).json({ success: false, message: 'Either jobId or jobData is required for scheduling.' });
+  }
+  if (existing) {
+    if (existing.cancelled) return res.status(409).json(JOB_CANCELLED);
+    ownerId = existing.ownerId; // an admin re-scheduling a user's job keeps the user as owner
+    auditAdminOverride(user, existing, 'scheduled');
   }
   const mode: 'live' | 'demo' = req.body.mode === 'demo' || req.body.dataSource === 'demo' ? 'demo' : 'live';
 
   try {
     const data = await scheduleWorkflow({
       jobId: source.id,
+      ownerId,
       name: String(source.name || 'Batch job'),
       commandOrImage: String(source.commandOrImage || 'carbonroute/test-workload:latest'),
       isContainerImage: source.isContainerImage ?? true,
@@ -116,6 +169,7 @@ export const scheduleJob = async (req: Request, res: Response) => {
       ...(registeredJobs.get(source.id) || source),
       id: source.id,
       status: 'scheduled',
+      ownerId,
     };
     registeredJobs.set(source.id, registered);
     return res.json({ success: true, data });
@@ -123,11 +177,13 @@ export const scheduleJob = async (req: Request, res: Response) => {
     return sendError(res, error, 503);
   }
 };
-
-export const dispatchJobToExecution = async (req: Request, res: Response) => {
+export const dispatchJobToExecution = async (req: JobRequest, res: Response) => {
   try {
-    const jobId = String(req.params.id);
-    const job = registeredJobs.get(jobId);
+    const ref = req.job!;
+    const jobId = ref.id;
+    if (ref.cancelled) return res.status(409).json(JOB_CANCELLED);
+    auditAdminOverride(req.user!, ref, 'dispatched');
+    const job: any = jobAsWorkload(ref);
     const decision = schedulingStore().latestDecisionForJob(jobId);
     const recommended = decision?.status === 'RECOMMENDED' ? decision.result?.recommendedDecision : null;
     const { simulatedDurationSec = 6 } = req.body || {};
@@ -135,7 +191,7 @@ export const dispatchJobToExecution = async (req: Request, res: Response) => {
 
     const command = job?.commandOrImage || 'python workload.py';
     const executionRecord = await K8sConnector.dispatchJob(
-      job || jobId,
+      job,
       { predictedCarbon, selectedStartHour: Number(recommended?.selectedStartHour ?? req.body?.scheduledHour ?? 0) },
       command,
       job?.cpu || 1,
@@ -171,8 +227,9 @@ export const dispatchJobToExecution = async (req: Request, res: Response) => {
 };
 
 /** Collects Electricity Maps observations for the job's scheduled window. */
-export const collectJobObservations = async (req: Request, res: Response) => {
+export const collectJobObservations = async (req: JobRequest, res: Response) => {
   try {
+    auditAdminOverride(req.user!, req.job!, 'collected observations for');
     const set = await collectObservations(String(req.params.id));
     return res.json({ success: true, data: { collected: set, ...evaluateJob(String(req.params.id)) } });
   } catch (error: any) {
@@ -180,7 +237,7 @@ export const collectJobObservations = async (req: Request, res: Response) => {
   }
 };
 
-export const getJobObservations = (req: Request, res: Response) => {
+export const getJobObservations = (req: JobRequest, res: Response) => {
   try {
     const id = String(req.params.id);
     return res.json({ success: true, data: { history: schedulingStore().observationSetsForJob(id), ...evaluateJob(id) } });
@@ -190,7 +247,7 @@ export const getJobObservations = (req: Request, res: Response) => {
 };
 
 /** Report as JSON (default) or a downloadable HTML file (?format=html). */
-export const getJobReport = (req: Request, res: Response) => {
+export const getJobReport = (req: JobRequest, res: Response) => {
   try {
     const id = String(req.params.id);
     const report = buildReport(id);
@@ -205,23 +262,22 @@ export const getJobReport = (req: Request, res: Response) => {
   }
 };
 
-export const getJobStatus = (req: Request, res: Response) => {
-  const jobId = String(req.params.id);
+export const getJobStatus = (req: JobRequest, res: Response) => {
+  const ref = req.job!;
+  const jobId = ref.id;
   const execution = K8sConnector.getJobExecution(jobId);
 
   if (!execution) {
-    const registered = registeredJobs.get(jobId);
-    if (registered) {
-      return res.json({
-        success: true,
-        data: {
-          jobId,
-          status: registered.status,
-          logs: ['[Waiting] Workload registered. Click "Dispatch Workload" to execute.'],
-        },
-      });
-    }
-    return res.status(404).json({ success: false, message: 'Job execution not found.' });
+    return res.json({
+      success: true,
+      data: {
+        jobId,
+        status: jobStatus(ref),
+        logs: ref.cancelled
+          ? ['[Cancelled] This job was cancelled before it was dispatched.']
+          : ['[Waiting] Workload registered. Click "Dispatch Workload" to execute.'],
+      },
+    });
   }
 
   return res.json({
@@ -229,8 +285,7 @@ export const getJobStatus = (req: Request, res: Response) => {
     data: execution,
   });
 };
-
-export const getJobResults = (req: Request, res: Response) => {
+export const getJobResults = (req: JobRequest, res: Response) => {
   const jobId = String(req.params.id);
   const execution = K8sConnector.getJobExecution(jobId);
 
@@ -261,10 +316,9 @@ export const getJobResults = (req: Request, res: Response) => {
   });
 };
 
-export const getJobManifest = (req: Request, res: Response) => {
+export const getJobManifest = (req: JobRequest, res: Response) => {
   try {
-    const jobId = String(req.params.id);
-    const job = registeredJobs.get(jobId) || { id: jobId, cpu: 1, memoryMb: 512, region: 'US-CAL-CISO' };
+    const job = jobAsWorkload(req.job!);
     const scheduledHour = Number(req.query.hour) || 0;
     const manifest = K8sConnector.generateJobManifest(job, scheduledHour);
     return res.json({ success: true, data: manifest });
@@ -378,12 +432,20 @@ export const getClusterHealth = async (_req: Request, res: Response) => {
   return res.json({ success: true, data: health });
 };
 
-export const recordExperiment = (req: Request, res: Response) => {
+export const recordExperiment = (req: AuthRequest, res: Response) => {
   try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    // An experiment that names a job must name one the caller can access.
+    if (body.jobId !== undefined) {
+      const job = findJob(String(body.jobId));
+      if (!job || !canAccessJob(req.user, job.ownerId)) return res.status(404).json(JOB_NOT_FOUND);
+    }
+    // Server-controlled fields come last so a client cannot set them.
     const exp = {
-      id: `exp-${Date.now()}`,
+      ...body,
+      id: `exp-${Date.now()}-${uuidv4().slice(0, 8)}`,
       timestamp: new Date().toISOString(),
-      ...req.body,
+      ownerId: req.user!.id,
     };
     experimentRecords.unshift(exp);
     return res.status(201).json({ success: true, data: exp });
@@ -391,10 +453,92 @@ export const recordExperiment = (req: Request, res: Response) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-
-export const getExperiments = (_req: Request, res: Response) => {
+/** Experiments recorded by the caller (administrators see all). */
+export const getExperiments = (req: AuthRequest, res: Response) => {
+  const user = req.user!;
   return res.json({
     success: true,
-    data: experimentRecords,
+    data: isAdmin(user) ? experimentRecords : experimentRecords.filter((e) => e.ownerId === user.id),
   });
+};
+
+/**
+ * GET /api/jobs: the caller's jobs (administrators: every job). Filters: ?status=,
+ * ?zone=, and ?owner= (administrators only; "me" is accepted for anyone).
+ */
+export const listJobs = (req: AuthRequest, res: Response) => {
+  const user = req.user!;
+  const { status, zone, owner } = req.query as Record<string, string | undefined>;
+  let ownerFilter: string | undefined;
+  if (owner !== undefined && owner !== '') {
+    if (owner === 'me' || owner === user.id || owner.toLowerCase() === user.username.toLowerCase()) ownerFilter = user.id;
+    else if (!isAdmin(user)) {
+      return res.status(403).json({ success: false, code: 'FORBIDDEN', message: 'Only administrators can list other users\' jobs.' });
+    } else {
+      ownerFilter = db.getUserById(owner)?.id ?? db.getUserByUsername(owner)?.id ?? owner;
+    }
+  }
+  const jobs = allJobs()
+    .filter((j) => canAccessJob(user, j.ownerId))
+    .filter((j) => (ownerFilter ? j.ownerId === ownerFilter : true))
+    .map((j) => jobSummary(j, user))
+    .filter((j) => (status ? j.status === status : true))
+    .filter((j) => (zone ? j.zone === zone : true))
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  return res.json({ success: true, data: jobs });
+};
+
+/** GET /api/jobs/:id: job details, latest decision and latest execution record. */
+export const getJobDetails = (req: JobRequest, res: Response) => {
+  const ref = req.job!;
+  const store = schedulingStore();
+  const decision = store.latestDecisionForJob(ref.id);
+  return res.json({
+    success: true,
+    data: {
+      ...jobSummary(ref, req.user!),
+      job: jobAsWorkload(ref),
+      decision: decision
+        ? {
+            id: decision.id,
+            status: decision.status,
+            createdAt: decision.createdAt,
+            engineVersion: decision.engineVersion,
+            dataMode: decision.dataMode,
+            dataClass: decision.dataClass,
+            snapshotId: decision.snapshotId,
+            recommendedWindow: decision.recommendedWindow,
+            immediateWindow: decision.immediateWindow,
+            infeasibilityReason: decision.infeasibilityReason ?? null,
+          }
+        : null,
+      execution: store.latestExecutionForJob(ref.id) ?? null,
+    },
+  });
+};
+
+/**
+ * POST /api/jobs/:id/cancel: cancels a job that has not finished. A running simulated
+ * execution stops; on a live cluster the Kubernetes Job is deleted. Cancelled jobs cannot be
+ * scheduled or dispatched again.
+ */
+export const cancelJob = async (req: JobRequest, res: Response) => {
+  try {
+    const ref = req.job!;
+    const user = req.user!;
+    if (ref.cancelled) return res.status(409).json({ success: false, code: 'JOB_ALREADY_CANCELLED', message: 'This job is already cancelled.' });
+    const execution = K8sConnector.getJobExecution(ref.id);
+    if (execution && (execution.status === 'completed' || execution.status === 'failed')) {
+      return res.status(409).json({ success: false, code: 'JOB_FINISHED', message: `The job has already ${execution.status}; it cannot be cancelled.` });
+    }
+    auditAdminOverride(user, ref, 'cancelled');
+    await K8sConnector.cancelExecution(ref.id, user.username);
+    const registered = registeredJobs.get(ref.id);
+    if (registered) registered.status = 'cancelled';
+    if (ref.stored) schedulingStore().markJobCancelled(ref.id, user.username);
+    const updated = findJob(ref.id)!;
+    return res.json({ success: true, message: `Job ${ref.id} cancelled.`, data: jobSummary(updated, user) });
+  } catch (error: any) {
+    return sendError(res, error);
+  }
 };

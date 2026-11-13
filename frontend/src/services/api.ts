@@ -563,7 +563,31 @@ const getHeaders = (isFormData: boolean = false): HeadersInit => {
   return headers;
 };
 
+/** Message shown when a job request is not authenticated (M1.2). */
+export const SIGN_IN_REQUIRED_MESSAGE =
+  'Sign in to schedule and inspect jobs: jobs belong to the account that created them.';
+
+/**
+ * Handles a 401 from a protected route: a stored token that the backend rejected (expired,
+ * revoked or signed with an old secret) is removed, and the caller is told to sign in.
+ */
+function authFailure(res: Response, json: any): { success: false; message: string; authRequired: true } {
+  if (localStorage.getItem('carbonroute_token')) localStorage.removeItem('carbonroute_token');
+  return {
+    success: false,
+    authRequired: true,
+    message: res.status === 401 && json?.message && json?.code === 'UNAUTHENTICATED' && !/^Authentication required/.test(json.message)
+      ? json.message
+      : SIGN_IN_REQUIRED_MESSAGE,
+  };
+}
+
 export const api = {
+  /** True when a sign-in token is stored (it may still be rejected if it has expired). */
+  hasSession(): boolean {
+    return Boolean(localStorage.getItem('carbonroute_token'));
+  },
+
   // Auth
   async login(username: string, password: string): Promise<ApiResponse<{ token: string; user: User }>> {
     try {
@@ -1155,10 +1179,11 @@ export const api = {
     try {
       const res = await fetch(`${API_BASE}/jobs`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify(jobData),
       });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Job submission failed (${res.status})` };
     } catch (err: any) {
@@ -1177,13 +1202,14 @@ export const api = {
     try {
       const res = await fetch(`${API_BASE}/schedule`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify({
           ...payload,
           mode: payload.mode || payload.dataSource || 'live',
         }),
       });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Scheduling failed (${res.status})` };
     } catch (err: any) {
@@ -1198,10 +1224,11 @@ export const api = {
     try {
       const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/dispatch`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify(payload || {}),
       });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Dispatch failed (${res.status})` };
     } catch (err: any) {
@@ -1211,8 +1238,9 @@ export const api = {
 
   async getJobStatus(jobId: string): Promise<ApiResponse<K8sJobExecutionRecord>> {
     try {
-      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/status`);
+      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/status`, { headers: getHeaders() });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Status check failed (${res.status})` };
     } catch (err: any) {
@@ -1222,8 +1250,9 @@ export const api = {
 
   async getJobResults(jobId: string): Promise<ApiResponse<K8sJobExecutionRecord>> {
     try {
-      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/results`);
+      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/results`, { headers: getHeaders() });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Results query failed (${res.status})` };
     } catch (err: any) {
@@ -1234,8 +1263,9 @@ export const api = {
   async getJobManifest(jobId: string, hour?: number): Promise<ApiResponse<any>> {
     try {
       const q = hour !== undefined ? `?hour=${encodeURIComponent(hour)}` : '';
-      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/manifest${q}`);
+      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/manifest${q}`, { headers: getHeaders() });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Manifest query failed (${res.status})` };
     } catch (err: any) {
@@ -1276,8 +1306,9 @@ export const api = {
   /** Collects provider observations for the job's scheduled window (never invented). */
   async collectObservations(jobId: string): Promise<ApiResponse<JobObservationsResult>> {
     try {
-      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/observations`, { method: 'POST' });
+      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/observations`, { method: 'POST', headers: getHeaders() });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Observation collection failed (${res.status})` };
     } catch (err: any) {
@@ -1285,9 +1316,36 @@ export const api = {
     }
   },
 
-  /** Download URL for the job report (JSON or self-contained HTML). */
-  reportUrl(jobId: string, format: 'json' | 'html' = 'html'): string {
-    return `${API_BASE}/jobs/${encodeURIComponent(jobId)}/report${format === 'html' ? '?format=html' : ''}`;
+  /**
+   * Downloads the job report (self-contained HTML or JSON). Reports are only available to the
+   * job's owner and administrators, so the request carries the sign-in token; a plain link
+   * cannot send it (M1.2).
+   */
+  async downloadReport(jobId: string, format: 'json' | 'html' = 'html'): Promise<ApiResponse<void>> {
+    try {
+      const res = await fetch(
+        `${API_BASE}/jobs/${encodeURIComponent(jobId)}/report${format === 'html' ? '?format=html' : ''}`,
+        { headers: getHeaders() }
+      );
+      if (res.status === 401) return authFailure(res, await res.json().catch(() => null));
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        return { success: false, message: json?.message || `Report download failed (${res.status})` };
+      }
+      const blob = format === 'html' ? await res.blob() : new Blob([JSON.stringify(await res.json(), null, 2)], { type: 'application/json' });
+      const safeId = jobId.replace(/[^a-zA-Z0-9-]/g, '');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `carbonroute-report-${safeId}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error downloading the report.' };
+    }
   },
 
   async getClusterHealth(): Promise<ApiResponse<{ isAvailable: boolean; message: string }>> {
@@ -1305,10 +1363,11 @@ export const api = {
     try {
       const res = await fetch(`${API_BASE}/experiments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify(expData),
       });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Failed to record experiment (${res.status})` };
     } catch (err: any) {
@@ -1318,8 +1377,9 @@ export const api = {
 
   async getExperiments(): Promise<ApiResponse<ExperimentRecord[]>> {
     try {
-      const res = await fetch(`${API_BASE}/experiments`);
+      const res = await fetch(`${API_BASE}/experiments`, { headers: getHeaders() });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Failed to fetch experiments (${res.status})` };
     } catch (err: any) {
