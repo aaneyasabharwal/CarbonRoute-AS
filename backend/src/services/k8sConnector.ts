@@ -299,6 +299,16 @@ spec:
       record.logs.push(`[${new Date().toISOString()}] Applied Kubernetes Job manifest to cluster.`);
 
       await execAsync(`kubectl apply -f "${tempPath}"`);
+      // The job may have been cancelled while the manifest was being applied. Its delete
+      // then ran before the Job existed, so delete it now and do not mark it running (M1.2).
+      if ((record.status as K8sJobExecutionRecord['status']) === 'cancelled') {
+        record.logs.push(`[${new Date().toISOString()}] Cancelled while the manifest was being applied; deleting the Kubernetes Job.`);
+        await execAsync(`kubectl delete job ${record.k8sJobName} -n carbonroute-jobs --ignore-not-found`).catch((err: any) => {
+          record.logs.push(`[${new Date().toISOString()}] Could not delete the Kubernetes Job: ${err.message}`);
+        });
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        return;
+      }
       record.status = 'running';
       const startTime = new Date();
       record.startedAt = startTime.toISOString();
