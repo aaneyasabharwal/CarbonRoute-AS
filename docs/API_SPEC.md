@@ -95,7 +95,7 @@ For any other user a job id answers **404**, exactly like an unknown id.
 | --- | --- | --- |
 | `GET /jobs` | any user | The caller's jobs (admins: all jobs, with `owner` names). Filters: `?status=pending\|scheduled\|infeasible\|running\|completed\|failed\|cancelled`, `?zone=`, `?owner=` (admins only; `me` for anyone, otherwise 403). |
 | `POST /jobs` | any user | Register a job. The owner is always the caller (`ownerId` in the body is ignored). |
-| `POST /schedule` | any user | Schedule `jobData` (new job owned by the caller; an unknown `jobData.id` is replaced by a server id) or an existing `jobId` the caller can access. Cancelled jobs: 409. |
+| `POST /schedule` (`jobData.deadlineAt` / `arrivalAt` must be ISO-8601 **with a time zone**, e.g. `2026-11-14T18:00:00Z` or `…+05:30`; optional `runtimeCv` 0–1) | any user | Schedule `jobData` (new job owned by the caller; an unknown `jobData.id` is replaced by a server id) or an existing `jobId` the caller can access. Cancelled jobs: 409. |
 | `GET /jobs/:id` | owner, admin | Job details, latest decision (forecast snapshot id, windows) and latest execution record. |
 | `GET /jobs/:id/status`, `/results`, `/manifest` | owner, admin | Execution status and logs, results, Kubernetes manifest. |
 | `POST /jobs/:id/dispatch` | owner, admin | Execute or simulate the job. Cancelled jobs: 409. |

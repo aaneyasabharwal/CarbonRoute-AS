@@ -14,7 +14,7 @@ import { CarbonService, CarbonForecastData } from './carbonService';
 import { SchedulerService, WorkloadJob, SchedulingDecisionResponse } from './schedulerService';
 import { schedulingStore, SchedulingStore, StoredDecision, StoredJob, StoredObservationSet, WindowTimes } from '../models/schedulingStore';
 import { assessEmissions, evaluateForecast, hourlyIntervals, windowIntensity } from '../evaluation/forecastEvaluation';
-import { timeWeightedAverage } from '../evaluation/timeWeighting';
+import { timeWeightedAverage, parseZonedTimestamp } from '../evaluation/timeWeighting';
 import { validateWorkloadSpec } from './workloadSpec';
 import { energyAssumption } from './energyModel';
 import { MAX_RUNTIME_CV } from './uncertaintyService';
@@ -56,10 +56,20 @@ export interface ScheduleInput {
 // Shared with the engine so both use the same numbers (P1).
 export { energyAssumption };
 
+/**
+ * Parses an absolute time. P3: a time zone designator (Z or ±hh:mm) is required. Without one,
+ * "2026-11-14T18:00" would be read in the SERVER's local time zone, which differs between
+ * machines and is not the grid zone's local time; such input is rejected instead of guessed.
+ */
 function parseIso(value: unknown, field: string): number {
-  const ms = typeof value === 'string' ? Date.parse(value) : NaN;
-  if (Number.isNaN(ms)) throw new WorkflowError(400, `${field} must be an ISO-8601 date-time (e.g. 2026-11-14T18:00:00Z).`);
-  return ms;
+  try {
+    return parseZonedTimestamp(String(value), field);
+  } catch {
+    throw new WorkflowError(
+      400,
+      `${field} must be an ISO-8601 date-time with a time zone, e.g. 2026-11-14T18:00:00Z or 2026-11-14T19:00:00+01:00.`
+    );
+  }
 }
 
 function validate(input: ScheduleInput, now: number) {
@@ -173,7 +183,7 @@ export async function scheduleWorkflow(
 
   // 2. Forecast covering the deadline (the smallest supported horizon, at most 72 h).
   const hoursNeeded = Math.ceil((deadline - now) / HOUR) + 1;
-  const forecast = await getForecast(zone, Math.min(72, hoursNeeded), input.mode);
+  const forecast = await getForecast(zone, Math.min(72, hoursNeeded), input.mode, now);
   const snapshot = store.addSnapshot(forecast.snapshot ?? demoSnapshot(forecast));
   const points = forecast.hourlyProfile;
   const start = Date.parse(points[0].timestamp);

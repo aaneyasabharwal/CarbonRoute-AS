@@ -12,7 +12,8 @@
     "admin:set-password": "node dist/scripts/setAdminPassword.js",
     "user:create": "node dist/scripts/createUser.js",
     "benchmark": "node dist/scripts/runBenchmark.js",
-    "collect": "node dist/scripts/collectElectricityMaps.js"
+    "collect": "node dist/scripts/collectElectricityMaps.js",
+    "coverage": "node dist/scripts/coverageReport.js"
   },
   "keywords": [
     "carbon-aware",
