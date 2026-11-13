@@ -44,7 +44,7 @@ CORS_ORIGIN=https://carbonroute.org
 # Required: 32+ random characters. Generate with:
 #   node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 JWT_SECRET=
-JWT_EXPIRES_IN=7d
+JWT_EXPIRES_IN=12h
 
 # Storage Options: 'local' or 's3'
 STORAGE_TYPE=s3

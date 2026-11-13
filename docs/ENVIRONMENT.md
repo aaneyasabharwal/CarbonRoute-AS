@@ -11,7 +11,7 @@ same file through `env_file`. No secret has a default.
 | `NODE_ENV` | no | `development` | `production` enables the secret checks below. |
 | `PORT` | no | `5000` | HTTP port. |
 | `JWT_SECRET` | **production** | random per process in development | HS256 signing key, at least 32 characters, never a value published in this repository. Changing it invalidates every token. The server refuses to start in production without a valid value. |
-| `JWT_EXPIRES_IN` | no | `7d` | Token lifetime. |
+| `JWT_EXPIRES_IN` | no | `12h` | Token lifetime (shorter than before P8 because tokens are kept in browser localStorage). |
 | `ADMIN_USERNAME`, `ADMIN_EMAIL` | no | `admin`, `admin@carbonroute.org` | Initial administrator. |
 | `ADMIN_PASSWORD` | **production, first start** | none | Creates the initial admin only when the database has no users (12+ characters). Not used afterwards; rotate with `npm run admin:set-password`. |
 | `CORS_ORIGIN` | **production** | local dev origins | Comma-separated browser origins allowed to call the API (no wildcard); also used for CSP `frame-ancestors`. |
@@ -19,6 +19,8 @@ same file through `env_file`. No secret has a default.
 | `RATE_LIMIT_LOGIN_MAX`, `RATE_LIMIT_LOGIN_IP_MAX`, `RATE_LIMIT_LOGIN_WINDOW_MIN` | no | 10, 50, 15 | Login attempts per account / per address per window. |
 | `RATE_LIMIT_JOBS_MAX`, `RATE_LIMIT_JOBS_WINDOW_MIN` | no | 30, 10 | Job actions per user per window. |
 | `RATE_LIMIT_CARBON_MAX`, `RATE_LIMIT_CARBON_WINDOW_MIN` | no | 60, 60 | Live carbon-data requests per user per window. |
+| `RATE_LIMIT_PUBLIC_MAX`, `RATE_LIMIT_PUBLIC_WINDOW_MIN` | no | 60, 10 | Public compute requests (`/scheduler/simulate`, `/cluster/health`) per address per window (P8). |
+| `RATE_LIMIT_PASSWORD_MAX` | no | 5 | Password changes per user per login window (P8). |
 | `ELECTRICITY_MAPS_API_KEY` | for live data | none | Electricity Maps v3 key. Without it, live scheduling and live carbon routes answer with an error (no synthetic substitute); demo mode still works. |
 | `EM_MAX_CALLS_PER_HOUR`, `EM_MAX_CALLS_PER_DAY` | no | 120, 1500 | Server-wide provider call budget; beyond it live routes answer 429 `QUOTA_GUARD`. |
 | `CARBONROUTE_DB_FILE` | no | `<repo>/database/carbonroute.db.json` | Main JSON database file; the scheduling store is `carbonroute.scheduling.db.json` next to it. Set it in containers (see DEPLOYMENT.md). |
