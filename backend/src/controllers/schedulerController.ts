@@ -1,128 +1,108 @@
 import { Request, Response } from 'express';
 import { CarbonService } from '../services/carbonService';
-import { UncertaintyService } from '../services/uncertaintyService';
+import { SchedulerService, WorkloadJob, EngineOutcome } from '../services/schedulerService';
 
 export interface TimeSlotCarbon {
   hour: number;
-  predictedCarbon: number; // gCO2eq/kWh
+  predictedCarbon: number; // gCO2eq/kWh, window average of the synthetic forecast
+  /** stdDev is the runtime standard deviation in HOURS (declared CV x duration). */
   uncertaintyLow: { stdDev: number; violationRisk: number };
   uncertaintyHigh: { stdDev: number; violationRisk: number };
 }
 
+/** Declared runtime variability for the two scenarios (coefficient of variation). */
+export const FEASIBILITY_RUNTIME_CV = { low: 0.05, high: 0.25 } as const;
+
+/**
+ * Feasibility demonstration (M2.6 / M3.9, P1): the same synthetic forecast, scheduled by the
+ * production engine twice: once with low and once with high declared runtime variability.
+ * Higher runtime variability raises the deadline-miss risk of late windows, so the
+ * risk-constrained policy may have to start earlier. Synthetic data only; labelled as such.
+ */
 export const simulateFeasibilityDecision = async (req: Request, res: Response) => {
   try {
-    const durationHours = Math.max(1, Math.min(6, Math.round(Number(req.body.durationHours) || 2)));
-    const deadlineHours = Math.max(durationHours + 1, Math.min(18, Math.round(Number(req.body.deadlineHours) || 12)));
-    const riskTolerance = Math.max(0.01, Math.min(0.50, Number(req.body.riskTolerance) || 0.10));
-    const region = String(req.body.region || 'BENCHMARK-RESEARCH');
-
-    // Retrieve controlled forecast trace for the research demonstration
-    // Explicitly uses mode: 'demo' so the experiment is 100% reproducible and independent of live API key status
-    const forecastData = await CarbonService.getForecast(region, 12, 'demo');
-    const horizon = 12;
-
-    // Dynamically compute candidate time slots from actual forecast and mathematical uncertainty models
-    const timeSlots: TimeSlotCarbon[] = [];
-
-    for (let h = 0; h < horizon; h++) {
-      // Calculate window average carbon intensity across durationHours
-      let sumCarbon = 0;
-      let sumStd = 0;
-      for (let w = h; w < h + durationHours; w++) {
-        const pt = forecastData.hourlyProfile[w % forecastData.hourlyProfile.length];
-        sumCarbon += pt.predictedCarbon;
-        // This demo always uses the synthetic trace, whose points carry a (synthetic) stdDev.
-        if (pt.stdDev === null) throw new Error('Feasibility demo requires the synthetic demo trace.');
-        sumStd += pt.stdDev;
-      }
-      const avgCarbon = Math.round(sumCarbon / durationHours);
-      const avgStd = Math.round(sumStd / durationHours);
-
-      const riskLow = UncertaintyService.calculateDeadlineRisk(h, durationHours, deadlineHours, avgStd, 0.6);
-      const riskHigh = UncertaintyService.calculateDeadlineRisk(h, durationHours, deadlineHours, avgStd, 2.5);
-
-      timeSlots.push({
-        hour: h,
-        predictedCarbon: avgCarbon,
-        uncertaintyLow: {
-          stdDev: Math.round(riskLow.effectiveStdDev),
-          violationRisk: riskLow.violationRisk,
-        },
-        uncertaintyHigh: {
-          stdDev: Math.round(riskHigh.effectiveStdDev),
-          violationRisk: riskHigh.violationRisk,
-        },
-      });
+    const durationHours = Number(req.body?.durationHours ?? 2);
+    const deadlineHours = Number(req.body?.deadlineHours ?? 12);
+    const riskTolerance = Number(req.body?.riskTolerance ?? 0.1);
+    const region = String(req.body?.region || 'BENCHMARK-RESEARCH');
+    if (!Number.isInteger(durationHours) || durationHours < 1 || durationHours > 6) {
+      return res.status(400).json({ success: false, message: 'durationHours must be a whole number from 1 to 6.' });
+    }
+    if (!Number.isInteger(deadlineHours) || deadlineHours <= durationHours || deadlineHours > 23) {
+      return res.status(400).json({ success: false, message: 'deadlineHours must be a whole number after durationHours and at most 23.' });
+    }
+    if (!(riskTolerance >= 0.01 && riskTolerance <= 0.5)) {
+      return res.status(400).json({ success: false, message: 'riskTolerance must be between 0.01 and 0.5.' });
     }
 
-    // Feasible start slots must satisfy: h + durationHours <= deadlineHours
-    const maxStart = deadlineHours - durationHours;
-    const feasibleSlots = timeSlots.filter((s) => s.hour <= maxStart);
+    // Synthetic demo trace only, so the demonstration is reproducible without any API key.
+    const forecastData = await CarbonService.getForecast(region, 24, 'demo');
+    const job: WorkloadJob = {
+      id: 'feasibility-demo',
+      name: 'Feasibility demonstration',
+      commandOrImage: 'synthetic',
+      isContainerImage: false,
+      durationHours,
+      deadlineHours,
+      arrivalHour: 0,
+      cpu: 2,
+      memoryMb: 512,
+      region,
+      riskTolerance,
+      createdAt: new Date().toISOString(),
+    };
+    const low = SchedulerService.evaluatePolicies(job, forecastData, { runtimeCv: FEASIBILITY_RUNTIME_CV.low });
+    const high = SchedulerService.evaluatePolicies(job, forecastData, { runtimeCv: FEASIBILITY_RUNTIME_CV.high });
 
-    // Scenario A: Low Uncertainty
-    // Filter by riskLow <= riskTolerance, then choose minimum carbon
-    const candidatesA = feasibleSlots.filter((s) => s.uncertaintyLow.violationRisk <= riskTolerance);
-    let slotA = candidatesA.length > 0
-      ? candidatesA.reduce((min, cur) => (cur.predictedCarbon < min.predictedCarbon ? cur : min), candidatesA[0])
-      : feasibleSlots[0];
+    const timeSlots: TimeSlotCarbon[] = low.candidateWindows.map((w, i) => ({
+      hour: w.startHour,
+      predictedCarbon: w.predictedCarbonIntensity,
+      uncertaintyLow: { stdDev: FEASIBILITY_RUNTIME_CV.low * durationHours, violationRisk: w.deadlineRisk },
+      uncertaintyHigh: { stdDev: FEASIBILITY_RUNTIME_CV.high * durationHours, violationRisk: high.candidateWindows[i].deadlineRisk },
+    }));
 
-    // Scenario B: High Uncertainty
-    // Filter by riskHigh <= riskTolerance, then choose minimum carbon
-    const candidatesB = feasibleSlots.filter((s) => s.uncertaintyHigh.violationRisk <= riskTolerance);
-    let slotB = candidatesB.length > 0
-      ? candidatesB.reduce((min, cur) => (cur.predictedCarbon < min.predictedCarbon ? cur : min), candidatesB[0])
-      : feasibleSlots[0];
-
-    // Build dynamic scientific rationale
-    const rationaleA =
-      slotA.hour > 0
-        ? `Under low forecast uncertainty (sigma ~ ${slotA.uncertaintyLow.stdDev}h), delaying execution to T+${slotA.hour}:00 is safe: estimated deadline risk (${(slotA.uncertaintyLow.violationRisk * 100).toFixed(1)}%) satisfies your ${(riskTolerance * 100).toFixed(0)}% tolerance, reducing carbon to ${slotA.predictedCarbon} gCO2/kWh.`
-        : `Under low forecast uncertainty, immediate dispatch at T+0 is selected with ${(slotA.uncertaintyLow.violationRisk * 100).toFixed(1)}% risk and ${slotA.predictedCarbon} gCO2/kWh.`;
-
-    const rationaleB =
-      slotB.hour < slotA.hour
-        ? `Under high forecast uncertainty (sigma ~ ${slotB.uncertaintyHigh.stdDev}h), the T+${slotA.hour} low-carbon window violates your ${(riskTolerance * 100).toFixed(0)}% risk limit (tail risk jumps to ${(slotA.uncertaintyHigh.violationRisk * 100).toFixed(1)}%). CarbonRoute dynamically adapts by choosing an earlier window at T+${slotB.hour}:00 (${slotB.predictedCarbon} gCO2) to keep risk at ${(slotB.uncertaintyHigh.violationRisk * 100).toFixed(1)}%.`
-        : `Under high forecast uncertainty, CarbonRoute confirms window T+${slotB.hour}:00 with ${(slotB.uncertaintyHigh.violationRisk * 100).toFixed(1)}% risk and ${slotB.predictedCarbon} gCO2/kWh.`;
-
+    const scenario = (out: EngineOutcome, name: string, level: string, cv: number) => {
+      if (out.status !== 'RECOMMENDED') {
+        return {
+          name,
+          predictedCarbonCurve: 'Identical synthetic forecast',
+          uncertaintyLevel: level,
+          selectedStartHour: -1,
+          selectedWindow: 'No feasible window',
+          predictedCarbonAtStart: null,
+          estimatedViolationRisk: null,
+          riskToleranceSatisfied: false,
+          decisionRationale: out.reason,
+        };
+      }
+      const r = out.recommendedDecision;
+      return {
+        name,
+        predictedCarbonCurve: 'Identical synthetic forecast',
+        uncertaintyLevel: level,
+        selectedStartHour: r.selectedStartHour,
+        selectedWindow: r.selectedWindow,
+        predictedCarbonAtStart: r.predictedCarbonIntensity,
+        estimatedViolationRisk: r.estimatedDeadlineRisk,
+        riskToleranceSatisfied: r.estimatedDeadlineRisk <= riskTolerance,
+        decisionRationale: `With declared runtime CV ${cv} (σ = ${(cv * durationHours).toFixed(2)} h), the lowest-forecast window meeting the ${(riskTolerance * 100).toFixed(0)}% tolerance is ${r.selectedWindow} (${r.predictedCarbonIntensity} gCO2eq/kWh, deadline-miss risk ${(r.estimatedDeadlineRisk * 100).toFixed(1)}%).`,
+      };
+    };
+    const a = scenario(low, 'Scenario A: Low runtime variability', `Low (declared CV ${FEASIBILITY_RUNTIME_CV.low})`, FEASIBILITY_RUNTIME_CV.low);
+    const b = scenario(high, 'Scenario B: High runtime variability', `High (declared CV ${FEASIBILITY_RUNTIME_CV.high})`, FEASIBILITY_RUNTIME_CV.high);
     const conclusion =
-      slotA.hour !== slotB.hour
-        ? `Mathematical Proof: Under identical predicted carbon values, higher forecast uncertainty caused CarbonRoute to shift the decision from T+${slotA.hour} to T+${slotB.hour} to guarantee the P(violation) <= ${(riskTolerance * 100).toFixed(0)}% constraint.`
-        : `At this deadline/duration configuration, window T+${slotA.hour} satisfies the risk constraint in both uncertainty scenarios.`;
+      a.selectedStartHour >= 0 && b.selectedStartHour >= 0 && a.selectedStartHour !== b.selectedStartHour
+        ? `With the same forecast, higher declared runtime variability moved the risk-constrained decision from T+${a.selectedStartHour} to T+${b.selectedStartHour} to keep the deadline-miss risk within ${(riskTolerance * 100).toFixed(0)}%.`
+        : `For this duration and deadline, both runtime-variability scenarios give the same decision (or no feasible window).`;
 
     return res.json({
       success: true,
       data: {
-        input: {
-          durationHours,
-          deadlineHours,
-          riskTolerance,
-          region,
-        },
+        input: { durationHours, deadlineHours, riskTolerance, region },
+        dataClass: 'synthetic',
+        riskModel: 'declared-runtime-cv',
         timeSlots,
-        scenarios: {
-          scenarioA: {
-            name: 'Scenario A: Low Forecast Uncertainty',
-            predictedCarbonCurve: 'Identical forecast profile',
-            uncertaintyLevel: `Low (tight error variance)`,
-            selectedStartHour: slotA.hour,
-            selectedWindow: `T+${slotA.hour}:00 to T+${slotA.hour + durationHours}:00`,
-            predictedCarbonAtStart: slotA.predictedCarbon,
-            estimatedViolationRisk: slotA.uncertaintyLow.violationRisk,
-            riskToleranceSatisfied: slotA.uncertaintyLow.violationRisk <= riskTolerance,
-            decisionRationale: rationaleA,
-          },
-          scenarioB: {
-            name: 'Scenario B: High Forecast Uncertainty',
-            predictedCarbonCurve: 'Identical forecast profile',
-            uncertaintyLevel: `High (wide error variance)`,
-            selectedStartHour: slotB.hour,
-            selectedWindow: `T+${slotB.hour}:00 to T+${slotB.hour + durationHours}:00`,
-            predictedCarbonAtStart: slotB.predictedCarbon,
-            estimatedViolationRisk: slotB.uncertaintyHigh.violationRisk,
-            riskToleranceSatisfied: slotB.uncertaintyHigh.violationRisk <= riskTolerance,
-            decisionRationale: rationaleB,
-          },
-        },
+        scenarios: { scenarioA: a, scenarioB: b },
         feasibilityConclusion: conclusion,
       },
     });

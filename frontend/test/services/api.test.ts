@@ -143,12 +143,20 @@ describe('scheduling API calls', () => {
  * assertions except in the PR that intentionally changes the behaviour.
  */
 describe('[legacy] client-side fallbacks when the backend is unreachable', () => {
-  // Audit H4 -> task M2.5: the frontend fabricates a full scheduling result.
-  it('simulateFeasibility returns success with a client-generated result', async () => {
+  // Audit H4 -> task M2.5 (done in P1): the frontend used to fabricate a full scheduling
+  // result when the backend was unreachable. The original assertion is kept as it.fails.
+  it.fails('[original check, fails] simulateFeasibility returns success with a client-generated result', async () => {
     const res = await api.simulateFeasibility(2, 12, 0.1, 'US-CAL-CISO');
     expect(res.success).toBe(true);
     expect(res.data?.timeSlots).toHaveLength(12);
     expect(res.data?.feasibilityConclusion).toBeTruthy();
+  });
+
+  it('simulateFeasibility reports failure instead of inventing a result (M2.5)', async () => {
+    const res = await api.simulateFeasibility(2, 12, 0.1, 'US-CAL-CISO');
+    expect(res.success).toBe(false);
+    expect(res.data).toBeUndefined();
+    expect(res.message).toBeTruthy();
   });
 
   // New observation (not in the original audit): built-in presentation records,

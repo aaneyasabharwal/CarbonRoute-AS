@@ -67,7 +67,8 @@ describe('scheduling with a real (recorded) forecast', () => {
   it('recommends a window that meets the deadline, with wall-clock times for every policy', async () => {
     const { out } = await scheduleLive();
     expect(out.status).toBe('RECOMMENDED');
-    expect(out.riskModel).toBe('deterministic-no-uncertainty-data');
+    // P1: deadline risk comes only from declared runtime variability; none declared here.
+    expect(out.riskModel).toBe('deterministic');
     const deadline = Date.parse(out.job.deadlineAt);
     for (const p of out.evaluatedPolicies) {
       expect(Date.parse(p.selectedStartUtc)).toBeGreaterThanOrEqual(NOW);
@@ -220,9 +221,17 @@ describe('observations after execution', () => {
   });
 
   it('does not compare a synthetic demo forecast with real observations', async () => {
-    const out: any = await scheduleWorkflow(baseInput({ mode: 'demo', zone: 'BENCHMARK-RESEARCH' }), { now: () => NOW, store });
+    // The synthetic trace starts at the real current hour, so this case uses the real clock.
+    // (With the fixed NOW the deadline fell before the trace; the old engine clamped it into a
+    // feasible window, defect D2. The P1 engine reports NO_FEASIBLE_WINDOW instead.)
+    const now = Date.now();
+    const out: any = await scheduleWorkflow(
+      baseInput({ mode: 'demo', zone: 'BENCHMARK-RESEARCH', deadlineAt: new Date(now + 12 * H).toISOString() }),
+      { now: () => now, store }
+    );
+    expect(out.status).toBe('RECOMMENDED');
     const { client, fetchImpl } = fakeClient([{ body: '{}' }]);
-    const set = await collectObservations(out.job.id, { now: () => NOW + 48 * H, store, client });
+    const set = await collectObservations(out.job.id, { now: () => now + 48 * H, store, client });
     expect(set.status).toBe('NOT_APPLICABLE_SYNTHETIC');
     expect(fetchImpl).not.toHaveBeenCalled();
   });

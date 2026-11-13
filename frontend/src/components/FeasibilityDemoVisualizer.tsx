@@ -51,7 +51,7 @@ export const FeasibilityDemoVisualizer: React.FC = () => {
               <span>Feasibility Parameter Controls</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Adjust job requirements to test how CarbonRoute adapts decisions under identical forecasts but differing uncertainty.
+              Same synthetic forecast, two levels of declared runtime variability: shows how CarbonRoute keeps the deadline-miss risk within tolerance. Synthetic data only.
             </p>
           </div>
           <button
@@ -120,7 +120,7 @@ export const FeasibilityDemoVisualizer: React.FC = () => {
         </div>
       </div>
 
-      {/* Carbon Curve & Forecast Uncertainty Visual Matrix */}
+      {/* Carbon curve and deadline risk under low / high runtime variability */}
       {data && (
         <div className="glass-card rounded-xl p-6 border border-slate-800/80 space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
@@ -236,13 +236,15 @@ export const FeasibilityDemoVisualizer: React.FC = () => {
               <div className="p-2.5 bg-slate-950 rounded border border-slate-800">
                 <span className="text-slate-400 block text-[10px]">Predicted Carbon:</span>
                 <span className="text-emerald-300 font-bold text-sm">
-                  {data.scenarios.scenarioA.predictedCarbonAtStart} gCO2/kWh
+                  {data.scenarios.scenarioA.predictedCarbonAtStart === null ? 'No feasible window' : `${data.scenarios.scenarioA.predictedCarbonAtStart} gCO2/kWh`}
                 </span>
               </div>
               <div className="p-2.5 bg-slate-950 rounded border border-slate-800">
                 <span className="text-slate-400 block text-[10px]">Estimated Deadline Risk:</span>
                 <span className="text-emerald-400 font-bold text-sm">
-                  {Math.round(data.scenarios.scenarioA.estimatedViolationRisk * 100)}% (&le; {Math.round(riskTolerance * 100)}%)
+                  {data.scenarios.scenarioA.estimatedViolationRisk === null
+                    ? 'n/a'
+                    : `${(data.scenarios.scenarioA.estimatedViolationRisk * 100).toFixed(1)}% (≤ ${Math.round(riskTolerance * 100)}%)`}
                 </span>
               </div>
             </div>
@@ -266,13 +268,15 @@ export const FeasibilityDemoVisualizer: React.FC = () => {
               <div className="p-2.5 bg-slate-950 rounded border border-slate-800">
                 <span className="text-slate-400 block text-[10px]">Predicted Carbon:</span>
                 <span className="text-teal-300 font-bold text-sm">
-                  {data.scenarios.scenarioB.predictedCarbonAtStart} gCO2/kWh
+                  {data.scenarios.scenarioB.predictedCarbonAtStart === null ? 'No feasible window' : `${data.scenarios.scenarioB.predictedCarbonAtStart} gCO2/kWh`}
                 </span>
               </div>
               <div className="p-2.5 bg-slate-950 rounded border border-slate-800">
                 <span className="text-slate-400 block text-[10px]">Estimated Deadline Risk:</span>
                 <span className="text-teal-400 font-bold text-sm">
-                  {Math.round(data.scenarios.scenarioB.estimatedViolationRisk * 100)}% (&le; {Math.round(riskTolerance * 100)}%)
+                  {data.scenarios.scenarioB.estimatedViolationRisk === null
+                    ? 'n/a'
+                    : `${(data.scenarios.scenarioB.estimatedViolationRisk * 100).toFixed(1)}% (≤ ${Math.round(riskTolerance * 100)}%)`}
                 </span>
               </div>
             </div>

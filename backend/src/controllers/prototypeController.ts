@@ -9,6 +9,7 @@ import { electricityMaps } from '../carbon/electricityMaps';
 import { ProviderError } from '../carbon/types';
 import { K8sConnector } from '../services/k8sConnector';
 import { validateWorkloadSpec, WorkloadSpecError } from '../services/workloadSpec';
+import { evaluateOracle } from '../evaluation/oracle';
 import { AuthRequest, isAdmin } from '../middleware/auth';
 import { db } from '../models/db';
 import {
@@ -126,7 +127,7 @@ function sendError(res: Response, error: any, fallbackStatus = 500) {
  * the job, the exact forecast snapshot and the decision.
  */
 export const scheduleJob = async (req: AuthRequest, res: Response) => {
-  const { jobId, jobData, region = 'US-CAL-CISO', uncertaintyMultiplier = 1.0 } = req.body || {};
+  const { jobId, jobData, region = 'US-CAL-CISO' } = req.body || {};
   const user = req.user!;
   let source: any;
   let ownerId: string | undefined = user.id;
@@ -168,7 +169,8 @@ export const scheduleJob = async (req: AuthRequest, res: Response) => {
       deadlineAt: source.deadlineAt,
       deadlineHours: source.deadlineAt ? undefined : Number(source.deadlineHours ?? 12),
       arrivalAt: source.arrivalAt,
-      uncertaintyMultiplier: Number(uncertaintyMultiplier),
+      // Declared runtime variability (P1); the old uncertaintyMultiplier is no longer used.
+      runtimeCv: req.body?.runtimeCv ?? source.runtimeCv,
       mode,
     });
     const registered: WorkloadJob = {
@@ -247,6 +249,47 @@ export const getJobObservations = (req: JobRequest, res: Response) => {
   try {
     const id = String(req.params.id);
     return res.json({ success: true, data: { history: schedulingStore().observationSetsForJob(id), ...evaluateJob(id) } });
+  } catch (error: any) {
+    return sendError(res, error);
+  }
+};
+
+const GRANULARITY_MINUTES: Record<string, number> = { hourly: 60, '15_minutes': 15, '5_minutes': 5 };
+
+/**
+ * GET /api/jobs/:id/oracle: hindsight (Oracle) evaluation of the job's latest decision on the
+ * realized observations collected for it. Offline evaluation only (P1, M10.6). Usually
+ * unavailable for single jobs, because observations are collected for the scheduled and
+ * Immediate windows only, not for every candidate.
+ */
+export const getJobOracle = (req: JobRequest, res: Response) => {
+  try {
+    const store = schedulingStore();
+    const decision = store.latestDecisionForJob(req.job!.id);
+    if (!decision || decision.status !== 'RECOMMENDED') {
+      return res.json({ success: true, data: { status: 'NOT_APPLICABLE', offlineOnly: true, reason: 'The job has no recommended decision to evaluate.' } });
+    }
+    if (decision.dataClass === 'synthetic') {
+      return res.json({ success: true, data: { status: 'NOT_APPLICABLE_SYNTHETIC', offlineOnly: true, reason: 'The decision used the synthetic demo trace; there are no realized observations to compare with.' } });
+    }
+    const latest = new Map<string, { datetime: string; value: number; intervalMinutes: number; fetchedAt: string }>();
+    for (const set of store.observationSetsForJob(req.job!.id)) {
+      for (const o of [...set.observations, ...(set.immediate?.observations || [])]) {
+        const prev = latest.get(o.datetime);
+        if (!prev || prev.fetchedAt < o.fetchedAt) {
+          latest.set(o.datetime, { datetime: o.datetime, value: o.carbonIntensity, intervalMinutes: GRANULARITY_MINUTES[o.granularity] ?? 60, fetchedAt: o.fetchedAt });
+        }
+      }
+    }
+    const realized = [...latest.values()].map(({ fetchedAt: _f, ...v }) => v);
+    const result: any = decision.result || {};
+    const candidates = (result.candidateWindows || [])
+      .filter((c: any) => c.startUtc && c.endUtc && c.classification !== 'REJECTED_DATA_GAP')
+      .map((c: any) => ({ startUtc: c.startUtc, endUtc: c.endUtc }));
+    const policies = (result.evaluatedPolicies || [])
+      .filter((p: any) => p.selectedStartUtc && p.selectedEndUtc)
+      .map((p: any) => ({ policyId: p.policyId, window: { startUtc: p.selectedStartUtc, endUtc: p.selectedEndUtc } }));
+    return res.json({ success: true, data: { decisionId: decision.id, ...evaluateOracle(candidates, realized, policies) } });
   } catch (error: any) {
     return sendError(res, error);
   }

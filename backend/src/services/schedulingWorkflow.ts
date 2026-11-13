@@ -16,8 +16,10 @@ import { schedulingStore, SchedulingStore, StoredDecision, StoredJob, StoredObse
 import { assessEmissions, evaluateForecast, hourlyIntervals, windowIntensity } from '../evaluation/forecastEvaluation';
 import { timeWeightedAverage } from '../evaluation/timeWeighting';
 import { validateWorkloadSpec } from './workloadSpec';
+import { energyAssumption } from './energyModel';
+import { MAX_RUNTIME_CV } from './uncertaintyService';
 
-export const ENGINE_VERSION = 'carbonroute-engine-2026-11-m5';
+export const ENGINE_VERSION = 'carbonroute-engine-2026-11-p1';
 const HOUR = 3600_000;
 const HISTORY_WINDOW_HOURS = 24; // Only the last 24 h are readable with the current API plan.
 
@@ -44,19 +46,15 @@ export interface ScheduleInput {
   deadlineHours?: number;
   /** ISO UTC arrival (defaults to now; may not be in the past). */
   arrivalAt?: string;
+  /** @deprecated ignored: belonged to the removed deadline-risk model (audit C1). */
   uncertaintyMultiplier?: number;
+  /** Declared runtime coefficient of variation, 0 to 1 (0 = deterministic runtime). */
+  runtimeCv?: number;
   mode: 'live' | 'demo';
 }
 
-/** Prototype energy assumption (not measured): 0.125 kW per vCPU, minimum 0.1 kW. */
-export function energyAssumption(cpu: number, durationHours: number) {
-  const powerKw = Math.max(0.1, Number((((cpu || 2) / 2) * 0.25).toFixed(3)));
-  return {
-    powerKw,
-    energyKwh: Number((durationHours * powerKw).toFixed(3)),
-    basis: 'Prototype assumption: 0.125 kW per requested vCPU (minimum 0.1 kW). Not measured.',
-  };
-}
+// Shared with the engine so both use the same numbers (P1).
+export { energyAssumption };
 
 function parseIso(value: unknown, field: string): number {
   const ms = typeof value === 'string' ? Date.parse(value) : NaN;
@@ -77,6 +75,10 @@ function validate(input: ScheduleInput, now: number) {
   const tau = Number(input.riskTolerance);
   if (!(tau > 0 && tau < 1)) throw new WorkflowError(400, 'riskTolerance must be between 0 and 1 (exclusive).');
   if (!(Number(input.cpu) > 0)) throw new WorkflowError(400, 'cpu must be greater than 0.');
+  const runtimeCv = input.runtimeCv === undefined || input.runtimeCv === null || (input.runtimeCv as unknown) === '' ? 0 : Number(input.runtimeCv);
+  if (!(Number.isFinite(runtimeCv) && runtimeCv >= 0 && runtimeCv <= MAX_RUNTIME_CV)) {
+    throw new WorkflowError(400, `runtimeCv must be between 0 and ${MAX_RUNTIME_CV} (declared runtime coefficient of variation).`);
+  }
 
   let deadline: number;
   if (input.deadlineAt !== undefined && input.deadlineAt !== null && input.deadlineAt !== '') {
@@ -93,7 +95,7 @@ function validate(input: ScheduleInput, now: number) {
     arrival = Math.max(arrival, now);
   }
   if (deadline <= arrival) throw new WorkflowError(400, 'The deadline must be after the arrival time.');
-  return { dur, tau, deadline, arrival };
+  return { dur, tau, deadline, arrival, runtimeCv };
 }
 
 function iso(ms: number) {
@@ -124,7 +126,7 @@ export async function scheduleWorkflow(
   const now = (deps.now ?? Date.now)();
   const store = deps.store ?? schedulingStore();
   const getForecast = deps.getForecast ?? CarbonService.getForecast.bind(CarbonService);
-  const { dur, tau, deadline, arrival } = validate(input, now);
+  const { dur, tau, deadline, arrival, runtimeCv } = validate(input, now);
   const zone = input.mode === 'live' ? ElectricityMapsClient.validateZone(input.zone) : String(input.zone || 'BENCHMARK-RESEARCH');
   const energy = energyAssumption(input.cpu, dur);
 
@@ -202,7 +204,19 @@ export async function scheduleWorkflow(
     status: 'scheduled',
     createdAt: job.createdAt,
   };
-  const result: SchedulingDecisionResponse = SchedulerService.evaluateAllPolicies(engineJob, forecast, Number(input.uncertaintyMultiplier) || 1);
+  const outcome = SchedulerService.evaluatePolicies(engineJob, forecast, { runtimeCv });
+  if (outcome.status !== 'RECOMMENDED') {
+    // No fallback (P1): an explicit, stored infeasible decision with the evaluated windows.
+    return infeasible(outcome.reason, snapshot.id, {
+      status: outcome.status,
+      riskModel: outcome.riskModel,
+      runtimeCv,
+      candidateWindows: outcome.candidateWindows,
+      evaluatedPolicies: outcome.evaluatedPolicies,
+      unavailablePolicies: outcome.unavailablePolicies,
+    });
+  }
+  const result: SchedulingDecisionResponse = outcome;
 
   // 3. Wall-clock times for every window, checked against the real deadline.
   const windowTimes = (k: number): WindowTimes => {
