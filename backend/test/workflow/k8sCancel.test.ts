@@ -4,6 +4,7 @@
  * available and `apply` stays pending until the test releases it.
  */
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
@@ -11,7 +12,10 @@ const commands: string[] = [];
 let releaseApply: (() => void) | null = null;
 
 vi.mock('child_process', () => ({
-  exec: (cmd: string, cb: (err: Error | null, out?: { stdout: string; stderr: string }) => void) => {
+  // kubectl is called through execFile with an argument array (P0/F10); the test records
+  // each call as one command line for readability.
+  execFile: (file: string, args: string[], _opts: unknown, cb: (err: Error | null, out?: { stdout: string; stderr: string }) => void) => {
+    const cmd = [file, ...args].join(' ');
     commands.push(cmd);
     if (cmd.startsWith('kubectl cluster-info')) return cb(null, { stdout: 'Kubernetes control plane is running', stderr: '' });
     if (cmd.startsWith('kubectl apply')) {
@@ -26,7 +30,7 @@ vi.mock('child_process', () => ({
 import { K8sConnector } from '../../src/services/k8sConnector';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
-const manifestPath = (jobId: string) => path.join(process.cwd(), `k8s-carbonroute-${jobId}.yaml`);
+const manifestPath = (jobId: string) => path.join(os.tmpdir(), `carbonroute-carbonroute-${jobId}-${process.pid}.json`);
 
 afterEach(() => {
   for (const id of ['job-race1', 'job-race2']) if (fs.existsSync(manifestPath(id))) fs.unlinkSync(manifestPath(id));

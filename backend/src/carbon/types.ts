@@ -121,6 +121,8 @@ export type ProviderErrorCode =
   | 'UNSUPPORTED_ZONE'
   | 'INVALID_PARAMETER'
   | 'RATE_LIMITED'
+  /** CarbonRoute's own call budget for the provider is used up (F9). */
+  | 'QUOTA_GUARD'
   | 'TIMEOUT'
   | 'NETWORK'
   | 'UPSTREAM_ERROR'
@@ -145,6 +147,7 @@ export class ProviderError extends Error {
       case 'INVALID_PARAMETER':
         return 422;
       case 'RATE_LIMITED':
+      case 'QUOTA_GUARD':
         return 429;
       default:
         return 503;

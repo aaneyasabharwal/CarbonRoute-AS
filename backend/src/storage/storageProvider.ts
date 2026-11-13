@@ -23,6 +23,31 @@ export interface IStorageProvider {
   getDownloadUrl(category: string, fileName: string): Promise<string>;
 }
 
+/** The only storage categories that exist (S1 / M1.5). Anything else is rejected. */
+export const STORAGE_CATEGORIES = ['presentations', 'resources'] as const;
+export type StorageCategory = (typeof STORAGE_CATEGORIES)[number];
+
+export class StorageAccessError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StorageAccessError';
+  }
+}
+
+/**
+ * Validates a category and file name from a request (S1 / M1.5: path traversal). The
+ * category must be on the allow-list and the file name must be a single plain path segment
+ * (no separators, no "." or "..", no control characters).
+ */
+export function safeStorageRef(category: string, fileName: string): { category: StorageCategory; fileName: string } {
+  if (!(STORAGE_CATEGORIES as readonly string[]).includes(category)) throw new StorageAccessError('Unknown storage category.');
+  const name = String(fileName);
+  if (!name || name === '.' || name === '..' || /[\\/\x00-\x1f]/.test(name) || path.basename(name) !== name) {
+    throw new StorageAccessError('Invalid file name.');
+  }
+  return { category: category as StorageCategory, fileName: name };
+}
+
 export class LocalStorageProvider implements IStorageProvider {
   private baseDir: string;
 
@@ -65,9 +90,18 @@ export class LocalStorageProvider implements IStorageProvider {
     };
   }
 
+  /** Absolute path for a validated reference; also checks it stays inside the category folder. */
+  private resolvePath(category: string, fileName: string): string {
+    const ref = safeStorageRef(category, fileName);
+    const dir = path.resolve(this.baseDir, ref.category);
+    const filePath = path.resolve(dir, ref.fileName);
+    if (path.dirname(filePath) !== dir) throw new StorageAccessError('Invalid file path.');
+    return filePath;
+  }
+
   async getFileStream(category: string, fileName: string): Promise<{ stream: NodeJS.ReadableStream; mimeType?: string; fileSize?: number }> {
-    const safeFileName = path.basename(fileName);
-    const filePath = path.join(this.baseDir, category, safeFileName);
+    const filePath = this.resolvePath(category, fileName);
+    const safeFileName = path.basename(filePath);
     
     if (!fs.existsSync(filePath)) {
       throw new Error(`File not found: ${category}/${safeFileName}`);
@@ -79,8 +113,7 @@ export class LocalStorageProvider implements IStorageProvider {
   }
 
   async deleteFile(category: string, fileName: string): Promise<boolean> {
-    const safeFileName = path.basename(fileName);
-    const filePath = path.join(this.baseDir, category, safeFileName);
+    const filePath = this.resolvePath(category, fileName);
     if (fs.existsSync(filePath)) {
       await fs.promises.unlink(filePath);
       return true;
@@ -89,8 +122,8 @@ export class LocalStorageProvider implements IStorageProvider {
   }
 
   async getDownloadUrl(category: string, fileName: string): Promise<string> {
-    const safeFileName = path.basename(fileName);
-    return `/api/storage/${category}/${safeFileName}`;
+    const ref = safeStorageRef(category, fileName);
+    return `/api/storage/${ref.category}/${encodeURIComponent(ref.fileName)}`;
   }
 }
 
@@ -144,7 +177,8 @@ export class S3StorageProvider implements IStorageProvider {
   }
 
   async getFileStream(category: string, fileName: string): Promise<{ stream: NodeJS.ReadableStream; mimeType?: string; fileSize?: number }> {
-    const key = `${category}/${path.basename(fileName)}`;
+    const ref = safeStorageRef(category, fileName);
+    const key = `${ref.category}/${ref.fileName}`;
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: key,
@@ -163,7 +197,8 @@ export class S3StorageProvider implements IStorageProvider {
   }
 
   async deleteFile(category: string, fileName: string): Promise<boolean> {
-    const key = `${category}/${path.basename(fileName)}`;
+    const ref = safeStorageRef(category, fileName);
+    const key = `${ref.category}/${ref.fileName}`;
     const command = new DeleteObjectCommand({
       Bucket: this.bucket,
       Key: key,
@@ -173,7 +208,8 @@ export class S3StorageProvider implements IStorageProvider {
   }
 
   async getDownloadUrl(category: string, fileName: string): Promise<string> {
-    const key = `${category}/${path.basename(fileName)}`;
+    const ref = safeStorageRef(category, fileName);
+    const key = `${ref.category}/${ref.fileName}`;
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: key,

@@ -653,7 +653,7 @@ export const PrototypePage: React.FC = () => {
               <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
               <span>
                 {scheduleError || forecastError}
-                {scheduleError && !api.hasSession() && (
+                {(scheduleError || forecastError) && !api.hasSession() && (
                   <>
                     {' '}
                     <Link to="/admin" className="underline font-bold">

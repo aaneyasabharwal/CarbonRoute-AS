@@ -18,13 +18,13 @@ app = FastAPI(
     version="1.0.0",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# M1.9: explicit origin allow-list from CORS_ORIGIN; credentials never with a wildcard.
+try:  # run from fastapi_service/ (README) or imported as a package
+    from cors_config import cors_settings  # noqa: E402
+except ImportError:  # pragma: no cover
+    from .cors_config import cors_settings  # noqa: E402
+
+app.add_middleware(CORSMiddleware, **cors_settings(os.environ))
 
 # Models
 class JobSubmissionRequest(BaseModel):

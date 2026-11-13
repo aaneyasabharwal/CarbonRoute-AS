@@ -27,6 +27,12 @@ export const ISOLATED_ENV_VARS = [
   'ADMIN_USERNAME',
   'ADMIN_EMAIL',
   'ADMIN_PASSWORD',
+  'RATE_LIMIT_LOGIN_MAX',
+  'RATE_LIMIT_LOGIN_IP_MAX',
+  'RATE_LIMIT_JOBS_MAX',
+  'RATE_LIMIT_CARBON_MAX',
+  'CORS_ORIGIN',
+  'TRUST_PROXY',
   'CARBONROUTE_TEST_ADMIN_USERNAME',
   'CARBONROUTE_TEST_ADMIN_PASSWORD',
 ] as const;
@@ -87,6 +93,14 @@ export function createTestEnv(): TestEnv {
   process.env.ADMIN_USERNAME = '';
   process.env.ADMIN_EMAIL = '';
   process.env.ADMIN_PASSWORD = '';
+  // Rate limits (P0/F11) are generous for the functional suites; test/security/hardening.test.ts
+  // sets low limits to test them. CORS and proxy settings use the defaults.
+  process.env.RATE_LIMIT_LOGIN_MAX = '100000';
+  process.env.RATE_LIMIT_LOGIN_IP_MAX = '100000';
+  process.env.RATE_LIMIT_JOBS_MAX = '100000';
+  process.env.RATE_LIMIT_CARBON_MAX = '100000';
+  process.env.CORS_ORIGIN = '';
+  process.env.TRUST_PROXY = '';
   process.env.CARBONROUTE_TEST_ADMIN_USERNAME = admin.username;
   process.env.CARBONROUTE_TEST_ADMIN_PASSWORD = admin.password;
 

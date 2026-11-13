@@ -15,6 +15,7 @@ import { SchedulerService, WorkloadJob, SchedulingDecisionResponse } from './sch
 import { schedulingStore, SchedulingStore, StoredDecision, StoredJob, StoredObservationSet, WindowTimes } from '../models/schedulingStore';
 import { assessEmissions, evaluateForecast, hourlyIntervals, windowIntensity } from '../evaluation/forecastEvaluation';
 import { timeWeightedAverage } from '../evaluation/timeWeighting';
+import { validateWorkloadSpec } from './workloadSpec';
 
 export const ENGINE_VERSION = 'carbonroute-engine-2026-11-m5';
 const HOUR = 3600_000;
@@ -64,6 +65,11 @@ function parseIso(value: unknown, field: string): number {
 }
 
 function validate(input: ScheduleInput, now: number) {
+  try {
+    validateWorkloadSpec({ commandOrImage: input.commandOrImage, isContainerImage: input.isContainerImage });
+  } catch (err: any) {
+    throw new WorkflowError(400, err.message, 'INVALID_WORKLOAD');
+  }
   const dur = Number(input.durationHours);
   if (!Number.isInteger(dur) || dur < 1 || dur > 72) {
     throw new WorkflowError(400, 'durationHours must be a whole number of hours between 1 and 72.');

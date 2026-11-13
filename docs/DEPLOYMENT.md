@@ -77,6 +77,24 @@ Earlier versions of this repository committed a default admin password and JWT s
 
 ---
 
+### Security settings (P0 hardening)
+
+| Variable | Purpose | Production value |
+| --- | --- | --- |
+| `CORS_ORIGIN` | Browser origins allowed to call the API with credentials, comma-separated. Others get no CORS headers. The same list is used for CSP `frame-ancestors` (PDF embedding). | Every deployed frontend origin. **Required**: without it only local dev origins work. |
+| `TRUST_PROXY` | Lets the server see the client address behind a proxy, for per-address rate limits. Leave empty when not behind a proxy (prevents spoofing). | `1` on Render / behind one proxy |
+| `RATE_LIMIT_*` | Login (per account and per address), job actions and live carbon data per user. | Defaults are in `.env.example` |
+| `EM_MAX_CALLS_PER_HOUR`, `EM_MAX_CALLS_PER_DAY` | Server-wide Electricity Maps call budget. When it is used up, live data answers 429 `QUOTA_GUARD`; demo mode keeps working. | Set below the plan's limits |
+
+Other hardening:
+- Live `/api/carbon/*` data requires sign-in; `?mode=demo` (synthetic) stays public.
+- `/api/storage/:category/:file` only serves the `presentations` and `resources` folders and a single file name.
+- Kubernetes jobs: the manifest is built as an object and applied as JSON; `kubectl` is run with argument arrays (no shell); images must be valid references; pods run without privilege escalation, with all capabilities dropped and no service-account token.
+- The FastAPI service reads the same `CORS_ORIGIN` list and never combines credentials with `*`.
+- Third-party binaries are not committed (`*.exe` is git-ignored). To expose a local server with Cloudflare Tunnel, download `cloudflared` from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/.
+
+---
+
 ## 4. Docker Production Deployment
 
 Run with Docker Compose:
