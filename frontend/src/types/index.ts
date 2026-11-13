@@ -613,3 +613,21 @@ export interface BenchmarkResultDetail extends Omit<BenchmarkListItem, 'scenario
   };
   notes: string[];
 }
+
+// P5: forecast-error model evaluations
+export interface MlEvaluationListItem {
+  id: string;
+  createdAt: string;
+  status: 'insufficient-data' | 'evaluated-not-promoted' | 'evaluated-promoted';
+  dataset: { rows: number; measuredRows: number; zones: string[]; spanDays: number };
+}
+
+export interface MlEvaluation extends MlEvaluationListItem {
+  statusReasons: string[];
+  thresholds: { minTrainRows: number; minValidationRows: number; minTestRows: number; minSpanDays: number };
+  providerErrorAllRows: { all: ErrorMetricsResult; measuredOnly: ErrorMetricsResult };
+  split: { train: number; validation: number; test: number; droppedForGap: number } | null;
+  testScores: { model: string; all: ErrorMetricsResult; measuredOnly: ErrorMetricsResult }[] | null;
+  anomalies: { method: string; interpretation?: string; zones: { zone: string; rows: number; status: string; flagged: unknown[] }[] };
+  notes: string[];
+}

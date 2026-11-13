@@ -25,6 +25,7 @@ Tests use [Vitest](https://vitest.dev) with [jsdom](https://github.com/jsdom/jsd
 | `test/app/` | Smoke test: every route in `App.tsx` renders without crashing while the backend is unreachable. |
 | `test/pages/` | Pages against a stubbed backend: Prototype (scheduling workflow), My jobs (P4: list, details, explanation, comparison, observation badges, offline Oracle, cancel, sign-in / empty / error states) and Results (P4: benchmark comparison with intervals, accuracy by realized quality). |
 | `test/components/` | Observation panel, data-quality badges (measured / estimate / forecast / synthetic / assumed are never confused) and the decision explanation. |
+| `test/components/ModelEvaluationSection.test.tsx` | P5: model evaluation shown as stored; no model scores when data is insufficient. |
 | `test/support/` | `fetch` stubbing helpers. |
 
 ## Legacy tests

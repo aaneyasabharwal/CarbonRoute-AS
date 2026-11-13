@@ -61,3 +61,50 @@ export const getBenchmark = (req: AuthRequest, res: Response) => {
   const { workloads: _omit, ...rest } = r;
   return res.json({ success: true, data: { id: String(req.params.id), ...rest } });
 };
+
+// ---- P5: forecast-error model evaluations (`npm run ml`) ----
+
+const ML_ID_PATTERN = /^ml-[0-9A-Za-z-]{8,64}$/;
+
+export function mlResultsDir(): string {
+  return path.resolve(process.env.ML_RESULTS_DIR || path.join(__dirname, '..', '..', '..', '..', 'CarbonRoute-AS-data', 'ml-results'));
+}
+
+function readMl(id: string): any | null {
+  if (!ML_ID_PATTERN.test(id)) return null;
+  const file = path.join(mlResultsDir(), `${id}.json`);
+  if (path.dirname(file) !== mlResultsDir() || !fs.existsSync(file)) return null;
+  try {
+    const r = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (!r || r.kind !== 'carbonroute-ml-evaluation') return null;
+    // P5 review: never serve model scores that the pipeline could not have produced. An
+    // insufficient-data report has no fitted model, so any scores in it are not real.
+    const evaluated = r.status === 'evaluated-promoted' || r.status === 'evaluated-not-promoted';
+    if (!evaluated && (r.testScores || r.candidate || r.promotion)) return null;
+    if (evaluated && (!Array.isArray(r.testScores) || !r.candidate || !r.promotion)) return null;
+    return r;
+  } catch {
+    return null;
+  }
+}
+
+/** GET /api/results/ml: evaluations newest first (status and data inventory). */
+export const listMlEvaluations = (_req: AuthRequest, res: Response) => {
+  const dir = mlResultsDir();
+  if (!fs.existsSync(dir)) return res.json({ success: true, data: [] });
+  const items = fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith('.json') && ML_ID_PATTERN.test(f.slice(0, -5)))
+    .map((f) => ({ id: f.slice(0, -5), r: readMl(f.slice(0, -5)) }))
+    .filter((x) => x.r)
+    .map(({ id, r }) => ({ id, createdAt: r.createdAt, status: r.status, dataset: r.dataset }))
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  return res.json({ success: true, data: items });
+};
+
+/** GET /api/results/ml/:id */
+export const getMlEvaluation = (req: AuthRequest, res: Response) => {
+  const r = readMl(String(req.params.id));
+  if (!r) return res.status(404).json({ success: false, code: 'RESULT_NOT_FOUND', message: 'Model evaluation not found.' });
+  return res.json({ success: true, data: { id: String(req.params.id), ...r } });
+};

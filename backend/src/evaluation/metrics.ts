@@ -119,3 +119,60 @@ export function pairedBootstrapDiffCI(
     opts
   );
 }
+
+/**
+ * Paired CLUSTER bootstrap CI for mean(a_i - b_i) (P5 review). Rows that share a cluster id
+ * (e.g. the same target hour predicted by several forecast snapshots) are not independent, so
+ * whole clusters are resampled. A row-level bootstrap on such data gives intervals that are
+ * too narrow. `clusters` is the number of distinct clusters actually used.
+ */
+export function pairedClusterBootstrapDiffCI(
+  a: number[],
+  b: number[],
+  clusterIds: (string | number)[],
+  opts: { iterations?: number; level?: number; seed?: number } = {}
+): ConfidenceInterval & { clusters: number; method: 'percentile-bootstrap' } {
+  if (a.length !== b.length || a.length !== clusterIds.length) throw new Error('Paired samples and cluster ids must have the same length.');
+  const iterations = opts.iterations ?? 2000;
+  const level = opts.level ?? 0.95;
+  const seed = opts.seed ?? 1;
+  const groups = new Map<string, number[]>();
+  a.forEach((x, i) => {
+    const k = String(clusterIds[i]);
+    const g = groups.get(k) ?? [];
+    g.push(x - b[i]);
+    groups.set(k, g);
+  });
+  const clusters = [...groups.values()];
+  const n = a.length;
+  const estimate = mean(a.map((x, i) => x - b[i]));
+  if (clusters.length < 2) {
+    return { n, estimate, low: null, high: null, level, method: 'percentile-bootstrap', iterations, seed, clusters: clusters.length, note: 'Fewer than 2 clusters: no interval.' };
+  }
+  const rand = seededRandom(seed);
+  const means: number[] = [];
+  for (let it = 0; it < iterations; it++) {
+    let s = 0;
+    let c = 0;
+    for (let j = 0; j < clusters.length; j++) {
+      const g = clusters[Math.floor(rand() * clusters.length)];
+      for (const d of g) s += d;
+      c += g.length;
+    }
+    means.push(s / c);
+  }
+  means.sort((x, y) => x - y);
+  const alpha = (1 - level) / 2;
+  return {
+    n,
+    estimate,
+    low: percentile(means, alpha),
+    high: percentile(means, 1 - alpha),
+    level,
+    method: 'percentile-bootstrap',
+    iterations,
+    seed,
+    clusters: clusters.length,
+    ...(clusters.length < 30 ? { note: `Only ${clusters.length} independent clusters: the interval is unreliable.` } : {}),
+  };
+}
