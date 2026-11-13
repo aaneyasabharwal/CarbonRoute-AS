@@ -42,6 +42,7 @@ import {
 } from '../types';
 import { FeasibilityDemoVisualizer } from '../components/FeasibilityDemoVisualizer';
 import { CarbonObservationPanel } from '../components/CarbonObservationPanel';
+import { DecisionExplanationPanel } from '../components/DecisionExplanationPanel';
 
 /** Formats a UTC ISO time in the viewer's local time zone. */
 const formatLocal = (iso?: string | null) =>
@@ -1009,6 +1010,22 @@ export const PrototypePage: React.FC = () => {
                 </span>
               </div>
             </div>
+
+            {decision.explanation && (
+              <DecisionExplanationPanel
+                explanation={decision.explanation}
+                policyNames={Object.fromEntries(decision.evaluatedPolicies.map((p) => [p.policyId, p.policyName]))}
+              />
+            )}
+            {activeJobId && (
+              <p className="text-xs text-slate-400">
+                This job is saved. See it any time, with its report, in{' '}
+                <Link to="/jobs" className="underline font-bold">
+                  My jobs
+                </Link>
+                .
+              </p>
+            )}
 
             {decision.recommendedWindow && decision.timeline && (
               <div className="p-3 rounded-xl bg-slate-950/60 border border-emerald-500/30 text-xs font-mono text-slate-300 space-y-1">

@@ -35,6 +35,7 @@ Every file passes when run on its own (`npx vitest run <file>`), together, and i
 | `test/scheduling/` | P1 engine correctness: hand-computed policy fixtures (Immediate, EDF, Greedy, CarbonAware baseline, CarbonRoute), runtime-only deadline risk, no clamping / wrap-around / fill-in, explicit infeasibility, exact ranking, seeded invariant checks, and the offline Oracle (`engine.test.ts`). |
 | `test/benchmark/` | P2 experiments: MAE/RMSE/bias, bootstrap intervals, seeded generator, collected-dataset loading, forecast accuracy and error bands, replay benchmark (reproducibility, zero regret on a perfect forecast, unobserved windows not scored) and the collector (`benchmark.test.ts`). Datasets are code-built fixtures. |
 | `test/carbon/coverage.test.ts` | P3 global data: listed vs observed coverage, time-zone mapping, and time-zone-explicit scheduling input. |
+| `test/features/application.test.ts` | P4: decision explanations, job details for the UI (policy comparison, observation summary by quality), benchmark results API, and no orphan jobs after provider failures. |
 | `test/features/` | Tests for existing behaviour that must be preserved, plus `[legacy]` blocks for audit-flagged behaviour. |
 | `test/isolation/` | Tests proving the suite is isolated from real data and from other test files. |
 | `test/support/` | Test environment and authentication fixtures. |

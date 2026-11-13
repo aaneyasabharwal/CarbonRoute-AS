@@ -14,6 +14,8 @@ const ROUTES = [
   '/how-it-works',
   '/architecture',
   '/prototype',
+  '/jobs',
+  '/results',
   '/experiments',
   '/system-design',
   '/roadmap',

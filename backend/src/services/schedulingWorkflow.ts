@@ -17,6 +17,7 @@ import { assessEmissions, evaluateForecast, hourlyIntervals, windowIntensity } f
 import { timeWeightedAverage, parseZonedTimestamp } from '../evaluation/timeWeighting';
 import { validateWorkloadSpec } from './workloadSpec';
 import { energyAssumption } from './energyModel';
+import { explainDecision } from './explain';
 import { MAX_RUNTIME_CV } from './uncertaintyService';
 
 export const ENGINE_VERSION = 'carbonroute-engine-2026-11-p1';
@@ -140,6 +141,13 @@ export async function scheduleWorkflow(
   const zone = input.mode === 'live' ? ElectricityMapsClient.validateZone(input.zone) : String(input.zone || 'BENCHMARK-RESEARCH');
   const energy = energyAssumption(input.cpu, dur);
 
+  // P4: fetch the forecast BEFORE storing anything. If the provider fails (no key, quota,
+  // outage) the request fails and no job without a decision is left behind. A job whose
+  // deadline is impossible needs no forecast and is stored with its INFEASIBLE decision.
+  const deadlineImpossible = arrival + dur * HOUR > deadline;
+  const hoursNeeded = Math.ceil((deadline - now) / HOUR) + 1;
+  const forecast = deadlineImpossible ? null : await getForecast(zone, Math.min(72, hoursNeeded), input.mode, now);
+
   const job: StoredJob = store.addJob({
     id: input.jobId,
     ...(input.ownerId ? { ownerId: input.ownerId } : {}),
@@ -174,16 +182,14 @@ export async function scheduleWorkflow(
   };
 
   // 1. Deadline feasibility before any data is fetched: even starting at arrival is too late.
-  if (arrival + dur * HOUR > deadline) {
+  if (deadlineImpossible || !forecast) {
     return infeasible(
       `A ${dur} h job arriving at ${iso(arrival)} cannot finish before the deadline ${iso(deadline)} (earliest finish ${iso(arrival + dur * HOUR)}).`,
       null
     );
   }
 
-  // 2. Forecast covering the deadline (the smallest supported horizon, at most 72 h).
-  const hoursNeeded = Math.ceil((deadline - now) / HOUR) + 1;
-  const forecast = await getForecast(zone, Math.min(72, hoursNeeded), input.mode, now);
+  // 2. Forecast covering the deadline (fetched above; the smallest supported horizon, at most 72 h).
   const snapshot = store.addSnapshot(forecast.snapshot ?? demoSnapshot(forecast));
   const points = forecast.hourlyProfile;
   const start = Date.parse(points[0].timestamp);
@@ -224,6 +230,20 @@ export async function scheduleWorkflow(
       candidateWindows: outcome.candidateWindows,
       evaluatedPolicies: outcome.evaluatedPolicies,
       unavailablePolicies: outcome.unavailablePolicies,
+      explanation: explainDecision({
+        status: outcome.status,
+        reason: outcome.reason,
+        riskModel: outcome.riskModel,
+        runtimeCv: outcome.runtimeCv,
+        riskTolerance: tau,
+        deadlineHours: deadlineHoursFromStart,
+        durationHours: dur,
+        candidateWindows: outcome.candidateWindows,
+        evaluatedPolicies: outcome.evaluatedPolicies,
+        unavailablePolicies: outcome.unavailablePolicies,
+        recommendedDecision: null,
+        deadlineLabel: `${iso(deadline).slice(0, 16).replace('T', ' ')} UTC`,
+      }),
     });
   }
   const result: SchedulingDecisionResponse = outcome;
@@ -256,6 +276,30 @@ export async function scheduleWorkflow(
     return { ...c, startUtc: w.startUtc, endUtc: w.endUtc };
   });
   const rec = policies.find((p) => p.policyId === result.recommendedDecision.policyId)!;
+
+  // P4 review: the explanation quotes the SAME values the decision shows (time-weighted forecast
+  // over each policy's wall-clock window, and the deadline in UTC), not hourly-slot averages,
+  // so its numbers match the policy comparison exactly.
+  const utc = (ms: number) => `${iso(ms).slice(0, 16).replace('T', ' ')} UTC`;
+  const asShown = (p: (typeof policies)[number]) => ({
+    ...p,
+    predictedCarbonIntensity: p.forecastIntensityTimeWeighted ?? p.predictedCarbonIntensity,
+    selectedWindow: `${utc(Date.parse(p.selectedStartUtc))} to ${utc(Date.parse(p.selectedEndUtc))}`,
+  });
+  const explanation = explainDecision({
+    status: 'RECOMMENDED',
+    riskModel: result.riskModel,
+    runtimeCv: result.runtimeCv,
+    riskTolerance: tau,
+    deadlineHours: deadlineHoursFromStart,
+    durationHours: dur,
+    candidateWindows: result.candidateWindows,
+    evaluatedPolicies: policies.map(asShown),
+    unavailablePolicies: result.unavailablePolicies,
+    recommendedDecision: asShown(rec),
+    deadlineLabel: utc(deadline),
+    intensityBasis: 'forecast, time-weighted over each window as scheduled (UTC); the same values as the policy comparison',
+  });
   if (!rec.meetsDeadline) {
     // Should be impossible by construction; never return an infeasible recommendation.
     throw new WorkflowError(500, 'Internal error: the recommended window does not meet the deadline.');
@@ -266,6 +310,7 @@ export async function scheduleWorkflow(
 
   const response = {
     ...result,
+    explanation,
     status: 'RECOMMENDED' as const,
     job: { ...engineJob, ...job },
     evaluatedPolicies: policies,

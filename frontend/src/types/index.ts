@@ -384,6 +384,8 @@ export interface SchedulingDecisionResponse {
   riskModel?: 'deterministic' | 'declared-runtime-cv';
   runtimeCv?: number;
   unavailablePolicies?: { policyId: string; policyName: string; reason: string }[];
+  /** P4: structured explanation stored with the decision. */
+  explanation?: DecisionExplanation;
   recommendedWindow?: { startUtc: string; endUtc: string };
   timeline?: {
     arrivalAt: string;
@@ -466,4 +468,148 @@ export interface ApiResponse<T> {
   user?: User;
   /** True when the backend answered 401: the user must sign in (again). */
   authRequired?: boolean;
+}
+
+// ==========================================
+// P4: job management, explanations, results
+// ==========================================
+export type JobStatus = 'pending' | 'scheduled' | 'infeasible' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface JobSummary {
+  id: string;
+  name: string | null;
+  zone: string | null;
+  createdAt: string | null;
+  status: JobStatus;
+  ownerId: string | null;
+  owner?: string | null;
+  latestDecision: { id: string; status: 'RECOMMENDED' | 'INFEASIBLE'; createdAt: string; dataMode: 'live' | 'demo'; recommendedWindow: { startUtc: string; endUtc: string } | null } | null;
+  cancelledAt: string | null;
+}
+
+export interface DecisionExplanation {
+  objective: string;
+  constraints: { name: string; value: string }[];
+  candidates: { total: number; feasible: number; rejectedHighRisk: number; rejectedDataGap: number };
+  bindingConstraint: 'none' | 'risk-tolerance' | 'deadline' | 'data-gaps';
+  summary: string;
+  policies: { policyId: string; relation: string }[];
+  unavailable: { policyId: string; policyName: string; reason: string }[];
+}
+
+export interface StoredPolicyRow {
+  policyId: string;
+  policyName: string;
+  category: string;
+  selectedStartUtc: string | null;
+  selectedEndUtc: string | null;
+  selectedWindow: string;
+  forecastIntensity: number | null;
+  estimatedEmissionsAssumedEnergyGrams: number | null;
+  estimatedDeadlineRisk: number | null;
+  waitingTimeHours: number | null;
+  isFeasible: boolean;
+  equivalentTo: string | null;
+  recommended: boolean;
+}
+
+export interface ObservationSummary {
+  status: string;
+  statusDetail: string;
+  collectedAt: string;
+  intervals: number;
+  measured: number;
+  providerEstimate: number;
+  missing: number;
+  attempts: number;
+}
+
+export interface JobDetails extends JobSummary {
+  job: Record<string, unknown>;
+  decision: {
+    id: string;
+    status: 'RECOMMENDED' | 'INFEASIBLE';
+    createdAt: string;
+    engineVersion: string;
+    dataMode: 'live' | 'demo';
+    dataClass: 'real' | 'synthetic';
+    snapshotId: string | null;
+    recommendedWindow: { startUtc: string; endUtc: string } | null;
+    immediateWindow: { startUtc: string; endUtc: string } | null;
+    infeasibilityReason: string | null;
+    riskModel: string | null;
+    runtimeCv: number;
+    provenance: { provider: string; dataClass: string; zone: string; fetchedAt: string; issuedAt: string | null } | null;
+    energyAssumption: { powerKw: number; energyKwh: number; basis: string };
+    explanation: DecisionExplanation | null;
+    policies: StoredPolicyRow[];
+    unavailablePolicies: { policyId: string; policyName: string; reason: string }[];
+    candidateCount: number;
+  } | null;
+  execution: { executionMode: string; scheduledStartUtc: string; scheduledEndUtc: string; dispatchedAt: string; note: string } | null;
+  observations: ObservationSummary | null;
+}
+
+export interface OracleEvaluation {
+  status: string;
+  offlineOnly: true;
+  reason?: string;
+  candidatesEvaluated?: number;
+  candidatesFullyCovered?: number;
+  oracleWindow?: { startUtc: string; endUtc: string; realizedIntensity: number } | null;
+  policies?: { policyId: string; realizedIntensity: number | null; regretGramsPerKwh: number | null }[];
+  basis?: string;
+}
+
+export interface ConfidenceIntervalResult {
+  n: number;
+  estimate: number | null;
+  low: number | null;
+  high: number | null;
+  level: number;
+  note?: string;
+}
+
+export interface BenchmarkPolicySummary {
+  policyId: string;
+  decisions: number;
+  scored: number;
+  meanRealizedIntensity: number | null;
+  meanForecastIntensity: number | null;
+  meanEstimatedEmissionsGrams: number | null;
+  meanDelayHours: number | null;
+  deadlineViolationRate: number | null;
+  meanRegretVsOracle: number | null;
+  realizedIntensityCI: ConfidenceIntervalResult;
+  diffVsImmediateCI: ConfidenceIntervalResult;
+}
+
+export interface ErrorMetricsResult {
+  n: number;
+  mae: number | null;
+  rmse: number | null;
+  bias: number | null;
+}
+
+export interface BenchmarkListItem {
+  id: string;
+  createdAt: string;
+  gitCommit: string | null;
+  dataClass: string;
+  dataset: { zones: string[]; snapshots: number; realizedIntervals: number; measuredShare: number | null };
+  seed: number;
+  workloadsPerSnapshot: number;
+  scenarios: { runtimeCv: number; workloads: number; pendingRealized: number }[];
+}
+
+export interface BenchmarkResultDetail extends Omit<BenchmarkListItem, 'scenarios'> {
+  configSha256: string;
+  dataset: BenchmarkListItem['dataset'] & { sha256: string };
+  scenarios: { runtimeCv: number; workloads: number; infeasible: number; pendingRealized: number; oracleAvailable: number; policies: BenchmarkPolicySummary[] }[];
+  accuracy?: {
+    zones: { zone: string; snapshots: number; pairs: number; all: ErrorMetricsResult; measuredOnly: ErrorMetricsResult; estimatedOnly: ErrorMetricsResult }[];
+    overall: ErrorMetricsResult;
+    measuredOnly: ErrorMetricsResult;
+  };
+  notes: string[];
 }

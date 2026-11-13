@@ -35,7 +35,7 @@ export function renderSummary(result: BenchmarkResult & { gitCommit: string | nu
   }
   for (const s of result.scenarios) {
     lines.push('', `## Policies, declared runtime CV ${s.runtimeCv}`, '');
-    lines.push(`Workloads ${s.workloads}; infeasible ${s.infeasible}; not yet fully observed ${s.pendingRealized}; oracle available ${s.oracleAvailable}.`, '');
+    lines.push(`Workloads ${s.workloads}; infeasible ${s.infeasible}; with at least one policy window not yet fully observed ${s.pendingRealized} (those windows are not scored; see Scored per policy); oracle available ${s.oracleAvailable}.`, '');
     lines.push('| Policy | Decisions | Scored | Mean realized intensity [95% CI] | Δ vs Immediate [95% CI] | Mean delay h | Violation rate | Regret vs oracle | Est. emissions g (assumed energy) |', '|---|---|---|---|---|---|---|---|---|');
     for (const p of s.policies) {
       const ci = p.realizedIntensityCI;

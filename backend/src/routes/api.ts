@@ -54,6 +54,7 @@ import {
 } from '../controllers/prototypeController';
 import { requireJobAccess } from '../services/jobAccess';
 import { buildRateLimiters } from '../middleware/rateLimit';
+import { listBenchmarks, getBenchmark } from '../controllers/resultsController';
 import type { Request, Response, NextFunction } from 'express';
 import { authenticateToken, requireAdmin, requireTeamMemberOrAdmin, optionalAuth } from '../middleware/auth';
 import { uploadMiddleware } from '../middleware/upload';
@@ -168,6 +169,10 @@ router.get('/cluster/health', getClusterHealth);
 
 router.post('/experiments', authenticateToken, limit.jobWrites, recordExperiment);
 router.get('/experiments', authenticateToken, getExperiments);
+
+// Historical experiment results (P4): benchmark runs from `npm run benchmark`.
+router.get('/results/benchmarks', authenticateToken, listBenchmarks);
+router.get('/results/benchmarks/:id', authenticateToken, getBenchmark);
 
 // Audit Logs (Admin only)
 router.get('/admin/audit-logs', authenticateToken, requireAdmin, (_req, res) => {
