@@ -26,6 +26,32 @@ npm run collect -- --out ../../CarbonRoute-AS-data/em-collection --zones DE,GB,U
   never touches the `.jsonl` files. The collector started on 2026-11-13 (pid 18848) is a wrapper
   script that predates the lock, so check the process list before starting `npm run collect`.
 
+### Lock limitations (P7 review) and recovery
+
+- **Simultaneous starts.** If two collectors are started at the same instant while a *stale* lock
+  exists, both can remove it and both can start. The lock protects against an accidental second
+  start, not against two starts in the same millisecond. Start collectors one at a time.
+- **Reused process ids (Windows).** Liveness is checked by process id. If the collector died and
+  Windows later gave its id to an unrelated process, the lock looks live and the collector refuses
+  to start (exit code 3, message names the pid). It never starts a second writer by mistake; it
+  errs towards not collecting.
+- **Release.** The lock is removed on normal completion and on Ctrl-C. Any other stop (closing the
+  window, `kill`, sleep, crash) leaves it behind; the next start replaces it if that process is gone.
+- **Wrapper collectors** that do not use `npm run collect` ignore the lock.
+
+Recovery when a start is refused (exit code 3):
+
+1. Read the pid and start time in the message (or in `<out>/.collector.lock`).
+2. Check whether that process is a collector:
+   ```powershell
+   Get-CimInstance Win32_Process -Filter "ProcessId=<pid>" | Select-Object ProcessId, Name, CommandLine, CreationDate
+   ```
+3. If it **is** a running collector: do nothing; collection is already happening.
+4. If it is **not** a collector (another program, or nothing): delete only the lock file,
+   `Remove-Item <out>.collector.lock`, and start the collector again. Never delete or edit the
+   `.jsonl` files.
+5. After the first run, check with `npm run coverage` that records were appended and none failed.
+
 ## Checking that it is healthy
 
 1. Exactly one collector process is running (two would double-count calls and interleave lines):

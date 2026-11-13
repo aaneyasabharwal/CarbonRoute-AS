@@ -51,8 +51,10 @@ deployed; requires approval), browsers other than the test environment's DOM.
 
 | Severity | Item | Notes |
 |---|---|---|
-| **High (live)** | The hosted backend `https://carbonroute.onrender.com` runs **pre-remediation code**: it reflected an arbitrary `Origin` (`https://evil.example`) with `Access-Control-Allow-Credentials: true`, and none of the remediated routes exist (`/api/jobs`, `/api/results/*` answer 404). Earlier versions also had a committed default admin password and JWT secrets. | Observed 2026-11-13 19:28 UTC with `GET /api/health`. Fixing requires deploying the remediated backend with new secrets (DEPLOYMENT.md §5); not done without approval. The hosted Pages frontend (from `main`) is also the old version. |
+| ~~High (live)~~ **contained**, replacement pending | The old hosted backend `https://carbonroute.onrender.com` ran **pre-remediation code**: it reflected an arbitrary `Origin` (`https://evil.example`) with `Access-Control-Allow-Credentials: true` (observed 2026-11-13 19:28 and 20:00 UTC), remediated routes answered 404, and that code version used the committed default admin password and JWT secrets. | **Suspended manually by the service owner** (not deleted). **Externally verified 2026-11-13 20:35 UTC:** `/`, `/api/health`, `/api/auth/login` (GET and POST) and `/api/presentations` return 503 with `x-render-routing: suspend-by-user` and no CORS headers. The old secrets are still in git history and must not be reused. The secured replacement is not deployed (DEPLOYMENT_READINESS.md). The public Pages site (from `main`) is the old version and now has no working backend. |
 | ~~Medium~~ fixed in P7 | GitHub Pages base path was hard-coded to `/CarbonRoute/`; on this repository (`CarbonRoute-AS`) every asset and route would break. | Now derived from the repository name; production build served under `/CarbonRoute-AS/` and checked in a browser (P7). |
+| **Medium (deployment blocker, not fixed)** | `.github/workflows/deploy-pages.yml` does not set `VITE_API_URL`, so a Pages build falls back to the hard-coded `https://carbonroute.onrender.com` (`frontend/src/services/api.ts`), the suspended backend. | Must be fixed before any merge to `main` (DEPLOYMENT_READINESS.md B7). |
+| Low | Collector lock: two collectors started at the same instant while a stale lock exists could both start; on Windows a reused process id can make a stale lock look live (the collector then refuses to start); only Ctrl-C releases the lock early. | Recovery procedure in COLLECTOR.md. |
 | Medium | Session token in `localStorage` (exposed to any XSS). | Roadmap M14.7 (httpOnly cookie). CSP reduces but does not remove the risk. |
 | Medium | JSON-file storage, single process; rate limits, provider budget and caches in memory. | Not suitable for multiple instances or concurrent writers. Ephemeral disks lose data. |
 | Medium | Older databases may contain orphan "pending" jobs created before the P4 fix. | Cosmetic in the job list. |
@@ -97,7 +99,8 @@ Docker/compose configuration (built and smoke-tested in CI from P7, never run lo
 deadline-risk model (not calibrated).
 
 **3. Partially implemented**
-Deployment (configuration documented, hosted services still run the old code); risk calibration
+Deployment (configuration documented; old hosted backend suspended and verified unavailable;
+secured replacement not deployed; Pages `VITE_API_URL` not configured); risk calibration
 (formula and declared CV only); forecast uncertainty (error bands gated on data); execution
 (simulated path complete, real path untested, no scheduled start).
 
@@ -123,3 +126,8 @@ deployment of the remediated system; merge of `fix/prototype-flaws` into `main`.
   typecheck, **97 tests**, build and Pages build (assets under `/CarbonRoute-AS/`); Python 5 tests. The
   30-check end-to-end API run was not repeated for P7 (no backend request path changed). Docker job:
   see the P7 PR's CI.
+- **Containment (2026-11-13):** the old Render service was suspended manually by its owner and
+  verified unavailable from outside at 20:35 UTC (503, `x-render-routing: suspend-by-user`, no CORS
+  headers). Nothing else on Render was changed; no service or disk was created; no credential was
+  rotated. Open deployment blockers, including the unconfigured Pages `VITE_API_URL`, are in
+  [DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md).
