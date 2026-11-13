@@ -143,12 +143,16 @@ export class PreparedTraceDataProvider implements ICarbonDataProvider {
 
   public async getForecast(
     region: string = 'BENCHMARK-RESEARCH',
-    horizonHours: number = 24
+    horizonHours: number = 24,
+    nowMs: number = Date.now()
   ): Promise<CarbonForecastData> {
     const validHorizon = Math.max(1, Math.min(48, Number(horizonHours) || 24));
     const selectedRegion = REGIONAL_PROFILES[region] ? region : 'BENCHMARK-RESEARCH';
     const profile = REGIONAL_PROFILES[selectedRegion];
-    const now = new Date();
+    // P3 / M5.4: the synthetic trace starts at the beginning of the current UTC hour (like the
+    // provider's hourly forecasts), so identical requests in the same hour give identical
+    // timestamps and decisions.
+    const now = new Date(Math.floor(nowMs / 3600000) * 3600000);
 
     const hourlyProfile: HourlyCarbonPoint[] = [];
     for (let idx = 0; idx < validHorizon; idx++) {
@@ -302,8 +306,10 @@ export class CarbonService {
   public static async getForecast(
     region: string = 'US-CAL-CISO',
     horizonHours: number = 24,
-    mode: 'live' | 'demo' = 'live'
+    mode: 'live' | 'demo' = 'live',
+    nowMs?: number
   ): Promise<CarbonForecastData> {
+    if (mode === 'demo') return await new PreparedTraceDataProvider().getForecast(region, horizonHours, nowMs);
     const provider = this.getProvider(mode);
     return await provider.getForecast(region, horizonHours);
   }

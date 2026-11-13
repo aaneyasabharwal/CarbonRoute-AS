@@ -39,6 +39,13 @@ In the 24-hour history, values are either measurements (`isEstimated: false`) or
 
 CarbonRoute never labels an estimate as measured. A history point without an explicit `isEstimated: false` is treated as an estimate.
 
+## Coverage and data quality (P3)
+
+- `npm run coverage -- --data <collection dir> [--zones-file <listing.json> | --live]` reports what the zone listing **lists** for this key and what collection actually **observed** per zone (forecast snapshots, points per forecast, realized hours, gaps, measured share). Listed access is not proof of entitlement: `past-range` is listed for no zone and was refused when probed.
+- Observed on 2026-11-13 (first collection run, last 24 h of history): measured share DE 0.75, FR 0.958, GB 0, IN-NO 0.208, US-CAL-CISO 1.0. Where the share is low, "realized" values are mostly provider estimates, and accuracy figures for that zone compare a forecast with an estimate, not a measurement.
+- The zone listing also lists `price-day-ahead` endpoints for these zones. They are not used: calling them was not part of the approved data collection, and whether the trial plan actually serves them has not been verified. They are the candidate data source for the cost-aware policy (dependency D7).
+- Time zones: all data is stored and compared in UTC; the curated zone-to-IANA mapping is used only for display, and zones without a reliable mapping are shown in UTC. Scheduling inputs (`deadlineAt`, `arrivalAt`) must carry an explicit time zone (`Z` or `±hh:mm`); a time without one is rejected (400) rather than read in the server's time zone.
+
 ## How CarbonRoute uses the data
 
 - **Forecasts** are stored as snapshots: exact points, issue time (`updatedAt`), fetch time, horizon, granularity, emission-factor type, endpoint and the SHA-256 of the raw response. Scheduling uses the smallest supported horizon that covers the deadline (at most 72 h).
