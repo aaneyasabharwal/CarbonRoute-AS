@@ -10,7 +10,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "admin:set-password": "node dist/scripts/setAdminPassword.js",
-    "user:create": "node dist/scripts/createUser.js"
+    "user:create": "node dist/scripts/createUser.js",
+    "benchmark": "node dist/scripts/runBenchmark.js",
+    "collect": "node dist/scripts/collectElectricityMaps.js"
   },
   "keywords": [
     "carbon-aware",
