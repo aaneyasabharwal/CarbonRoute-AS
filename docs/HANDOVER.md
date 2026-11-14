@@ -10,19 +10,22 @@ Secrets are never written here; only variable names. Companion documents:
 | Item | Value |
 |---|---|
 | Integration branch | `fix/prototype-flaws` (PRs #14–#28 merged; see §2); CI green |
-| `main` | `80b411a`, untouched (the original prototype) |
-| Public website | **https://carbonroute-staging-web.onrender.com** (Render static site, free) |
+| `main` | `82f36c5` (PR #29, 2026-11-14, owner-approved: `fix/prototype-flaws` merged into `main`; the original prototype is `80b411a`) |
+| Public website (GitHub Pages) | **https://aaneyasabharwal.github.io/CarbonRoute-AS/** (built from `main` by the Pages workflow) |
+| Public website (Render) | **https://carbonroute-staging-web.onrender.com** (Render static site, built from `fix/prototype-flaws`) |
 | Public API | **https://carbonroute-staging-api.onrender.com** (Render Free web service; health `/api/health`) |
 | Hosting cost | **₹0**: Hobby workspace, no card on file, Free plan (Render can only suspend, never charge) |
 | Old backend `carbonroute.onrender.com` | suspended (503), untouched |
-| GitHub Pages | disabled (production later, from `main`) |
+| GitHub Pages | enabled (Source: GitHub Actions); repository variable `VITE_API_URL` = the Render API URL; deploys on every push to `main` that changes `frontend/` (or Actions › Deploy Frontend to GitHub Pages › Run workflow) |
+| Both websites | use the **same** API, so accounts and jobs are shared; the API's `CORS_ORIGIN` lists both origins |
 
 ## 2. Pull requests
 
 #14 P6 delivery · #15 P7 stabilisation · #16 security · #17 backend URL / Pages build · #18 job
 lifecycle · #19 exact deadline instants · #20 research report · #21 Dashboard · #22 Account page ·
 #23 docs · #24 Experiments page · #25 staging readiness · #26 free public demo · **#27 global zone
-catalogue, responsive navigation, research rerun** · **#28 submission documentation**.
+catalogue, responsive navigation, research rerun** · **#28 submission documentation** · **#29 release
+to `main`** (GitHub Pages) · #30–#31 documentation of the Pages deployment.
 
 ## 3. Final verification (details: VALIDATION_REPORT.md)
 
@@ -82,9 +85,9 @@ catalogue, responsive navigation, research rerun** · **#28 submission documenta
 
 | Item | Location / state (2026-11-14 14:47 UTC) |
 |---|---|
-| Collector | pid 3304 (lock port 26554), approved 25-run plan, 24 runs / 240 records / 0 failed; last run ~15:32 UTC, then it stops by itself. Hours 08:07–12:32 UTC were missed (computer asleep). **Restarting for 7 days needs the owner's approval** ([COLLECTOR.md](COLLECTOR.md)); never start a second collector or edit the JSONL files. |
-| Raw collection | `../CarbonRoute-AS-data/em-collection/collection-2026-11-13.jsonl` (complete, SHA-256 `397ebd6a…`), `collection-2026-11-14.jsonl` |
-| Backups / snapshots | `../CarbonRoute-AS-data/backups/` (13 Nov verified), `../CarbonRoute-AS-data/snapshots/collection-2026-11-14T1440Z/` (frozen input of the latest results) |
+| Collector | **finished** the approved 25-run plan on 2026-11-14 15:32 UTC (exit 0, lock released; not running). 25 runs, 250 records, 0 failed, 0 unparseable. Hours 08:07–12:32 UTC on 14 Nov were missed (computer asleep). **Starting a new collection period (e.g. 7 days) needs the owner's approval** ([COLLECTOR.md](COLLECTOR.md)); never run two collectors or edit the JSONL files. |
+| Raw collection | `../CarbonRoute-AS-data/em-collection/collection-2026-11-13.jsonl` (complete, SHA-256 `397ebd6a…`), `collection-2026-11-14.jsonl` (complete, SHA-256 `44961168…`) |
+| Backups / snapshots | `../CarbonRoute-AS-data/backups/` (13 Nov and 14 Nov complete files, checksums verified), `../CarbonRoute-AS-data/snapshots/collection-2026-11-14T1440Z/` (frozen input of the latest results) |
 | Results | `../CarbonRoute-AS-data/{benchmark-results,ml-results,reports}`; published copies in `results/published/` |
 
 ## 8. Running locally
@@ -112,11 +115,20 @@ Research: see `results/published/README.md` (frozen snapshot → benchmark → m
 - Free demo: no live data (no key, by design), no persistence, cold starts.
 - Live data verified for 7 of 351 zones.
 
-## 10. Before merging into `main` (owner decisions)
+## 10. GitHub Pages deployment (done 2026-11-14) and next steps
 
-1. Decide the production backend (persistent storage; new secrets; never the old service).
-2. Merge `fix/prototype-flaws` → `main` via a reviewed PR; enable Pages (Source: GitHub Actions);
-   set the repository variable `VITE_API_URL`; add `https://aaneyasabharwal.github.io` to the
-   production API's `CORS_ORIGIN`.
-3. Run `scripts/staging-check.mjs` against production; keep the old service suspended until its
-   settings are recorded, then delete it.
+Done: Pages enabled (Source: GitHub Actions); repository variable `VITE_API_URL` set to
+`https://carbonroute-staging-api.onrender.com`; the API's `CORS_ORIGIN` lists
+`https://carbonroute-staging-web.onrender.com,https://aaneyasabharwal.github.io`; PR #29 merged
+`fix/prototype-flaws` into `main` (`82f36c5`); the Pages workflow deployed it. Verified: site and
+bundle load, the bundle uses the Render API and not the retired host, base path `/CarbonRoute-AS/`,
+CORS allows the Pages origin, the Dashboard shows backend data, the Prototype lists 351 zones.
+Deep links (e.g. `/CarbonRoute-AS/dashboard`) are served through `404.html`, the usual GitHub Pages
+single-page-app fallback, so the browser reports HTTP 404 for the page while it works normally.
+
+Keeping both websites in step: Render builds `fix/prototype-flaws`, Pages builds `main`. After a
+change, merge it into both branches and deploy both (Render: Manual Deploy).
+
+Next (owner decisions): a persistent backend for production (storage, new secrets, never the old
+service); then point `VITE_API_URL` and `CORS_ORIGIN` at it and rerun `scripts/staging-check.mjs`;
+keep the old service suspended until its settings are recorded, then delete it.
