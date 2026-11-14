@@ -5,7 +5,7 @@ import { CarbonService } from '../services/carbonService';
 import { WorkloadJob } from '../services/schedulerService';
 import { scheduleWorkflow, collectObservations, evaluateJob, WorkflowError } from '../services/schedulingWorkflow';
 import { buildReport, renderReportHtml } from '../services/reportService';
-import { schedulingStore } from '../models/schedulingStore';
+import { schedulingStore, FINAL_EXECUTION_STATUSES } from '../models/schedulingStore';
 import { electricityMaps } from '../carbon/electricityMaps';
 import { ProviderError } from '../carbon/types';
 import { K8sConnector } from '../services/k8sConnector';
@@ -109,6 +109,11 @@ export const submitJob = (req: AuthRequest, res: Response) => {
   }
 };
 
+// P8: every execution status change is persisted with the job's latest stored execution.
+K8sConnector.onStatusChange((jobId, status, at) => {
+  schedulingStore().updateExecutionStatus(jobId, status, at);
+});
+
 /** Maps a thrown error to an HTTP status and message without exposing internals. */
 function sendError(res: Response, error: any, fallbackStatus = 500) {
   const status =
@@ -190,15 +195,49 @@ export const scheduleJob = async (req: AuthRequest, res: Response) => {
     return sendError(res, error, 503);
   }
 };
+/**
+ * Jobs whose dispatch is in progress (P8 review). The executor registers a run only after an
+ * asynchronous cluster probe, so without this two concurrent requests could both pass the
+ * "already dispatched" check and start two runs.
+ */
+const dispatchesInProgress = new Set<string>();
+
 export const dispatchJobToExecution = async (req: JobRequest, res: Response) => {
+  const jobId = req.job!.id;
+  if (dispatchesInProgress.has(jobId)) {
+    return res.status(409).json({ success: false, code: 'JOB_ALREADY_DISPATCHED', message: 'This job is already being dispatched.' });
+  }
+  dispatchesInProgress.add(jobId);
   try {
     const ref = req.job!;
-    const jobId = ref.id;
     if (ref.cancelled) return res.status(409).json(JOB_CANCELLED);
     auditAdminOverride(req.user!, ref, 'dispatched');
     const job: any = jobAsWorkload(ref);
     const decision = schedulingStore().latestDecisionForJob(jobId);
     const recommended = decision?.status === 'RECOMMENDED' ? decision.result?.recommendedDecision : null;
+    // P8: only a job with a recommended window can be dispatched, and only once (a failed or
+    // interrupted run may be dispatched again).
+    if (!decision || decision.status !== 'RECOMMENDED' || !decision.recommendedWindow) {
+      return res.status(409).json({
+        success: false,
+        code: 'NO_RECOMMENDATION',
+        message: 'This job has no recommended execution window (not scheduled yet, or its decision was infeasible). Schedule it first.',
+      });
+    }
+    const current = jobStatus(ref);
+    if (current === 'scheduled' && K8sConnector.getJobExecution(jobId)) {
+      return res.status(409).json({ success: false, code: 'JOB_ALREADY_DISPATCHED', message: 'This job has already been dispatched and is waiting to run.' });
+    }
+    if (current === 'running' || current === 'completed') {
+      return res.status(409).json({ success: false, code: 'JOB_ALREADY_DISPATCHED', message: `This job has already been dispatched (${current}).` });
+    }
+    // An earlier stored run that is not finished and has no live executor (cut off by a restart, or
+    // written before statuses were stored) is closed as 'interrupted' before the new run starts, so
+    // the new run's status updates cannot be recorded on it.
+    const previous = schedulingStore().latestExecutionForJob(jobId);
+    if (previous && !(previous.status && FINAL_EXECUTION_STATUSES.includes(previous.status))) {
+      schedulingStore().updateExecutionStatus(jobId, 'interrupted');
+    }
     const { simulatedDurationSec = 6 } = req.body || {};
     const predictedCarbon = Number(recommended?.predictedCarbonIntensity ?? req.body?.predictedCarbon ?? 0);
 
@@ -222,6 +261,8 @@ export const dispatchJobToExecution = async (req: JobRequest, res: Response) => 
         scheduledStartUtc: decision.recommendedWindow.startUtc,
         scheduledEndUtc: decision.recommendedWindow.endUtc,
         dispatchedAt: new Date().toISOString(),
+        status: executionRecord.status,
+        statusUpdatedAt: new Date().toISOString(),
         note:
           executionRecord.clusterMode === 'minikube'
             ? 'Submitted to the connected Kubernetes cluster at dispatch time.'
@@ -236,6 +277,8 @@ export const dispatchJobToExecution = async (req: JobRequest, res: Response) => 
     });
   } catch (error: any) {
     return sendError(res, error);
+  } finally {
+    dispatchesInProgress.delete(jobId);
   }
 };
 
@@ -643,9 +686,10 @@ export const cancelJob = async (req: JobRequest, res: Response) => {
     const ref = req.job!;
     const user = req.user!;
     if (ref.cancelled) return res.status(409).json({ success: false, code: 'JOB_ALREADY_CANCELLED', message: 'This job is already cancelled.' });
-    const execution = K8sConnector.getJobExecution(ref.id);
-    if (execution && (execution.status === 'completed' || execution.status === 'failed')) {
-      return res.status(409).json({ success: false, code: 'JOB_FINISHED', message: `The job has already ${execution.status}; it cannot be cancelled.` });
+    // P8: also after a restart (persisted status), a finished job cannot be cancelled.
+    const finished = jobStatus(ref);
+    if (finished === 'completed' || finished === 'failed') {
+      return res.status(409).json({ success: false, code: 'JOB_FINISHED', message: `The job has already ${finished}; it cannot be cancelled.` });
     }
     auditAdminOverride(user, ref, 'cancelled');
     await K8sConnector.cancelExecution(ref.id, user.username);

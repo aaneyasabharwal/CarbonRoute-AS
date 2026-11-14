@@ -473,7 +473,8 @@ export interface ApiResponse<T> {
 // ==========================================
 // P4: job management, explanations, results
 // ==========================================
-export type JobStatus = 'pending' | 'scheduled' | 'infeasible' | 'running' | 'completed' | 'failed' | 'cancelled';
+/** 'interrupted' (P8): the server stopped before a dispatched run finished; its outcome is unknown. */
+export type JobStatus = 'pending' | 'scheduled' | 'infeasible' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
 
 export interface JobSummary {
   id: string;
