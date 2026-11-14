@@ -54,6 +54,13 @@ forecast with another model's estimate.
 
 ## 5. Results
 
+> **Latest run (2026-11-14, frozen snapshot of 1.00 day, 115 snapshots, dataset `0e9b960c6b21`):**
+> CarbonRoute vs Immediate at runtime CV 0.2: −25.16 [−33.60, −16.86] gCO2eq/kWh; simulated
+> deadline violations 0.8 % (Greedy 20.0 %, Immediate 4.2 %). **Not statistically conclusive**
+> (1 day < 7). ML: insufficient data, no model trained. Full tables: RESEARCH_REPORT.md §7 and
+> `results/published/reports/research-report-2026-11-14T14-30-03-628Z.md`. The subsections below
+> describe the earlier 0.40-day sample (2026-11-13 23:48 UTC) and are kept for comparison.
+
 ### 5.1 Forecast accuracy (forecast − realized, gCO2eq/kWh, 70 pairs per zone)
 
 | Zone | MAE | RMSE | Bias | MAE vs measured only (n) |

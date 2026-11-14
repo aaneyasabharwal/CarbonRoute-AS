@@ -133,6 +133,8 @@ A scheduling request that fails before a decision exists (e.g. the provider is u
 
 ### Carbon data and limits (P0)
 - Live `/carbon/*` routes (`forecast`, `forecast/snapshot`, `latest`, `history`, `power-breakdown`, `regions`) spend the Electricity Maps quota: they require a token (401 otherwise) and are rate limited per user. With `?mode=demo` (synthetic data) `forecast` and `regions` are public. `GET /carbon/provider` is public and shows the server-wide `callBudget` (no secrets).
+- `GET /carbon/catalogue` (P11, public, static, rate limited per address; no provider call): `{ meta, liveConfigured, zones[] }` with all 351 zones of the global catalogue (zone, name, country, continent, area, IANA `timezone` or null, parent/sub-zones, tier, `providerListed`, `verifiedLive`, `syntheticDemo`, `flags`). See GLOBAL_ZONES.md.
+- Demo data (`?mode=demo`) for a zone without a synthetic profile answers **422** `INVALID_PARAMETER` with the zones that have one (P11: no silent substitution).
 - **429** `{ "code": "RATE_LIMITED" }` with `Retry-After`: too many login attempts (per account and per address), job actions or live-data requests. **429** `{ "code": "QUOTA_GUARD" }`: the server's provider call budget is used up.
 - Job images must be valid image references and commands may not contain control characters (400 `INVALID_WORKLOAD`).
 

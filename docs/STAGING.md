@@ -5,6 +5,11 @@ old suspended Render service (`carbonroute.onrender.com`) or the research data. 
 prepared and rehearsed; **nothing has been created yet**: creating the services needs the owner's
 Render account.
 
+> **Deployed 2026-11-14 (option B, Render Free, no persistence):** website
+> https://carbonroute-staging-web.onrender.com, API https://carbonroute-staging-api.onrender.com,
+> created by the owner from `render.yaml`; no card on file. Latest deploy: PR #27 (`2152b01`) by
+> Manual Deploy. Verification: VALIDATION_REPORT.md §4.
+>
 > **Owner decision (2026-11-14): option B, Render Free, no persistence.** `render.yaml` is set up for
 > it: cost $0, no payment method. **All accounts, jobs and uploads are lost on every deploy, restart
 > and after 15 minutes without traffic**; only the admin (from `ADMIN_PASSWORD`) is re-created at each
