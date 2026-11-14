@@ -4,7 +4,7 @@ Durable log for the autonomous completion sprint that started 2026-11-13 21:36 U
 each milestone. Times are UTC. Claims use: **implemented**, **tested locally**, **verified in CI**,
 **verified with real data**, **deployed**, **not implemented**, **not validated**.
 
-Last update: 2026-11-14 00:35.
+Last update: 2026-11-14 00:15.
 
 ## Baseline (recovered 2026-11-13 21:36)
 
@@ -28,10 +28,11 @@ Last update: 2026-11-14 00:35.
 | #20 | `task/p8-research-report` | `139ca89` | `npm run report` with guardrails; results on 12 runs | 4/4 green |
 | #21 | `task/p8-dashboard` | `9983362` | real Dashboard (D1) | 4/4 green |
 | #22 | `task/p8-account-ui` | `02d332f` | Account page, auth-aware navigation (N1); **contains #16 and #21** | 4/4 green |
-| (next) | `task/p8-sprint-progress` | this branch | docs: README, ARCHITECTURE, TESTING, FINAL_REPORT §7–8, this log | docs only |
+| #23 | `task/p8-sprint-progress` | this branch | docs: README, ARCHITECTURE, TESTING, FINAL_REPORT §7–8, this log | docs only |
+| #24 | `task/p8-experiments-honesty` | `c514415` | Experiments page: real status per metric, links Results (independent) | 4/4 green |
 
-**Merge order:** #16 → #21 → #22 (it contains both); the others are independent and may go in any
-order. All seven merge together without conflicts (checked locally).
+**Merge order:** #16 → #21 → #22 (it contains both); #17–#20 and #24 are independent; #23 (docs) last.
+The seven code PRs #16–#22 merge together without conflicts (checked locally).
 
 ## Verification of the combined tree (all seven merged locally, 2026-11-13 23:58)
 
@@ -66,7 +67,8 @@ Report: `../CarbonRoute-AS-data/reports/research-report-2026-11-13T23-48-22-308Z
 |---|---|---|---|---|---|
 | 21:36 | 3304 | 10 | 100 | 0 | `29f7edb8…` |
 | 23:39 | 3304 | 12 | 120 | 0 | `29f7edb8…` |
-| 00:01 | 3304 | 12 | 120 | 0 | `29f7edb8…` (run 13 due 00:06, first record of the 14 Nov file) |
+| 00:01 | 3304 | 12 | 120 | 0 | `29f7edb8…` |
+| 00:09 | 3304 | 13 | 130 | 0 | `29f7edb8…`; the 13 Nov file is complete (120 lines, sha256 `397ebd6a…`, verified backup in `backups/em-collection-2026-11-13-complete`); run 13 opened `collection-2026-11-14.jsonl` |
 
 The collector runs the approved 25-run plan (ends about 2026-11-14 12:50 UTC). Restarting it for the
 7-day plan (168 runs) needs the owner's approval (COLLECTOR.md).
@@ -76,9 +78,9 @@ The collector runs the approved 25-run plan (ends about 2026-11-14 12:50 UTC). R
 - B3: staging storage option and service creation (possible cost).
 - B7 (owner action): set repository variable `VITE_API_URL` once a new backend exists.
 - Seven days of data not collected; ML model untrained.
-- Review and merge PRs #16–#22 (and the docs PR) into `fix/prototype-flaws`.
+- Review and merge PRs #16–#24 into `fix/prototype-flaws`.
 
 ## Next action
 
-Open the docs PR for this branch, then continue with remaining audit items (carbon-data handling in
-the frontend for unsupported zones, explanation wording), re-checking the collector hourly.
+Owner review of PRs #16–#24. The collector keeps running until its 25th run (about 12:50 UTC); then it
+stops by itself and needs the owner's approval to start the 7-day plan.
