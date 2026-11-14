@@ -44,10 +44,28 @@ Ends the session. The token sent with the request is revoked and is rejected fro
 - **403**: authenticated, but the role lacks the permission (for example a non-admin using an admin route or `GET /jobs?owner=<someone else>`).
 - **404** `{ "code": "JOB_NOT_FOUND" }`: the job does not exist **or belongs to another user**. Both cases give the same response, so job ids cannot be probed.
 
+### `POST /auth/password` (signed in; P8)
+Body `{ "currentPassword": "...", "newPassword": "..." }`. Requires the current password (401 otherwise);
+the new one must be at least 12 characters, not a known default, and differ from the current one
+(400). On success **every token issued before the change stops working**, on every device, and the
+response carries a new `token`. Rate limited per user (`RATE_LIMIT_PASSWORD_MAX`, 429).
+
 ### Accounts
-Roles: `admin`, `student`, `evaluator`. Only `admin` has administrator rights. Create accounts with
-`NEW_USER_USERNAME=... NEW_USER_EMAIL=... NEW_USER_ROLE=student NEW_USER_PASSWORD=... npm run user:create`
-(in `backend/`, after `npm run build`; the password is read from the environment and never printed).
+Roles: `admin`, `student`, `evaluator`. Only `admin` has administrator rights. There is **no public
+self-registration**: every account can spend the shared Electricity Maps quota, so accounts are issued
+by an administrator.
+
+- `GET /admin/users` (admin): accounts without password hashes.
+- `POST /admin/users` (admin): `{ "username", "email", "password", "role"? }` (role defaults to
+  `student`). 201 with the account; 400 for duplicates, weak passwords, invalid roles or non-text input;
+  403 for non-admins.
+- From the command line: `NEW_USER_USERNAME=... NEW_USER_EMAIL=... NEW_USER_ROLE=student NEW_USER_PASSWORD=... npm run user:create`
+  (in `backend/`, after `npm run build`; the password is read from the environment and never printed).
+
+### Errors (P8)
+Unexpected server errors return **500** `{ "message": "Internal server error. (reference abcd1234)", "reference": "abcd1234" }`;
+the details are only in the server log under that reference. Malformed JSON is **400**; JSON bodies
+over 1 MB are **413**.
 
 ---
 
@@ -109,7 +127,7 @@ For any other user a job id answers **404**, exactly like an unknown id.
 
 A scheduling request that fails before a decision exists (e.g. the provider is unavailable) stores nothing; an impossible deadline is stored as an `INFEASIBLE` decision.
 
-`/cluster/health` and `/scheduler/simulate` do not use job data and remain public.
+`/cluster/health` and `/scheduler/simulate` do not use job data and remain public, but are rate limited per address (`RATE_LIMIT_PUBLIC_MAX` per `RATE_LIMIT_PUBLIC_WINDOW_MIN`, defaults 60 per 10 min). `/cluster/health` only says whether a cluster is reachable (cached for 30 s); it never returns `kubectl` output.
 
 ### Carbon data and limits (P0)
 - Live `/carbon/*` routes (`forecast`, `forecast/snapshot`, `latest`, `history`, `power-breakdown`, `regions`) spend the Electricity Maps quota: they require a token (401 otherwise) and are rate limited per user. With `?mode=demo` (synthetic data) `forecast` and `regions` are public. `GET /carbon/provider` is public and shows the server-wide `callBudget` (no secrets).

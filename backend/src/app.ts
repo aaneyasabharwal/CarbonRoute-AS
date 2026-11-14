@@ -2,6 +2,7 @@
  * Express application factory (no network listener).
  * Imported by index.ts (server entry) and by the test suite (supertest).
  */
+import { internalError } from './utils/httpErrors';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -69,8 +70,8 @@ app.use(
 
 // Logging & Body Parsers
 app.use(morgan('dev'));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '1mb' })); // P8: JSON bodies are small; uploads use multipart
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Serve API Routes
 app.use('/api', apiRouter);
@@ -107,12 +108,12 @@ app.use((_req, res) => {
 });
 
 // Global Error Handler
+// Client errors raised by middleware (malformed JSON, oversized body, upload limits) keep their
+// message; anything else is logged with a reference and answered generically (P8).
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Unhandled server error:', err);
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || 'Internal server error occurred.',
-  });
+  const status = Number.isInteger(err?.status) && err.status >= 400 && err.status < 500 ? err.status : 500;
+  if (status < 500) return res.status(status).json({ success: false, message: err.message || 'Bad request.' });
+  return internalError(res, err, 'Unhandled server error');
 });
 
 export default app;

@@ -73,6 +73,11 @@ export function rateLimitConfig() {
     jobWindowMs: intFromEnv('RATE_LIMIT_JOBS_WINDOW_MIN', 10) * 60_000,
     carbonLive: intFromEnv('RATE_LIMIT_CARBON_MAX', 60), // live provider requests per user per window
     carbonWindowMs: intFromEnv('RATE_LIMIT_CARBON_WINDOW_MIN', 60) * 60_000,
+    // P8: unauthenticated compute endpoints (feasibility demo, cluster status) per address.
+    publicCompute: intFromEnv('RATE_LIMIT_PUBLIC_MAX', 60),
+    publicWindowMs: intFromEnv('RATE_LIMIT_PUBLIC_WINDOW_MIN', 10) * 60_000,
+    // P8: password changes per user (each costs two bcrypt operations).
+    passwordChange: intFromEnv('RATE_LIMIT_PASSWORD_MAX', 5),
   };
 }
 
@@ -100,6 +105,20 @@ export function buildRateLimiters() {
       max: c.jobWrites,
       key: userKey,
       message: `Too many job submissions or actions. The limit is ${c.jobWrites} per ${minutes(c.jobWindowMs)} minutes.`,
+    }),
+    publicCompute: rateLimit({
+      name: 'public-compute',
+      windowMs: c.publicWindowMs,
+      max: c.publicCompute,
+      key: (req) => `ip:${clientIp(req)}`,
+      message: `Too many requests from this address. The limit is ${c.publicCompute} per ${minutes(c.publicWindowMs)} minutes.`,
+    }),
+    passwordChange: rateLimit({
+      name: 'password-change',
+      windowMs: c.loginWindowMs,
+      max: c.passwordChange,
+      key: userKey,
+      message: `Too many password-change attempts. Try again in up to ${minutes(c.loginWindowMs)} minutes.`,
     }),
     carbonLive: rateLimit({
       name: 'carbon-live',

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { login, getMe, logout } from '../controllers/authController';
+import { login, getMe, logout, changePassword, listUsers, createUserAccount } from '../controllers/authController';
 import {
   getPresentations,
   getAllVersions,
@@ -93,6 +93,11 @@ router.get('/storage/:category/:fileName', serveFile);
 router.post('/auth/login', limit.loginPerIp, limit.loginPerAccount, login);
 router.post('/auth/logout', optionalAuth, logout);
 router.get('/auth/me', authenticateToken, getMe);
+router.post('/auth/password', authenticateToken, limit.passwordChange, changePassword);
+
+// Accounts (P8): created by administrators only; there is no public self-registration.
+router.get('/admin/users', authenticateToken, requireAdmin, listUsers);
+router.post('/admin/users', authenticateToken, requireAdmin, limit.jobWrites, createUserAccount);
 
 // Presentations & Versioning Routes
 router.get('/presentations', getPresentations);
@@ -135,7 +140,8 @@ router.delete('/roadmap/tasks/:id', authenticateToken, requireTeamMemberOrAdmin,
 router.put('/roadmap/:id', authenticateToken, requireTeamMemberOrAdmin, updateRoadmapMilestone);
 
 // Feasibility Simulation Demonstration API
-router.post('/scheduler/simulate', simulateFeasibilityDecision);
+// Public (synthetic data, no provider quota) but rate limited per address (P8).
+router.post('/scheduler/simulate', limit.publicCompute, simulateFeasibilityDecision);
 
 // ==========================================
 // CarbonRoute Prototype Milestone API Routes
@@ -165,7 +171,7 @@ router.get('/carbon/history', ...liveCarbon, getCarbonHistory);
 router.get('/carbon/power-breakdown', ...liveCarbon, getCarbonPowerBreakdown);
 router.get('/carbon/provider', getCarbonProviderStatus);
 router.get('/carbon/regions', ...liveCarbon, getAvailableRegions);
-router.get('/cluster/health', getClusterHealth);
+router.get('/cluster/health', limit.publicCompute, getClusterHealth);
 
 router.post('/experiments', authenticateToken, limit.jobWrites, recordExperiment);
 router.get('/experiments', authenticateToken, getExperiments);

@@ -56,7 +56,23 @@ export class K8sConnector {
   /**
    * Checks if local Minikube / Kubectl cluster is accessible
    */
-  public static async checkClusterHealth(): Promise<{ isAvailable: boolean; message: string }> {
+  /**
+   * P8: cluster status is cached for HEALTH_TTL_MS and concurrent callers share one probe, so
+   * requests cannot make the server spawn kubectl repeatedly.
+   */
+  private static healthCache: { at: number; value: Promise<{ isAvailable: boolean; message: string }> } | null = null;
+  public static HEALTH_TTL_MS = 30_000;
+  public static checkClusterHealth(): Promise<{ isAvailable: boolean; message: string }> {
+    const now = Date.now();
+    if (this.healthCache && now - this.healthCache.at < this.HEALTH_TTL_MS) return this.healthCache.value;
+    const value = this.probeClusterHealth();
+    this.healthCache = { at: now, value };
+    return value;
+  }
+  public static resetHealthCache(): void {
+    this.healthCache = null;
+  }
+  private static async probeClusterHealth(): Promise<{ isAvailable: boolean; message: string }> {
     try {
       const { stdout } = await kubectl(['cluster-info', '--request-timeout=2s']);
       return {

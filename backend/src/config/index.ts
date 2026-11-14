@@ -16,7 +16,9 @@ export const config = {
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173',
   jwtSecret: jwt.secret,
   jwtSecretSource: jwt.source,
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  // P8: 12 h by default. Tokens are held in browser localStorage (readable by any injected script), so
+  // a short lifetime limits how long a stolen token is useful.
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '12h',
   
   // Electricity Maps Live API Key
   electricityMapsApiKey: process.env.ELECTRICITY_MAPS_API_KEY || '',
