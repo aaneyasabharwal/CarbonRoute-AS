@@ -9,8 +9,9 @@ forecast (Electricity Maps), while keeping the modelled probability of missing t
 a tolerance τ. Every decision stores the forecast it used, explains itself, is compared with four other
 policies, and can later be checked against what the grid actually did.
 
-**Live demo (free hosting, synthetic data):** https://carbonroute-staging-web.onrender.com
-(API https://carbonroute-staging-api.onrender.com). The free backend sleeps when idle (about a minute
+**Live demo (free hosting, synthetic data):** https://aaneyasabharwal.github.io/CarbonRoute-AS/
+(GitHub Pages) or https://carbonroute-staging-web.onrender.com (Render); both use the API
+https://carbonroute-staging-api.onrender.com and share its accounts and jobs. The free backend sleeps when idle (about a minute
 to wake) and keeps no data across restarts. Demonstration script: [docs/DEMONSTRATION.md](docs/DEMONSTRATION.md).
 
 **Status (14 November 2026): research prototype, not production-ready.** Submission documents:

@@ -1,7 +1,9 @@
 # Demonstration package
 
-Public site: **https://carbonroute-staging-web.onrender.com** · API:
-**https://carbonroute-staging-api.onrender.com** (Render Free, ₹0). Screenshots: `docs/screenshots/`.
+Public site: **https://aaneyasabharwal.github.io/CarbonRoute-AS/** (GitHub Pages) or
+**https://carbonroute-staging-web.onrender.com** (Render); both use the API
+**https://carbonroute-staging-api.onrender.com** (Render Free, ₹0) and share accounts and jobs.
+Screenshots: `docs/screenshots/`.
 
 ## 1. Before the demonstration (10 minutes)
 
