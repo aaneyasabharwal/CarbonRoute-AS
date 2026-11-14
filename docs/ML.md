@@ -95,6 +95,10 @@ Latest run (2026-11-13 19:23 UTC, 6 collection runs): still **insufficient-data*
 error over all pairs MAE 23.44 (17.41 against measured values only, n = 46). Collection status and
 restart instructions: [COLLECTOR.md](COLLECTOR.md).
 
+Run of 2026-11-13 23:48 UTC (12 collection runs): still **insufficient-data**. 350 pairs (175
+measured) over 0.40 days, lead 0–10 h; split 140 / 9 / 21 (180 dropped by the leakage gap). No model
+was fitted. At hourly collection the thresholds are expected to be reachable after about 7 days.
+
 ## How the pipeline itself was validated
 
 On **synthetic test fixtures** (seeded, clearly separated from real data, never reported as results):

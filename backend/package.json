@@ -15,7 +15,8 @@
     "collect": "node dist/scripts/collectElectricityMaps.js",
     "coverage": "node dist/scripts/coverageReport.js",
     "ml": "node dist/scripts/runMlPipeline.js",
-    "demo": "node dist/scripts/runDemo.js"
+    "demo": "node dist/scripts/runDemo.js",
+    "report": "node dist/scripts/researchReport.js"
   },
   "keywords": [
     "carbon-aware",

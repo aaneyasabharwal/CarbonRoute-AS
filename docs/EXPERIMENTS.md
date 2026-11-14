@@ -50,7 +50,20 @@ cd backend && npm run build
 npm run collect -- --out ../../CarbonRoute-AS-data/em-collection --runs 25
 npm run benchmark -- --data ../../CarbonRoute-AS-data/em-collection --seed 42 --workloads 20
 npm run demo -- --data ../../CarbonRoute-AS-data/em-collection   # one job end to end, see DEMO.md
+npm run ml -- --data ../../CarbonRoute-AS-data/em-collection     # forecast-error model (gated)
+npm run report                                                    # research report from the saved results
 ```
+
+`npm run report` (P8) reads the latest saved benchmark and ML results (and the collection, for its
+inventory) and writes `reports/research-report-<benchmark id>.{md,json}`: provenance (commit, dataset
+and configuration hashes, seed), data quality per zone, forecast accuracy, the policy comparison with
+snapshot-cluster intervals, ML status and threats to validity. It applies the interpretation rules
+below automatically: a difference is only called lower or higher when its interval excludes 0; fewer
+than 7 days of data or fewer than 30 snapshot clusters gives a "not statistically conclusive"
+banner; a data span is only attributed to the benchmark when the dataset hashes match; model accuracy
+is only shown for a model that was evaluated. The report body is a pure function of the input files;
+the scheduler runtime overhead (machine-dependent) is reported separately and excluded from the
+report hash.
 
 ## Interpreting the results
 
