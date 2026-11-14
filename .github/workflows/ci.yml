@@ -105,6 +105,15 @@ jobs:
           fi
           grep -q "VITE_API_URL is required" /tmp/pages-noapi.log && echo "refused as expected"
 
+      - name: A retired backend in a frontend .env file must fail the build (P8 review)
+        run: |
+          printf 'VITE_API_URL=https://carbonroute.onrender.com\n' > .env.production
+          if npm run build > /tmp/envfile.log 2>&1; then
+            rm .env.production; echo "build accepted a retired backend from .env.production"; exit 1
+          fi
+          rm .env.production
+          grep -q "retired backend" /tmp/envfile.log && echo "refused as expected"
+
       - name: Build for GitHub Pages (as deploy-pages.yml does, with a placeholder API URL)
         run: npm run build
         env:
