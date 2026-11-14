@@ -156,9 +156,12 @@ Defects found and fixed, each with a regression test that fails on the old code:
 | R1 | No reproducible research report; interpretation of intervals was manual | #20 |
 | D1 | The Dashboard was a placeholder preview with no data | #21 |
 | T1 | A collector test failed on Windows checkouts (CRLF) | #16, #18, #19, #20 |
+| L4 | (review) Concurrent dispatch requests started several runs (the check ran before an asynchronous cluster probe); an older run stored without a status received the new run's status updates | #18 |
+| B7b | (review) The build check ignored `VITE_API_URL` from git-ignored `frontend/.env*` files, so a retired backend could still be built in | #17 |
 
-Verification of the combined tree (all seven branches merged locally, 2026-11-13 23:58 UTC): backend
-typecheck, **329 tests (11 `it.fails`)**, build; frontend typecheck, **116 tests**, build; Pages build
+Verification of the combined tree (all code branches merged locally, including the review fixes,
+2026-11-14 06:30 UTC): backend typecheck, **331 tests (11 `it.fails`)**, build; frontend typecheck,
+**117 tests**, build; Pages build
 with a URL passes and without one fails (by design); Python 5 tests; live end-to-end API check
 **30/30**. Each PR is green in CI (4/4 jobs: Backend incl. lock stress test, Frontend, Python, Docker).
 Details: [TESTING.md](TESTING.md), [SPRINT_PROGRESS.md](SPRINT_PROGRESS.md).

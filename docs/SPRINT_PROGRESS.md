@@ -32,16 +32,31 @@ Last update: 2026-11-14 00:15.
 | #24 | `task/p8-experiments-honesty` | `c514415` | Experiments page: real status per metric, links Results (independent) | 4/4 green |
 
 **Merge order:** #16 → #21 → #22 (it contains both); #17–#20 and #24 are independent; #23 (docs) last.
-The seven code PRs #16–#22 merge together without conflicts (checked locally).
+The code PRs #16–#22 and #24 merge together without conflicts (checked locally).
 
-## Verification of the combined tree (all seven merged locally, 2026-11-13 23:58)
+## Review pass (2026-11-14, before merging)
+
+Every PR was re-read in merge order. Two defects were found and fixed on their branches, each with a
+check that fails on the previous commit:
+
+- **#18 (`f56dfea`)**: three simultaneous dispatch requests started three runs (the "already
+  dispatched" check ran before the asynchronous cluster probe that registers the run). A per-job
+  in-progress guard now answers the others 409. An older stored run without a status (pre-P8 data)
+  received the new run's status updates; earlier unfinished runs are now closed as interrupted first.
+- **#17 (`c8d2409`)**: the build check read only shell variables, so a git-ignored
+  `frontend/.env.production` naming the retired backend still produced a bundle calling it. The check
+  now uses Vite's `loadEnv`; CI builds with such a file and expects a refusal.
+
+No defects found in #16, #19, #20, #21, #22, #24.
+
+## Verification of the combined tree (all code PRs merged locally, 2026-11-14 06:30 UTC)
 
 | Gate | Result |
 |---|---|
 | Backend typecheck / build | pass / pass |
-| Backend tests | 329 passed in 24 files (11 `it.fails`, reported separately) |
+| Backend tests | 331 passed in 24 files (11 `it.fails`, reported separately) |
 | Frontend typecheck / build | pass / pass |
-| Frontend tests | 116 passed in 13 files |
+| Frontend tests | 117 passed in 14 files |
 | Pages build | passes with `VITE_API_URL`; fails without it (by design) |
 | Python tests | 5 passed |
 | Live end-to-end API check | 30/30 (one real provider call) |
@@ -69,6 +84,7 @@ Report: `../CarbonRoute-AS-data/reports/research-report-2026-11-13T23-48-22-308Z
 | 23:39 | 3304 | 12 | 120 | 0 | `29f7edb8…` |
 | 00:01 | 3304 | 12 | 120 | 0 | `29f7edb8…` |
 | 00:09 | 3304 | 13 | 130 | 0 | `29f7edb8…`; the 13 Nov file is complete (120 lines, sha256 `397ebd6a…`, verified backup in `backups/em-collection-2026-11-13-complete`); run 13 opened `collection-2026-11-14.jsonl` |
+| 06:25 | 3304 | 19 | 190 | 0 | `29f7edb8…`; 13 Nov file unchanged (sha256 `397ebd6a…`) |
 
 The collector runs the approved 25-run plan (ends about 2026-11-14 12:50 UTC). Restarting it for the
 7-day plan (168 runs) needs the owner's approval (COLLECTOR.md).

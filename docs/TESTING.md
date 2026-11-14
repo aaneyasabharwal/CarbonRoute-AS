@@ -1,8 +1,8 @@
 # Testing strategy and quality gates
 
 How CarbonRoute is tested, what each suite covers, and the current results. Counts are for
-`fix/prototype-flaws` with the P8 pull requests #16–#22 merged (checked locally on the combined tree,
-2026-11-13 23:58 UTC); each PR is also green in CI on its own.
+`fix/prototype-flaws` with the P8 code pull requests #16–#22 and #24 merged, including the review fixes (checked
+locally on the combined tree, 2026-11-14 06:30 UTC); each PR is also green in CI on its own.
 
 ## Principles
 
@@ -40,11 +40,11 @@ How CarbonRoute is tested, what each suite covers, and the current results. Coun
 | Gate | Where | Result (combined tree, 2026-11-13) |
 |---|---|---|
 | Backend typecheck (source + tests) | local, CI | pass |
-| Backend tests | local, CI | **329 passed in 24 files, of which 11 are `it.fails`** (318 assert current behaviour) |
+| Backend tests | local, CI | **331 passed in 24 files, of which 11 are `it.fails`** (320 assert current behaviour) |
 | Backend build | local, CI | pass |
 | Frontend typecheck | local, CI | pass |
-| Frontend tests | local, CI | **116 passed in 13 files** |
-| Frontend build; GitHub Pages build | local, CI | pass; a Pages build **without** `VITE_API_URL` fails by design |
+| Frontend tests | local, CI | **117 passed in 14 files** |
+| Frontend build; GitHub Pages build | local, CI | pass; a Pages build **without** `VITE_API_URL`, or any build whose `frontend/.env*` names the retired backend, fails by design |
 | Python tests | local, CI | 5 passed |
 | Docker images: build, no `.env`/database inside, backend in production mode behind nginx, refuses to start without `JWT_SECRET`, compose valid | CI only (Docker not installed locally) | pass |
 | Collector-lock stress test + oracle self-check | CI (25 rounds × 8 processes); locally 150 rounds × 10 processes | 0 violations; broken lock detected |
