@@ -14,7 +14,7 @@ policies, and can later be checked against what the grid actually did.
 https://carbonroute-staging-api.onrender.com and share its accounts and jobs. The free backend sleeps when idle (about a minute
 to wake) and keeps no data across restarts. Demonstration script: [docs/DEMONSTRATION.md](docs/DEMONSTRATION.md).
 
-**Status (14 November 2026): research prototype, not production-ready.** Submission documents:
+**Status (15 November 2026): working research system, not production-ready.** Submission documents:
 [handover](docs/HANDOVER.md) · [validation report](docs/VALIDATION_REPORT.md) ·
 [original vs final](docs/ORIGINAL_VS_FINAL.md) · [research report](docs/RESEARCH_REPORT.md) ·
 [global zones](docs/GLOBAL_ZONES.md) · [screenshots](docs/screenshots/) · **[team handbook](docs/TEAM_HANDBOOK.md)** (everything in one place). In short:

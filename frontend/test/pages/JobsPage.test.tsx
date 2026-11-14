@@ -54,7 +54,7 @@ const details = {
     riskModel: 'deterministic',
     runtimeCv: 0,
     provenance: { provider: 'electricitymaps', dataClass: 'real', zone: 'DE', fetchedAt: '2026-11-13T10:00:00.000Z', issuedAt: null },
-    energyAssumption: { powerKw: 0.25, energyKwh: 0.5, basis: 'Prototype assumption: 0.125 kW per requested vCPU (minimum 0.1 kW). Not measured.' },
+    energyAssumption: { powerKw: 0.25, energyKwh: 0.5, basis: 'Assumption: 0.125 kW per requested vCPU (minimum 0.1 kW). Not measured.' },
     explanation: {
       objective: 'Minimise forecast carbon intensity of the run window, subject to the deadline and the deadline-miss risk tolerance.',
       constraints: [{ name: 'Deadline', value: 'the window must end by slot T+8 (2 h job)' }],
@@ -98,7 +98,7 @@ describe('JobsPage', () => {
     stubFetch((url) => (url === `${API_BASE}/jobs` ? { body: { success: true, data: [] } } : undefined));
     renderPage();
     expect(await screen.findByText('No jobs yet')).toBeInTheDocument();
-    expect(screen.getByText('Prototype').closest('a')).toHaveAttribute('href', '/prototype');
+    expect(screen.getByText('Scheduler').closest('a')).toHaveAttribute('href', '/scheduler');
   });
 
   it('shows the backend error with a retry, and never invented jobs', async () => {

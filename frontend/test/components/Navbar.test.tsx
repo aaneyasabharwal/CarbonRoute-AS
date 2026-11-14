@@ -28,7 +28,7 @@ beforeEach(() => {
 
 describe('Navbar', () => {
   it('every page is a destination: 5 application links and 9 project links', () => {
-    expect(PRIMARY_LINKS.map((l) => l.path)).toEqual(['/dashboard', '/prototype', '/jobs', '/results', '/experiments']);
+    expect(PRIMARY_LINKS.map((l) => l.path)).toEqual(['/dashboard', '/scheduler', '/jobs', '/results', '/experiments']);
     expect(PROJECT_LINKS).toHaveLength(9);
     expect(new Set([...PRIMARY_LINKS, ...PROJECT_LINKS].map((l) => l.path)).size).toBe(14);
   });
@@ -53,10 +53,10 @@ describe('Navbar', () => {
 
   // P13 regression: a second "Launch Prototype" button (>= 1536 px) overlapped "More" when signed in
   // with a long username (measured in a browser). The highlighted Prototype link is the only one.
-  it('has a single Prototype link in the bar (no duplicate button that could overlap More)', () => {
+  it('has a single Scheduler link in the bar (no duplicate button that could overlap More)', () => {
     renderNav('/dashboard');
     const header = document.querySelector('header')!;
-    const links = [...header.querySelectorAll('a[href="/prototype"]')].filter((a) => !a.closest('#mobile-menu'));
+    const links = [...header.querySelectorAll('a[href="/scheduler"]')].filter((a) => !a.closest('#mobile-menu'));
     expect(links).toHaveLength(1);
     expect(header.textContent).not.toMatch(/Launch Prototype/);
   });

@@ -34,18 +34,18 @@ import {
 export const HomePage: React.FC = () => {
   const [activePipelineStep, setActivePipelineStep] = useState<number>(0);
 
-  const builtPrototypeItems = [
-    { title: 'Interactive Prototype Vertical Slice', desc: 'End-to-end working execution flow from workload submission to pod log completion.' },
-    { title: 'Multi-Region Carbon Service', desc: 'Electricity Maps live API client. A synthetic demo trace (CAISO, ERCOT, DE, IN-NO profiles) is used only when demo mode is chosen explicitly, and is labelled synthetic.' },
-    { title: 'Horizon Uncertainty Modeling', desc: 'Parametric error dispersion model sigma(t) with Chebyshev erfc tail probability deadline risk.' },
-    { title: '5-Policy Benchmark Engine', desc: 'Side-by-side evaluation of Immediate, EDF, Deterministic, Baseline, and CarbonRoute algorithms.' },
-    { title: 'Kubernetes Dispatch & Sandbox Fallback', desc: 'Production batch/v1 Job generator with automatic detection and isolated local process runner.' },
-    { title: 'Real-Time Container Telemetry', desc: 'Streaming epoch log terminal and empirical carbon accounting calculating realized CO2 savings.' },
+  const builtItems = [
+    { title: 'End-to-end scheduler', desc: 'Submit a job, get a decision with an explanation, dispatch it, and download a report; jobs belong to their owner.' },
+    { title: 'Global carbon data', desc: 'All 351 Electricity Maps grid zones selectable. Live forecasts where a provider key is configured; otherwise labelled synthetic demo data (own profiles for 4 zones, a generic synthetic trace for the rest).' },
+    { title: 'Deadline-risk model', desc: 'P(miss) = 1 - Phi((D - t - d) / (CV d)) from a declared runtime variability CV, at exact deadline and arrival instants.' },
+    { title: '5-policy comparison', desc: 'Immediate, EDF, Greedy, CarbonAware baseline and CarbonRoute on the same forecast and candidate windows.' },
+    { title: 'Kubernetes dispatch or labelled simulation', desc: 'Kubernetes Job submission when a cluster is connected; otherwise a simulation that runs no workload and says so.' },
+    { title: 'Reproducible research pipeline', desc: 'Hourly collector, replay benchmark with confidence intervals, and a forecast-error ML pipeline that refuses to train on too little data.' },
   ];
 
   const futureRoadmapItems = [
     { title: 'Full Cluster Minikube Testbed', desc: 'Multi-node Kubernetes testbed deployment with live prometheus-node-exporter telemetry.' },
-    { title: 'Large-Scale Trace Ingestion', desc: 'Automated ingestion pipelines for 365-day historical grid intensity across 12 ISO zones.' },
+    { title: 'Longer data collection', desc: 'At least 7 days of real forecasts and realized values (1 day so far) so results can become statistically conclusive.' },
     { title: 'Repeated Seed Evaluations', desc: '10 to 30 independent random seed simulation suites for 95% statistical confidence intervals.' },
     { title: 'Risk calibration (not implemented)', desc: 'Brier score / ECE need recorded runtimes and outcomes; no calibration results exist yet (roadmap M9.2).' },
     { title: 'Multi-Job Queue Contention Solver', desc: 'Concurrent batch queue scheduler with multi-tenant capacity and priority preemption.' },
@@ -142,7 +142,7 @@ export const HomePage: React.FC = () => {
           {/* Status Badge */}
           <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono shadow-sm">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-bold">PROTOTYPE MILESTONE ACTIVE</span>
+            <span className="font-bold">LIVE RESEARCH PLATFORM</span>
             <span className="text-slate-500">&bull;</span>
             <span className="text-slate-300 font-semibold">Team TriFlux</span>
             <span className="text-slate-500">&bull;</span>
@@ -167,11 +167,11 @@ export const HomePage: React.FC = () => {
           {/* 3 CTAs */}
           <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
             <Link
-              to="/prototype"
+              to="/scheduler"
               className="inline-flex items-center px-6 py-3.5 rounded-xl bg-emerald-500 text-slate-950 font-bold text-sm hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-950/60 font-mono group"
             >
               <Cpu className="w-4 h-4 mr-2" />
-              <span>Launch Prototype</span>
+              <span>Open the Scheduler</span>
               <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
             </Link>
 
@@ -203,7 +203,7 @@ export const HomePage: React.FC = () => {
                 End-to-End Vertical Slice Pipeline
               </span>
               <h2 className="text-2xl sm:text-3xl font-extrabold text-white font-mono tracking-tight">
-                How the Prototype Operates
+                How CarbonRoute Works
               </h2>
             </div>
             <Link
@@ -296,10 +296,10 @@ export const HomePage: React.FC = () => {
 
                 <div className="pt-2 flex items-center justify-end">
                   <Link
-                    to="/prototype"
+                    to="/scheduler"
                     className="inline-flex items-center text-xs font-mono font-bold text-emerald-400 hover:text-emerald-300 space-x-1"
                   >
-                    <span>Run this step in the Prototype &rarr;</span>
+                    <span>Run this step in the Scheduler &rarr;</span>
                   </Link>
                 </div>
               </div>
@@ -308,7 +308,7 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 3. VERIFIED PROTOTYPE STATUS vs FUTURE RESEARCH PHASES */}
+      {/* 3. VERIFIED STATUS vs FUTURE RESEARCH PHASES */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="space-y-6">
           <div className="text-center space-y-2 max-w-3xl mx-auto">
@@ -317,7 +317,7 @@ export const HomePage: React.FC = () => {
               <span>Transparent Milestone Delivery</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white font-mono tracking-tight">
-              Prototype Milestone: What is Built vs Future Roadmap
+              What is Built vs Future Roadmap
             </h2>
             <p className="text-xs sm:text-sm text-slate-400 font-sans">
               CarbonRoute demonstrates a genuine working vertical slice. The system estimates deadline-miss risk from a declared runtime variability; that risk is not yet calibrated against recorded runtimes.
@@ -325,7 +325,7 @@ export const HomePage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Column A: BUILT / WORKING IN PROTOTYPE */}
+            {/* Column A: BUILT AND WORKING */}
             <div className="glass-card rounded-2xl p-6 sm:p-8 border border-emerald-500/40 bg-slate-950/80 space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-emerald-900/60">
                 <div className="space-y-1">
@@ -334,7 +334,7 @@ export const HomePage: React.FC = () => {
                   </span>
                   <h3 className="text-xl font-bold text-white font-mono flex items-center space-x-2">
                     <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                    <span>BUILT IN CURRENT PROTOTYPE</span>
+                    <span>BUILT AND WORKING</span>
                   </h3>
                 </div>
                 <span className="text-xs font-mono text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded border border-emerald-800/80 font-bold">
@@ -343,7 +343,7 @@ export const HomePage: React.FC = () => {
               </div>
 
               <div className="space-y-3 font-mono text-xs">
-                {builtPrototypeItems.map((item, idx) => (
+                {builtItems.map((item, idx) => (
                   <div key={idx} className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1 hover:border-emerald-500/30 transition-colors">
                     <div className="flex items-center text-emerald-300 font-bold space-x-2">
                       <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -486,7 +486,7 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 6. CALL TO ACTION FOR PROTOTYPE */}
+      {/* 6. CALL TO ACTION */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="glass-card rounded-2xl p-8 md:p-10 border border-emerald-500/30 bg-gradient-to-r from-emerald-950/30 via-slate-900/60 to-teal-950/30 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
           <div className="space-y-2 text-center md:text-left">
@@ -494,7 +494,7 @@ export const HomePage: React.FC = () => {
               Interactive Vertical Slice Ready
             </span>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight font-mono">
-              Test the Working Prototype Live
+              Try the Scheduler Live
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
               Submit custom batch jobs or preloaded presets, observe live carbon intensity envelopes with horizon uncertainty, compare all 5 scheduling policies, and execute real container workloads.
@@ -502,11 +502,11 @@ export const HomePage: React.FC = () => {
           </div>
 
           <Link
-            to="/prototype"
+            to="/scheduler"
             className="shrink-0 px-6 py-3.5 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs hover:bg-emerald-400 transition-all shadow-lg font-mono flex items-center space-x-2"
           >
             <Cpu className="w-4 h-4" />
-            <span>Launch Interactive Prototype</span>
+            <span>Open the Scheduler</span>
             <ArrowRight className="w-4 h-4 ml-1" />
           </Link>
         </div>

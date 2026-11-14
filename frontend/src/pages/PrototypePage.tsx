@@ -412,7 +412,7 @@ export const PrototypePage: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-bold">PROTOTYPE MILESTONE VERTICAL SLICE</span>
+            <span className="font-bold">END-TO-END SCHEDULER</span>
             <span className="text-slate-500">&bull;</span>
             <span>Team TriFlux</span>
           </div>
@@ -435,7 +435,7 @@ export const PrototypePage: React.FC = () => {
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-mono">
-          CarbonRoute End-to-End Scheduling Prototype
+          CarbonRoute Scheduler
         </h1>
         <p className="text-sm text-slate-400 max-w-4xl leading-relaxed">
           Demonstrates one complete software vertical slice: from job submission through Electricity Maps carbon

@@ -37,7 +37,9 @@ export const App: React.FC = () => {
               <Route path="/project" element={<ProjectPage />} />
               <Route path="/how-it-works" element={<HowItWorksPage />} />
               <Route path="/architecture" element={<ArchitecturePage />} />
-              <Route path="/prototype" element={<PrototypePage />} />
+              <Route path="/scheduler" element={<PrototypePage />} />
+              {/* P14: the page was called Prototype; old links keep working. */}
+              <Route path="/prototype" element={<Navigate to="/scheduler" replace />} />
               <Route path="/jobs" element={<JobsPage />} />
               <Route path="/results" element={<ResultsPage />} />
               <Route path="/experiments" element={<ExperimentsPage />} />
