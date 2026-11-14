@@ -25,3 +25,6 @@ Thumbs.db
 
 # Third-party binaries are downloaded, never committed (M1.10)
 *.exe
+
+# Staging verification state (job id and usernames only)
+staging-check.state.json

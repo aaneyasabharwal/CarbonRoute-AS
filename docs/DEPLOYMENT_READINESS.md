@@ -79,7 +79,7 @@ shared to perform the suspension, the owner should change it.
 **Service settings (option A)**
 - [ ] New Web Service `carbonroute-staging`; repository `aaneyasabharwal/CarbonRoute-AS`; branch
       `fix/prototype-flaws`; runtime Node; Root Directory empty; **Auto-Deploy off** until verified.
-- [ ] Build: `cd backend && npm ci && npm run build`
+- [ ] Build: `cd backend && npm ci --include=dev && npm run build` (P9: with `NODE_ENV=production`, plain `npm ci` skips the TypeScript compiler and the build fails; verified). **P9: use `render.yaml` and [STAGING.md](STAGING.md) instead of these manual steps.**
 - [ ] Start: `mkdir -p /var/data/uploads && cp -rn storage/uploads/presentations /var/data/uploads/ && cd backend && npm start`
       (seeds the three committed presentation PDFs onto the disk without overwriting; the disk is not
       available during the build).
