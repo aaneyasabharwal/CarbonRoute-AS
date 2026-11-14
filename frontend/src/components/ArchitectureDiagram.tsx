@@ -101,10 +101,10 @@ export const ArchitectureDiagram: React.FC = () => {
         'Workload Connector (Modular execution driver)',
         'Kubernetes Job Manifest Generator (`batch/v1 Job`)',
         'Argo Workflows / GitHub Actions Runners Integration (Modular targets)',
-        'Real Containerized Batch Workload Execution (ML inference/rendering)',
+        'Simulated execution when no cluster is connected (no workload runs)',
       ],
       description:
-        'Dispatches containerized jobs to target clusters when their scheduled green window arrives. Manages container lifecycle, captures start/finish timestamps, and records actual carbon emissions.',
+        'Dispatches the job as a Kubernetes Job when the user clicks Dispatch and a cluster is connected; otherwise records a labelled simulation. Emissions are estimates (assumed energy model), never measured.',
       inputs: 'Scheduled start trigger, container spec, resource allocations',
       outputs: 'Running Kubernetes Job, completion logs, execution audit records',
     },

@@ -138,7 +138,7 @@ export const HowItWorksPage: React.FC = () => {
       math: 't^* = \\arg\\min_{t \\in \\mathcal{T}_{\\text{feasible}}} \\mathbb{E}[C(t)] \\quad \\text{subject to } P(\\text{violation}(t)) \\le \\tau',
       details: [
         'If the lowest-carbon window has risk > tau, CarbonRoute picks the lowest-carbon window within tau; if none exists the result is INFEASIBLE_RISK (no fallback).',
-        'Calculates projected percentage carbon savings vs. Immediate baseline.',
+        'Reports the difference in forecast carbon intensity vs. the Immediate window (a forecast, not a measured saving).',
         'Generates formal scheduling decision record with full mathematical audit trail.',
       ],
       output: 'Recommended start slot t* (or an explicit infeasible result) with its explanation.',
@@ -163,14 +163,14 @@ export const HowItWorksPage: React.FC = () => {
     },
     {
       step: '09',
-      title: 'Execution Dispatch & Sandbox Fallback',
+      title: 'Execution Dispatch or Simulation',
       subtitle: 'Kubernetes submission when a cluster is reachable, otherwise simulated',
       icon: Terminal,
       badge: 'Execution Layer',
       color: 'text-emerald-400',
       description:
-        'The connector probes cluster readiness. If Minikube or Kubernetes is reachable, the manifest is submitted to the cluster. If the cluster is offline, CarbonRoute cleanly falls back to an isolated local sandbox process, streaming real container logs without crashing.',
-      math: '\\text{Cluster Status: Active (Minikube)} \\iff \\text{Offline Fallback (Local Sandbox)}',
+        'The connector probes cluster readiness. If Minikube or Kubernetes is reachable, the manifest is submitted to the cluster. If no cluster is reachable (as on the public demo), the dispatch is recorded as a labelled simulation: no workload process is started.',
+      math: '\\text{Cluster reachable} \\Rightarrow \\text{Kubernetes Job}; \\quad \\text{otherwise} \\Rightarrow \\text{simulated (no workload runs)}',
       details: [
         'Checks cluster connectivity using Kubernetes API client.',
         'If cluster is online: creates Job resource in carbonroute-jobs namespace.',
@@ -181,8 +181,8 @@ export const HowItWorksPage: React.FC = () => {
     },
     {
       step: '10',
-      title: 'Carbon Accounting & Empirical Verification',
-      subtitle: 'Comparing realized emissions against counterfactual immediate baseline',
+      title: 'Forecast vs Observed Comparison',
+      subtitle: 'Comparing observed carbon intensity of the scheduled and Immediate windows',
       icon: TrendingDown,
       badge: 'Accounting & Audit',
       color: 'text-teal-400',
@@ -210,7 +210,7 @@ export const HowItWorksPage: React.FC = () => {
           How CarbonRoute Works
         </h1>
         <p className="text-sm text-slate-400 max-w-4xl leading-relaxed">
-          The 10-step vertical slice lifecycle from batch job submission, carbon intensity forecasting, horizon uncertainty modeling, and 5-policy benchmarking to Kubernetes dispatch, sandbox execution, and realized carbon accounting.
+          The 10-step vertical slice lifecycle from batch job submission, carbon intensity forecasting, deadline-miss risk estimation, and 5-policy benchmarking to Kubernetes dispatch (or a labelled simulation when no cluster is connected) and a forecast-vs-observed comparison.
         </p>
       </div>
 
@@ -326,7 +326,7 @@ export const HowItWorksPage: React.FC = () => {
             {/* Try in the Scheduler */}
             <div className="pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="text-xs text-slate-400">
-                Want to observe this step running live against actual grid traces and container sandboxes?
+                Want to observe this step in the Scheduler (labelled demo data on the public site)?
               </div>
               <Link
                 to="/scheduler"

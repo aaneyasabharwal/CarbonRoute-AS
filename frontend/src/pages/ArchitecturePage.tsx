@@ -60,12 +60,12 @@ export const ArchitecturePage: React.FC = () => {
     {
       id: 'uncertainty-model',
       num: '04',
-      name: 'Horizon Uncertainty Modeling',
-      tech: 'Parametric Error Dispersion Model',
+      name: 'Deadline-Miss Risk Model',
+      tech: 'Normal runtime model with declared variability',
       icon: GitBranch,
       color: 'text-purple-400',
-      summary: 'Models variance growth over the 24-hour look-ahead horizon sigma(t).',
-      details: 'Calculates standard deviation using sigma(t) = sigma_0 * (1 + beta * (t - t_0)^gamma). Computes 95% confidence intervals [mu - 1.96*sigma, mu + 1.96*sigma] to capture widening forecast inaccuracy as jobs are shifted further into the future.',
+      summary: 'Estimates the deadline-miss probability of every candidate start slot.',
+      details: 'Runtime R ~ Normal(d, (cv * d)^2) with cv declared by the user (not learned or calibrated). P(miss) = 1 - Phi((D - t - d) / (cv * d)). The provider gives no forecast uncertainty, so none is invented; forecast error is measured separately in the research pipeline.',
     },
     {
       id: 'scheduling-engine',
@@ -114,18 +114,18 @@ export const ArchitecturePage: React.FC = () => {
       tech: 'kubectl (Minikube / any cluster) or simulated execution',
       icon: HardDrive,
       color: 'text-cyan-400',
-      summary: 'Dispatches workload to active Kubernetes cluster or falls back cleanly to local sandbox.',
-      details: 'Probes cluster readiness. If reachable, submits Job to carbonroute-jobs namespace. If cluster is offline, sets clusterMode = "offline_fallback" and executes workload.py in an isolated local subprocess sandbox, streaming stdout live.',
+      summary: 'Dispatches the job to a Kubernetes cluster when one is reachable; otherwise records a labelled simulation.',
+      details: 'Probes cluster readiness. If reachable, submits Job to carbonroute-jobs namespace. If no cluster is reachable, sets clusterMode = "offline_fallback" and records a simulated execution: no workload process is started.',
     },
     {
       id: 'telemetry-accounting',
       num: '10',
-      name: 'Empirical Carbon Accounting & Telemetry',
-      tech: 'Realized Energy & Emission Tracker',
+      name: 'Forecast vs Observed Comparison',
+      tech: 'Provider observations + assumed energy model',
       icon: TrendingDown,
       color: 'text-teal-400',
-      summary: 'Calculates realized emissions and validates empirical percentage carbon reduction.',
-      details: 'Aggregates actual execution duration, multiplies by regional grid intensity at runtime, compares against the counterfactual immediate dispatch baseline, and stores the record in the benchmark experiments store.',
+      summary: 'Compares forecast and observed carbon intensity for the scheduled and Immediate windows.',
+      details: 'After the window has passed, collects observed intensity (each value labelled measured or provider estimate) for both windows. Emissions use an assumed 0.125 kW per vCPU, so they are estimates; realized emissions need measured energy, which does not exist yet.',
     },
   ];
 
@@ -143,7 +143,7 @@ export const ArchitecturePage: React.FC = () => {
           CarbonRoute 10-Layer System Architecture
         </h1>
         <p className="text-sm sm:text-base text-slate-400 max-w-4xl leading-relaxed">
-          The architecture connecting client interfaces, carbon intensity services, horizon uncertainty modeling, polymorphic scheduling policies, Kubernetes batch dispatch, and empirical carbon accounting.
+          The architecture connecting client interfaces, carbon intensity services, deadline-miss risk estimation, polymorphic scheduling policies, Kubernetes batch dispatch (or a labelled simulation), and a forecast-vs-observed comparison.
         </p>
       </div>
 
@@ -283,8 +283,8 @@ export const ArchitecturePage: React.FC = () => {
               <p className="text-slate-400 font-sans text-[11px]">Declarative Job manifests with CPU/RAM bounds and metadata tags.</p>
             </div>
             <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
-              <span className="font-bold text-slate-200">Cluster / Sandbox Runner</span>
-              <p className="text-slate-400 font-sans text-[11px]">Live pod execution or local process sandbox streaming real epoch stdout.</p>
+              <span className="font-bold text-slate-200">Cluster / Simulated Execution</span>
+              <p className="text-slate-400 font-sans text-[11px]">Kubernetes Job when a cluster is connected; otherwise a labelled simulation (no workload runs).</p>
             </div>
           </div>
         </div>
