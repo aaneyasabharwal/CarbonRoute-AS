@@ -65,7 +65,7 @@ https://carbonroute-staging-web.onrender.com (Render) · API https://carbonroute
 | Protected endpoints without a token (`/jobs`, `/results/benchmarks`, live forecast) | 401 |
 | Wrong password | 401 |
 | `GET /api/carbon/catalogue` | 351 zones, `liveConfigured: false`, 7 verified |
-| Demo data for a zone without a profile (KE) | **422** with the reason (no substitution) |
+| Demo data for a zone without its own profile (KE) | P11: **422**; since P13: 200 with the generic synthetic trace, labelled "not KE data" (`syntheticTrace: generic`); a zone outside the catalogue: 422 |
 | Public demo forecast | 200, labelled synthetic |
 | All site routes and the bundle | 200 |
 | Bundle contains the API key value / `JWT_SECRET` / the retired backend host | no / no / no |

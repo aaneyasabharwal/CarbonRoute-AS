@@ -14,6 +14,8 @@ export const BENCHMARK_ZONE = 'BENCHMARK-RESEARCH';
 export interface ZoneUsability {
   usable: boolean;
   reason: string | null;
+  /** P13: demo data for a zone without its own profile uses the generic synthetic trace. */
+  generic?: boolean;
 }
 
 /** Whether a zone can be scheduled in a data mode on this server, and why not. */
@@ -33,9 +35,9 @@ export function zoneUsability(
   const z = catalogue.zones.find((c) => c.zone === zone);
   if (!z) return { usable: false, reason: `${zone} is not in the zone catalogue.` };
   if (mode === 'demo') {
-    return z.syntheticDemo
-      ? { usable: true, reason: null }
-      : { usable: false, reason: `No synthetic demo profile exists for ${zone}. Demo profiles: ${demoZones(catalogue).join(', ')}, or the research benchmark.` };
+    // P13: every catalogue zone works on demo data; zones without their own profile use the generic
+    // synthetic trace (labelled; never presented as that zone's data).
+    return z.syntheticDemo ? { usable: true, reason: null } : { usable: true, reason: null, generic: true };
   }
   if (!catalogue.liveConfigured) {
     return { usable: false, reason: 'Live data is not configured on this server (no provider key). Use the synthetic demo data.' };
@@ -43,10 +45,6 @@ export function zoneUsability(
   if (!signedIn) return { usable: false, reason: 'Live data needs sign-in.' };
   if (!z.providerListed.forecast) return { usable: false, reason: 'The provider does not list a carbon-intensity forecast for this zone.' };
   return { usable: true, reason: null };
-}
-
-function demoZones(catalogue: ZoneCatalogue | null): string[] {
-  return (catalogue?.zones ?? []).filter((z) => z.syntheticDemo).map((z) => z.zone);
 }
 
 const matches = (z: CatalogueZone, q: string) =>
@@ -125,7 +123,7 @@ export const ZoneSelector: React.FC<Props> = ({ value, onChange, mode, catalogue
         <select aria-label="Filter by availability" value={availability} onChange={(e) => setAvailability(e.target.value as AvailabilityFilter)} className={control}>
           <option value="all">All zones</option>
           <option value="verified">Live data verified</option>
-          <option value="demo">Synthetic demo profile</option>
+          <option value="demo">Own synthetic demo profile</option>
         </select>
       </div>
       <select
@@ -200,7 +198,7 @@ const ZoneDetails: React.FC<{ zone: CatalogueZone | undefined; value: string; mo
           <Badge ok={zone.providerListed.forecast}>Forecast listed by the provider (trial key; not verified)</Badge>
           <Badge ok={zone.providerListed.history}>24 h history listed by the provider (not verified)</Badge>
           <Badge ok={!!zone.verifiedLive}>{zone.verifiedLive ? `Live data verified (${zone.verifiedLive.evidence})` : 'Live data not verified for this zone'}</Badge>
-          <Badge ok={zone.syntheticDemo}>Synthetic demo profile</Badge>
+          <Badge ok={zone.syntheticDemo}>{zone.syntheticDemo ? 'Own synthetic demo profile' : 'No own demo profile (demo uses the generic synthetic trace)'}</Badge>
           <Badge ok={liveConfigured}>Live data configured on this server</Badge>
         </ul>
       </>
@@ -208,7 +206,11 @@ const ZoneDetails: React.FC<{ zone: CatalogueZone | undefined; value: string; mo
       <p className="text-slate-400">{value}</p>
     )}
     <p className={usable.usable ? 'text-emerald-300 font-bold' : 'text-amber-300 font-bold'} data-testid="zone-usable">
-      {usable.usable ? `Can be scheduled with ${mode === 'demo' ? 'synthetic demo data' : 'live data'}.` : `Not available for ${mode === 'demo' ? 'demo' : 'live'} scheduling: ${usable.reason}`}
+      {usable.usable
+        ? usable.generic
+          ? `Can be scheduled with the generic synthetic trace: the same synthetic curve used for every zone without its own profile, not ${value} data.`
+          : `Can be scheduled with ${mode === 'demo' ? 'synthetic demo data' : 'live data'}.`
+        : `Not available for ${mode === 'demo' ? 'demo' : 'live'} scheduling: ${usable.reason}`}
     </p>
   </div>
 );

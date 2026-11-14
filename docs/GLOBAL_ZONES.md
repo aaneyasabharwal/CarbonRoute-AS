@@ -25,7 +25,8 @@ commercial availability, and four separate availability facts:
 | In the verified catalogue | 351 | provider's public zone list, 2026-11-14 |
 | Carbon-intensity forecast / 24 h history / latest **listed by the provider** for the project's trial key | 351 / 351 / 351 | provider listing 2026-11-13. **A listing is not proof**: on 2026-11-12 the listed past-range endpoint was refused (401). |
 | Live data **verified** (actually read with the project key) | **7**: DE, FR, GB, IN, IN-NO, IN-SO, US-CAL-CISO | probe log 2026-11-12 and the research collector since 2026-11-13 |
-| **Synthetic demo** profile (not real data) | 4: DE, IN-NO, US-CAL-CISO, US-TEX-ERCO (+ the synthetic `BENCHMARK-RESEARCH` trace, which is not a real zone) | `backend/src/services/carbonService.ts` |
+| **Own synthetic demo** profile (not real data) | 4: DE, IN-NO, US-CAL-CISO, US-TEX-ERCO (+ the synthetic `BENCHMARK-RESEARCH` trace, which is not a real zone) | `backend/src/services/carbonService.ts` |
+| Demo scheduling possible | **all 351** (P13): the other 347 use the **generic synthetic trace**, the same synthetic curve for every zone without its own profile, labelled "not <zone> data" | `carbonService.ts`, `syntheticTrace` field |
 | Live data configured on a given server | per deployment | `liveConfigured` in the API response (the free public demo has no key) |
 
 ## 2. Sources and licences
@@ -71,8 +72,11 @@ provider's hourly timestamps, so daylight-saving changes cannot shift a window (
   A panel shows the availability facts for the selected zone and whether it can be scheduled in
   the chosen data mode on this server, with the reason when it cannot. Evaluate is then disabled
   and no request is made.
-- **No silent substitution**: demo data for a zone without a synthetic profile is refused (HTTP 422
-  with the list of demo zones); before P11 it silently returned the `BENCHMARK-RESEARCH` trace.
+- **Every zone works on demo data, never silently** (P13): a zone without its own synthetic profile
+  uses the generic synthetic trace, stated in the forecast title ("<zone> — generic synthetic trace … not <zone> data"), in
+  the availability panel and in the API (`syntheticTrace: "generic"`); the zone keeps its own id and
+  time zone. (Before P11 such zones silently received the `BENCHMARK-RESEARCH` trace under its name;
+  P11 refused them; P13 allows them with the label.) A zone outside the catalogue is refused (422).
 - Live scheduling for any listed zone works on a server with a valid key; a provider refusal is
   shown as an error, never replaced by other data.
 
