@@ -31,13 +31,14 @@ const m49 = readJson('iso3166-m49-regions.json');
 
 // IANA: canonical names, aliases, and the zones listed per country.
 const aliases = new Map();
-for (const line of fs.readFileSync(src('iana-backward'), 'utf8').split('\n')) {
+// Line endings may be CRLF on Windows checkouts.
+for (const line of fs.readFileSync(src('iana-backward'), 'utf8').split(/\r?\n/)) {
   const m = line.match(/^Link\s+(\S+)\s+(\S+)/);
   if (m) aliases.set(m[2], m[1]);
 }
 const tzByCountry = new Map();
 const canonicalTz = new Set();
-for (const line of fs.readFileSync(src('iana-zone.tab'), 'utf8').split('\n')) {
+for (const line of fs.readFileSync(src('iana-zone.tab'), 'utf8').split(/\r?\n/)) {
   if (!line || line.startsWith('#')) continue;
   const [cc, , tz] = line.split('\t');
   canonicalTz.add(tz);
