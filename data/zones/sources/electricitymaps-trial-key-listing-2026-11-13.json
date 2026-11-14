@@ -1,0 +1,1761 @@
+{
+ "source": "GET https://api.electricitymap.org/v3/zones with the project trial key, response saved 2026-11-13 00:28 local time",
+ "note": "What the provider LISTED for this key (the access field), reduced to carbon-intensity latest/history/forecast. A listing is not proof of access: on 2026-11-12 the listed past-range endpoint was refused (401). History is limited to the last 24 h by the plan.",
+ "zones": {
+  "AE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AF": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AG": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AL": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AT": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AU": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AU-NSW": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AU-NT": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AU-QLD": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AU-SA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AU-TAS": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AU-TAS-FI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AU-TAS-KI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AU-VIC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AU-WA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AU-WA-RI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AW": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AX": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "AZ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BB": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BD": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BF": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BG": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BH": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BJ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BN": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BR-CS": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BR-N": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BR-NE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BR-S": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BS": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BT": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BW": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BY": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "BZ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CA-AB": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CA-BC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CA-MB": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CA-NB": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CA-NL": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CA-NS": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CA-NT": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CA-NU": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CA-ON": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CA-PE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CA-QC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CA-SK": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CA-YT": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CD": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CF": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CG": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CH": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CL-SEN": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CN": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CU": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CV": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CW": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CY": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "CZ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "DE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "DJ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "DK": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "DK-DK1": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "DK-DK2": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "DM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "DO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "DZ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "EC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "EE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "EG": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ER": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ES": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ES-CE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ES-CN-FV": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ES-CN-GC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ES-CN-HI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ES-CN-IG": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ES-CN-LP": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ES-CN-LZ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ES-CN-TE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ES-IB-FO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ES-IB-IZ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ES-IB-MA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ES-IB-ME": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ES-ML": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ET": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "FI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "FJ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "FK": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "FM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "FO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "FO-MI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "FO-SI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "FR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "FR-COR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GB": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GB-NIR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GF": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GH": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GL": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GN": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GP": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GQ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GS": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GT": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GU": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GW": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "GY": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "HK": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "HN": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "HR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "HT": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "HU": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ID": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IL": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IN": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IN-EA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IN-NE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IN-NO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IN-SO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IN-WE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IQ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IS": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IT": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IT-CA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IT-CNO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IT-CSO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IT-NO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IT-SAR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IT-SIC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "IT-SO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "JM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "JO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "JP": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "JP-CB": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "JP-CG": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "JP-HKD": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "JP-HR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "JP-KN": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "JP-KY": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "JP-ON": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "JP-SK": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "JP-TH": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "JP-TK": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "KE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "KG": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "KH": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "KM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "KP": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "KR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "KW": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "KY": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "KZ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "LA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "LB": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "LC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "LK": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "LR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "LS": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "LT": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "LU": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "LV": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "LY": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MD": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ME": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MG": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MK": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ML": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MN": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MQ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MT": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MU": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MV": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MW": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MX": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MY": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MY-EM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MY-WM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "MZ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "NA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "NC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "NE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "NG": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "NI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "NL": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "NO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "NO-NO1": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "NO-NO2": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "NO-NO3": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "NO-NO4": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "NO-NO5": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "NP": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "NZ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "OM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PF": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PG": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PH": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PH-LU": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PH-MI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PH-VI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PK": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PL": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PS": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PT": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PT-MA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PW": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "PY": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "QA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "RE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "RO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "RS": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "RU-1": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "RU-2": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "RU-AS": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "RW": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SB": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SD": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SE-SE1": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SE-SE2": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SE-SE3": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SE-SE4": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SG": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SK": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SL": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SN": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SS": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ST": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SV": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SY": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "SZ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "TD": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "TG": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "TH": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "TJ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "TL": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "TM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "TN": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "TO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "TR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "TT": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "TW": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "TZ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "UG": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-AK": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-AK-SEAPA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-CAL-BANC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-CAL-CISO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-CAL-IID": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-CAL-LDWP": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-CAL-TIDC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-CAR-CPLE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-CAR-CPLW": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-CAR-DUK": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-CAR-SC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-CAR-SCEG": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-CAR-YAD": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-CENT-SPA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-CENT-SWPP": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-FLA-FMPP": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-FLA-FPC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-FLA-FPL": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-FLA-GVL": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-FLA-HST": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-FLA-JEA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-FLA-SEC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-FLA-TAL": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-FLA-TEC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-HI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-MIDA-PJM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-MIDW-AECI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-MIDW-LGEE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-MIDW-MISO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NE-ISNE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-AVA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-BPAT": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-CHPD": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-DOPD": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-GCPD": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-GRID": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-IPCO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-NEVP": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-NWMT": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-PACE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-PACW": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-PGE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-PSCO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-PSEI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-SCL": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-TPWR": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-WACM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NW-WAUW": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-NY-NYIS": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-SE-SEPA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-SE-SOCO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-SW-AZPS": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-SW-EPE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-SW-PNM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-SW-SRP": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-SW-TEPC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-SW-WALC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-TEN-TVA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "US-TEX-ERCO": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "UY": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "UZ": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "VC": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "VE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "VI": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "VN": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "VU": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "WS": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "XK": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "YE": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "YT": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ZA": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ZM": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  },
+  "ZW": {
+   "latest": true,
+   "history": true,
+   "forecast": true
+  }
+ }
+}

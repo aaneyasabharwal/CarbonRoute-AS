@@ -1,0 +1,753 @@
+{
+  "kind": "carbonroute-ml-evaluation",
+  "createdAt": "2026-11-14T14:30:11.263Z",
+  "dataset": {
+    "sha256": "0e9b960c6b21153761090be0d87328998ec993e81cb8d1186d728b03219f2c17",
+    "rows": 1655,
+    "measuredRows": 946,
+    "zones": [
+      "DE",
+      "FR",
+      "GB",
+      "IN-NO",
+      "US-CAL-CISO"
+    ],
+    "firstIssue": "2026-11-13T13:32:30.748Z",
+    "lastIssue": "2026-11-14T13:32:52.380Z",
+    "spanDays": 1,
+    "leadHours": {
+      "min": 0,
+      "max": 24
+    }
+  },
+  "thresholds": {
+    "minTrainRows": 500,
+    "minValidationRows": 100,
+    "minTestRows": 200,
+    "minSpanDays": 7
+  },
+  "promotionRule": {
+    "maxMaeRatio": 0.95,
+    "requireCiBelowZero": true,
+    "clusterBy": "target-hour",
+    "minTestClusters": 30,
+    "measuredCheckMinRows": 30,
+    "bootstrapIterations": 2000,
+    "seed": 20261113
+  },
+  "providerErrorAllRows": {
+    "all": {
+      "n": 1655,
+      "mae": 22.72205438066465,
+      "rmse": 28.91045661193496,
+      "bias": 5.636858006042296
+    },
+    "measuredOnly": {
+      "n": 946,
+      "mae": 17.882663847780126,
+      "rmse": 24.099138966836918,
+      "bias": 11.506342494714588
+    }
+  },
+  "anomalies": {
+    "method": "robust-z of forecast error per zone (median / MAD), unsupervised",
+    "interpretation": "Unsupervised statistical screening flags for manual review. They are NOT confirmed provider failures or data errors, and no detection accuracy is claimed.",
+    "threshold": 3.5,
+    "zones": [
+      {
+        "zone": "DE",
+        "rows": 331,
+        "status": "ok",
+        "flagged": []
+      },
+      {
+        "zone": "FR",
+        "rows": 331,
+        "status": "ok",
+        "flagged": [
+          {
+            "targetTime": "2026-11-13T15:00:00.000Z",
+            "leadHours": 2,
+            "error": -8,
+            "z": -5.4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T16:00:00.000Z",
+            "leadHours": 3,
+            "error": -13,
+            "z": -7.08,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T17:00:00.000Z",
+            "leadHours": 4,
+            "error": -9,
+            "z": -5.73,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T18:00:00.000Z",
+            "leadHours": 5,
+            "error": -9,
+            "z": -5.73,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T19:00:00.000Z",
+            "leadHours": 6,
+            "error": -8,
+            "z": -5.4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T20:00:00.000Z",
+            "leadHours": 7,
+            "error": -12,
+            "z": -6.74,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T21:00:00.000Z",
+            "leadHours": 8,
+            "error": -13,
+            "z": -7.08,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T22:00:00.000Z",
+            "leadHours": 9,
+            "error": -14,
+            "z": -7.42,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T23:00:00.000Z",
+            "leadHours": 10,
+            "error": -8,
+            "z": -5.4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T15:00:00.000Z",
+            "leadHours": 1,
+            "error": -8,
+            "z": -5.4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T16:00:00.000Z",
+            "leadHours": 2,
+            "error": -13,
+            "z": -7.08,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T17:00:00.000Z",
+            "leadHours": 3,
+            "error": -9,
+            "z": -5.73,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T18:00:00.000Z",
+            "leadHours": 4,
+            "error": -9,
+            "z": -5.73,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T19:00:00.000Z",
+            "leadHours": 5,
+            "error": -6,
+            "z": -4.72,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T20:00:00.000Z",
+            "leadHours": 6,
+            "error": -11,
+            "z": -6.41,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T21:00:00.000Z",
+            "leadHours": 7,
+            "error": -13,
+            "z": -7.08,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T22:00:00.000Z",
+            "leadHours": 8,
+            "error": -14,
+            "z": -7.42,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T23:00:00.000Z",
+            "leadHours": 9,
+            "error": -8,
+            "z": -5.4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T15:00:00.000Z",
+            "leadHours": 0,
+            "error": -8,
+            "z": -5.4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T16:00:00.000Z",
+            "leadHours": 1,
+            "error": -13,
+            "z": -7.08,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T17:00:00.000Z",
+            "leadHours": 2,
+            "error": -9,
+            "z": -5.73,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T18:00:00.000Z",
+            "leadHours": 3,
+            "error": -9,
+            "z": -5.73,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T19:00:00.000Z",
+            "leadHours": 4,
+            "error": -6,
+            "z": -4.72,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T20:00:00.000Z",
+            "leadHours": 5,
+            "error": -8,
+            "z": -5.4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T21:00:00.000Z",
+            "leadHours": 6,
+            "error": -11,
+            "z": -6.41,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T22:00:00.000Z",
+            "leadHours": 7,
+            "error": -14,
+            "z": -7.42,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T23:00:00.000Z",
+            "leadHours": 8,
+            "error": -8,
+            "z": -5.4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T16:00:00.000Z",
+            "leadHours": 0,
+            "error": -12,
+            "z": -6.74,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T17:00:00.000Z",
+            "leadHours": 1,
+            "error": -9,
+            "z": -5.73,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T18:00:00.000Z",
+            "leadHours": 2,
+            "error": -9,
+            "z": -5.73,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T19:00:00.000Z",
+            "leadHours": 3,
+            "error": -6,
+            "z": -4.72,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T20:00:00.000Z",
+            "leadHours": 4,
+            "error": -8,
+            "z": -5.4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T21:00:00.000Z",
+            "leadHours": 5,
+            "error": -10,
+            "z": -6.07,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T22:00:00.000Z",
+            "leadHours": 6,
+            "error": -13,
+            "z": -7.08,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T23:00:00.000Z",
+            "leadHours": 7,
+            "error": -8,
+            "z": -5.4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T17:00:00.000Z",
+            "leadHours": 0,
+            "error": -9,
+            "z": -5.73,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T18:00:00.000Z",
+            "leadHours": 1,
+            "error": -10,
+            "z": -6.07,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T19:00:00.000Z",
+            "leadHours": 2,
+            "error": -6,
+            "z": -4.72,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T20:00:00.000Z",
+            "leadHours": 3,
+            "error": -8,
+            "z": -5.4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T21:00:00.000Z",
+            "leadHours": 4,
+            "error": -10,
+            "z": -6.07,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T22:00:00.000Z",
+            "leadHours": 5,
+            "error": -12,
+            "z": -6.74,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T23:00:00.000Z",
+            "leadHours": 6,
+            "error": -7,
+            "z": -5.06,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T18:00:00.000Z",
+            "leadHours": 0,
+            "error": -10,
+            "z": -6.07,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T19:00:00.000Z",
+            "leadHours": 1,
+            "error": -6,
+            "z": -4.72,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T20:00:00.000Z",
+            "leadHours": 2,
+            "error": -8,
+            "z": -5.4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T21:00:00.000Z",
+            "leadHours": 3,
+            "error": -10,
+            "z": -6.07,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T22:00:00.000Z",
+            "leadHours": 4,
+            "error": -11,
+            "z": -6.41,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T23:00:00.000Z",
+            "leadHours": 5,
+            "error": -6,
+            "z": -4.72,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T19:00:00.000Z",
+            "leadHours": 0,
+            "error": -6,
+            "z": -4.72,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T20:00:00.000Z",
+            "leadHours": 1,
+            "error": -8,
+            "z": -5.4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T21:00:00.000Z",
+            "leadHours": 2,
+            "error": -10,
+            "z": -6.07,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T22:00:00.000Z",
+            "leadHours": 3,
+            "error": -11,
+            "z": -6.41,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T23:00:00.000Z",
+            "leadHours": 4,
+            "error": -6,
+            "z": -4.72,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T20:00:00.000Z",
+            "leadHours": 0,
+            "error": -8,
+            "z": -5.4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T21:00:00.000Z",
+            "leadHours": 1,
+            "error": -10,
+            "z": -6.07,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T22:00:00.000Z",
+            "leadHours": 2,
+            "error": -11,
+            "z": -6.41,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T23:00:00.000Z",
+            "leadHours": 3,
+            "error": -5,
+            "z": -4.38,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T20:00:00.000Z",
+            "leadHours": 0,
+            "error": -8,
+            "z": -5.4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T21:00:00.000Z",
+            "leadHours": 1,
+            "error": -10,
+            "z": -6.07,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T22:00:00.000Z",
+            "leadHours": 2,
+            "error": -11,
+            "z": -6.41,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T23:00:00.000Z",
+            "leadHours": 3,
+            "error": -5,
+            "z": -4.38,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T21:00:00.000Z",
+            "leadHours": 0,
+            "error": -10,
+            "z": -6.07,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T22:00:00.000Z",
+            "leadHours": 1,
+            "error": -11,
+            "z": -6.41,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T23:00:00.000Z",
+            "leadHours": 2,
+            "error": -5,
+            "z": -4.38,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T22:00:00.000Z",
+            "leadHours": 0,
+            "error": -11,
+            "z": -6.41,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T23:00:00.000Z",
+            "leadHours": 1,
+            "error": -5,
+            "z": -4.38,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T23:00:00.000Z",
+            "leadHours": 0,
+            "error": -5,
+            "z": -4.38,
+            "quality": "measured"
+          }
+        ]
+      },
+      {
+        "zone": "GB",
+        "rows": 331,
+        "status": "ok",
+        "flagged": []
+      },
+      {
+        "zone": "IN-NO",
+        "rows": 331,
+        "status": "ok",
+        "flagged": []
+      },
+      {
+        "zone": "US-CAL-CISO",
+        "rows": 331,
+        "status": "ok",
+        "flagged": [
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 24,
+            "error": -63,
+            "z": -4.86,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 23,
+            "error": -52,
+            "z": -4.11,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 22,
+            "error": -55,
+            "z": -4.32,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 21,
+            "error": -55,
+            "z": -4.32,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 20,
+            "error": -55,
+            "z": -4.32,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 19,
+            "error": -56,
+            "z": -4.38,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 18,
+            "error": -54,
+            "z": -4.25,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 17,
+            "error": -54,
+            "z": -4.25,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 17,
+            "error": -54,
+            "z": -4.25,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 16,
+            "error": -54,
+            "z": -4.25,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 15,
+            "error": -54,
+            "z": -4.25,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 14,
+            "error": -52,
+            "z": -4.11,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 13,
+            "error": -45,
+            "z": -3.64,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 12,
+            "error": -45,
+            "z": -3.64,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 11,
+            "error": -46,
+            "z": -3.71,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 10,
+            "error": -49,
+            "z": -3.91,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 9,
+            "error": -50,
+            "z": -3.98,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 8,
+            "error": -50,
+            "z": -3.98,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 7,
+            "error": -49,
+            "z": -3.91,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 6,
+            "error": -49,
+            "z": -3.91,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 5,
+            "error": -50,
+            "z": -3.98,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 1,
+            "error": -44,
+            "z": -3.57,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T13:00:00.000Z",
+            "leadHours": 0,
+            "error": -45,
+            "z": -3.64,
+            "quality": "measured"
+          }
+        ]
+      }
+    ]
+  },
+  "notes": [
+    "Targets are realized values from Electricity Maps history; provider estimates are included and reported separately (measuredOnly).",
+    "Features use only information available when the forecast was fetched (leakage-checked).",
+    "Splits are chronological with a gap: no target hour of an earlier split overlaps a later split.",
+    "Thresholds and the promotion rule were fixed in code before evaluation.",
+    "Anomaly flags are unsupervised screening flags, not a validated detector."
+  ],
+  "status": "insufficient-data",
+  "statusReasons": [
+    "Data spans 1 days; at least 7 are required.",
+    "Training rows 415 < 500.",
+    "Validation rows 55 < 100.",
+    "Test rows 104 < 200.",
+    "No model was fitted. Reliable training is pending more collected data."
+  ],
+  "split": {
+    "train": 415,
+    "validation": 55,
+    "test": 104,
+    "measured": {
+      "train": 270,
+      "validation": 35,
+      "test": 52
+    },
+    "droppedForGap": 1081,
+    "validationStart": "2026-11-14T01:06:44.680Z",
+    "testStart": "2026-11-14T06:07:03.541Z"
+  },
+  "candidate": null,
+  "testScores": null,
+  "promotion": null,
+  "gitCommit": "b62e99933885d421df0bbd40ed3ff61584680bf5"
+}

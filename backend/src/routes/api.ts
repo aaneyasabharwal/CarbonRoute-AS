@@ -47,6 +47,7 @@ import {
   getCarbonForecastSnapshot,
   getCarbonPowerBreakdown,
   getCarbonProviderStatus,
+  getZoneCatalogue,
   listJobs,
   getJobDetails,
   cancelJob,
@@ -170,6 +171,8 @@ router.get('/carbon/latest', ...liveCarbon, getCarbonLatest);
 router.get('/carbon/history', ...liveCarbon, getCarbonHistory);
 router.get('/carbon/power-breakdown', ...liveCarbon, getCarbonPowerBreakdown);
 router.get('/carbon/provider', getCarbonProviderStatus);
+// P11: the global zone catalogue (static, public, no provider call).
+router.get('/carbon/catalogue', limit.publicCompute, getZoneCatalogue);
 router.get('/carbon/regions', ...liveCarbon, getAvailableRegions);
 router.get('/cluster/health', limit.publicCompute, getClusterHealth);
 

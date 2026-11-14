@@ -1,4 +1,5 @@
 import { internalError } from '../utils/httpErrors';
+import { catalogueMeta, catalogueZones } from '../carbon/zoneCatalogue';
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { CarbonService } from '../services/carbonService';
@@ -509,6 +510,16 @@ export const getCarbonPowerBreakdown = async (req: Request, res: Response) => {
 };
 
 /** Which carbon-data capabilities are configured and verified (no secrets). */
+/**
+ * Global zone catalogue (P11): every zone of the provider's public list with country, area, time
+ * zone and availability kept apart (provider-listed, verified live, synthetic demo). Static data:
+ * no provider call, no sign-in, no quota. `liveConfigured` says whether this server has a key.
+ */
+export const getZoneCatalogue = (_req: Request, res: Response) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  return res.json({ success: true, data: { meta: catalogueMeta(), liveConfigured: electricityMaps.isConfigured(), zones: catalogueZones() } });
+};
+
 export const getCarbonProviderStatus = (_req: Request, res: Response) => {
   return res.json({
     success: true,

@@ -75,9 +75,9 @@ export const ResultsPage: React.FC = () => {
         </EmptyState>
       ) : (
         <div className="space-y-4">
-          <label className="text-xs text-slate-400 flex items-center gap-2">
+          <label className="text-xs text-slate-400 flex items-center gap-2 min-w-0">
             Run
-            <select value={selected ?? ''} onChange={(e) => setSelected(e.target.value)} className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200">
+            <select value={selected ?? ''} onChange={(e) => setSelected(e.target.value)} className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 min-w-0 w-full max-w-xl truncate">
               {list.data.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.createdAt} · {r.dataset.zones.join(', ')} · seed {r.seed}

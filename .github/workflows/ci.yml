@@ -56,6 +56,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      # P11: the committed zone catalogue must be exactly what its versioned sources produce.
+      - name: Zone catalogue is reproducible from data/zones/sources
+        run: |
+          node ../scripts/zones/build-zone-catalogue.mjs > /dev/null
+          git diff --exit-code -- src/carbon/zoneCatalogue.generated.ts
+
       # P7 review: adversarial multi-process test of the collector lock (needs the build).
       - name: Collector lock stress test (multi-process, random SIGKILLs)
         run: node test/stress/collectorLockStress.cjs 25 8 1500

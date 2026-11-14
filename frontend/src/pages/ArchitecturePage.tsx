@@ -55,7 +55,7 @@ export const ArchitecturePage: React.FC = () => {
       icon: Activity,
       color: 'text-teal-400',
       summary: 'Acquires 24-hour regional marginal carbon intensity forecasts in gCO2eq/kWh.',
-      details: 'Queries live Electricity Maps REST API with regional zone identifiers (e.g. US-CAL-CISO, US-TEX-ERCO, DE, IN-NO). Provider failures are returned as errors; the synthetic demo trace is used only in explicit demo mode.',
+      details: 'Queries live Electricity Maps REST API with zone identifiers (e.g. US-CAL-CISO, DE, IN-NO); the global zone catalogue lists all 351 provider zones with country, area and IANA time zone, and states per zone whether live data was verified or a synthetic demo profile exists. Provider failures are returned as errors; the synthetic demo trace is used only in explicit demo mode.',
     },
     {
       id: 'uncertainty-model',

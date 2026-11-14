@@ -193,6 +193,34 @@ export interface ZoneOption {
   capabilities?: { latest: boolean; history: boolean; forecast: boolean; pastRange: boolean; powerBreakdown: boolean } | null;
 }
 
+/** P11: one zone of the global catalogue (GET /api/carbon/catalogue). */
+export interface CatalogueZone {
+  zone: string;
+  name: string;
+  zoneName: string;
+  countryCode: string;
+  countryName: string | null;
+  continent: string | null;
+  area: string | null;
+  timezone: string | null;
+  timezoneSource: string | null;
+  parentZone: string | null;
+  subZones: string[];
+  aggregate: boolean;
+  tier: string | null;
+  commerciallyAvailable: boolean;
+  providerListed: { latest: boolean; history: boolean; forecast: boolean };
+  verifiedLive: { latest: boolean; history: boolean; forecast: boolean; evidence: string } | null;
+  syntheticDemo: boolean;
+  flags: string[];
+}
+
+export interface ZoneCatalogue {
+  meta: { version: string; zones: number; sources: Record<string, string>; counts: Record<string, any> };
+  liveConfigured: boolean;
+  zones: CatalogueZone[];
+}
+
 export type ObservationQuality = 'measured' | 'provider-estimate';
 
 export interface ObservationPoint {

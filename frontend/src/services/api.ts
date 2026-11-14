@@ -23,6 +23,7 @@ import {
   MlEvaluationListItem,
   MlEvaluation,
   ZoneOption,
+  ZoneCatalogue,
   JobObservationsResult,
 } from '../types';
 import { resolveBackendUrl } from '../config/apiUrl';
@@ -1212,6 +1213,18 @@ export const api = {
    * Live mode: every zone the backend's Electricity Maps key can access.
    * Demo mode: the built-in synthetic profiles. A failure is returned as a failure.
    */
+  /** P11: the global zone catalogue (static, public; every provider zone with availability levels). */
+  async getZoneCatalogue(): Promise<ApiResponse<ZoneCatalogue>> {
+    try {
+      const res = await fetch(`${API_BASE}/carbon/catalogue`);
+      const json = await res.json().catch(() => null);
+      if (res.ok && json && json.success) return json;
+      return { success: false, message: json?.message || `Zone catalogue unavailable (${res.status})` };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error loading the zone catalogue.' };
+    }
+  },
+
   async getCarbonRegions(mode: 'live' | 'demo' = 'live'): Promise<ApiResponse<ZoneOption[]> & { source?: string }> {
     try {
       const res = await fetch(`${API_BASE}/carbon/regions${mode === 'demo' ? '?mode=demo' : ''}`, { headers: getHeaders() });
