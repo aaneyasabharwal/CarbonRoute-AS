@@ -17,7 +17,7 @@ to wake) and keeps no data across restarts. Demonstration script: [docs/DEMONSTR
 **Status (14 November 2026): research prototype, not production-ready.** Submission documents:
 [handover](docs/HANDOVER.md) · [validation report](docs/VALIDATION_REPORT.md) ·
 [original vs final](docs/ORIGINAL_VS_FINAL.md) · [research report](docs/RESEARCH_REPORT.md) ·
-[global zones](docs/GLOBAL_ZONES.md) · [screenshots](docs/screenshots/). In short:
+[global zones](docs/GLOBAL_ZONES.md) · [screenshots](docs/screenshots/) · **[team handbook](docs/TEAM_HANDBOOK.md)** (everything in one place). In short:
 
 | Works and is tested | Limited or not done |
 |---|---|
