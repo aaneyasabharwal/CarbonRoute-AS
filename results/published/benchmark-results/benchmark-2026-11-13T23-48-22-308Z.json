@@ -1,0 +1,982 @@
+{
+  "kind": "carbonroute-replay-benchmark",
+  "dataClass": "real-carbon-data-synthetic-workloads",
+  "createdAt": "2026-11-13T23:48:22.308Z",
+  "config": {
+    "seed": 42,
+    "workloadsPerSnapshot": 20,
+    "runtimeCvs": [
+      0,
+      0.2
+    ],
+    "riskTolerance": 0.05,
+    "durationsHours": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "maxSlackHours": 12,
+    "cpu": 2,
+    "bootstrapIterations": 2000
+  },
+  "configSha256": "a074e5bb9fa81a5122961f440134328ac712393e8c4866e5403f920b230e0681",
+  "dataset": {
+    "sha256": "46a5a644d1b4291acd23e55cb3bdf1b4906db9dcb491f51e0f12d7eb624b7d6f",
+    "files": [
+      "collection-2026-11-13.jsonl"
+    ],
+    "zones": [
+      "DE",
+      "FR",
+      "GB",
+      "IN-NO",
+      "US-CAL-CISO"
+    ],
+    "snapshots": 60,
+    "realizedIntervals": 170,
+    "measuredShare": 0.6118
+  },
+  "scenarios": [
+    {
+      "runtimeCv": 0,
+      "workloads": 1200,
+      "infeasible": 0,
+      "pendingRealized": 528,
+      "oracleAvailable": 412,
+      "policies": [
+        {
+          "policyId": "immediate",
+          "decisions": 1200,
+          "scored": 1053,
+          "meanRealizedIntensity": 285.03,
+          "meanForecastIntensity": 290.2,
+          "meanEstimatedEmissionsGrams": 166,
+          "meanDelayHours": 0,
+          "deadlineViolationRate": 0,
+          "meanRegretVsOracle": 13.01,
+          "realizedIntensityCI": {
+            "n": 1053,
+            "estimate": 285.0347388414055,
+            "low": 273.4472269705605,
+            "high": 296.71372269705614,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 1042
+          },
+          "diffVsImmediateCI": {
+            "n": 1053,
+            "estimate": 0,
+            "low": 0,
+            "high": 0,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 1542
+          },
+          "diffVsImmediateClusterCI": {
+            "n": 1053,
+            "estimate": 0,
+            "low": 0,
+            "high": 0,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 1742,
+            "clusters": 60
+          }
+        },
+        {
+          "policyId": "edf",
+          "decisions": 1200,
+          "scored": 1053,
+          "meanRealizedIntensity": 285.03,
+          "meanForecastIntensity": 290.2,
+          "meanEstimatedEmissionsGrams": 166,
+          "meanDelayHours": 0,
+          "deadlineViolationRate": 0,
+          "meanRegretVsOracle": 13.01,
+          "realizedIntensityCI": {
+            "n": 1053,
+            "estimate": 285.0347388414055,
+            "low": 273.05800569800556,
+            "high": 297.2456600189932,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 1043
+          },
+          "diffVsImmediateCI": {
+            "n": 1053,
+            "estimate": 0,
+            "low": 0,
+            "high": 0,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 1543
+          },
+          "diffVsImmediateClusterCI": {
+            "n": 1053,
+            "estimate": 0,
+            "low": 0,
+            "high": 0,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 1743,
+            "clusters": 60
+          }
+        },
+        {
+          "policyId": "deterministic_carbon",
+          "decisions": 1200,
+          "scored": 672,
+          "meanRealizedIntensity": 257.71,
+          "meanForecastIntensity": 256.19,
+          "meanEstimatedEmissionsGrams": 149.4,
+          "meanDelayHours": 3.24,
+          "deadlineViolationRate": 0,
+          "meanRegretVsOracle": 1.95,
+          "realizedIntensityCI": {
+            "n": 672,
+            "estimate": 257.7148809523816,
+            "low": 246.0538095238097,
+            "high": 269.8387797619051,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 1044
+          },
+          "diffVsImmediateCI": {
+            "n": 672,
+            "estimate": -8.056994047619046,
+            "low": -10.4225,
+            "high": -5.66738095238095,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 1544
+          },
+          "diffVsImmediateClusterCI": {
+            "n": 672,
+            "estimate": -8.056994047619046,
+            "low": -18.4976338028169,
+            "high": -0.2805837173579091,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 1744,
+            "clusters": 57
+          }
+        },
+        {
+          "policyId": "carbon_aware_baseline",
+          "decisions": 1200,
+          "scored": 824,
+          "meanRealizedIntensity": 273.08,
+          "meanForecastIntensity": 273.44,
+          "meanEstimatedEmissionsGrams": 157.4,
+          "meanDelayHours": 1.43,
+          "deadlineViolationRate": 0,
+          "meanRegretVsOracle": 5.1,
+          "realizedIntensityCI": {
+            "n": 824,
+            "estimate": 273.0783131067969,
+            "low": 260.7960679611654,
+            "high": 285.3081917475732,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 1045
+          },
+          "diffVsImmediateCI": {
+            "n": 824,
+            "estimate": -6.3858616504854355,
+            "low": -8.1076213592233,
+            "high": -4.641456310679612,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 1545
+          },
+          "diffVsImmediateClusterCI": {
+            "n": 824,
+            "estimate": -6.3858616504854355,
+            "low": -13.566191066997519,
+            "high": -0.7196179183135708,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 1745,
+            "clusters": 59
+          }
+        },
+        {
+          "policyId": "carbonroute_uncertainty",
+          "decisions": 1200,
+          "scored": 672,
+          "meanRealizedIntensity": 257.71,
+          "meanForecastIntensity": 256.19,
+          "meanEstimatedEmissionsGrams": 149.4,
+          "meanDelayHours": 3.24,
+          "deadlineViolationRate": 0,
+          "meanRegretVsOracle": 1.95,
+          "realizedIntensityCI": {
+            "n": 672,
+            "estimate": 257.7148809523816,
+            "low": 245.71721726190495,
+            "high": 270.31397321428597,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 1046
+          },
+          "diffVsImmediateCI": {
+            "n": 672,
+            "estimate": -8.056994047619046,
+            "low": -10.298869047619046,
+            "high": -5.767693452380949,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 1546
+          },
+          "diffVsImmediateClusterCI": {
+            "n": 672,
+            "estimate": -8.056994047619046,
+            "low": -17.61048076923077,
+            "high": -0.04633204633204584,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 1746,
+            "clusters": 57
+          }
+        }
+      ]
+    },
+    {
+      "runtimeCv": 0.2,
+      "workloads": 1200,
+      "infeasible": 110,
+      "pendingRealized": 528,
+      "oracleAvailable": 412,
+      "policies": [
+        {
+          "policyId": "immediate",
+          "decisions": 1200,
+          "scored": 1053,
+          "meanRealizedIntensity": 285.03,
+          "meanForecastIntensity": 290.2,
+          "meanEstimatedEmissionsGrams": 166,
+          "meanDelayHours": 0,
+          "deadlineViolationRate": 0.0408,
+          "meanRegretVsOracle": 13.01,
+          "realizedIntensityCI": {
+            "n": 1053,
+            "estimate": 285.0347388414055,
+            "low": 273.42880341880357,
+            "high": 296.3851851851851,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 2042
+          },
+          "diffVsImmediateCI": {
+            "n": 1053,
+            "estimate": 0,
+            "low": 0,
+            "high": 0,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 2542
+          },
+          "diffVsImmediateClusterCI": {
+            "n": 1053,
+            "estimate": 0,
+            "low": 0,
+            "high": 0,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 2742,
+            "clusters": 60
+          }
+        },
+        {
+          "policyId": "edf",
+          "decisions": 1200,
+          "scored": 1053,
+          "meanRealizedIntensity": 285.03,
+          "meanForecastIntensity": 290.2,
+          "meanEstimatedEmissionsGrams": 166,
+          "meanDelayHours": 0,
+          "deadlineViolationRate": 0.0408,
+          "meanRegretVsOracle": 13.01,
+          "realizedIntensityCI": {
+            "n": 1053,
+            "estimate": 285.0347388414055,
+            "low": 273.55154795821494,
+            "high": 296.7998670465335,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 2043
+          },
+          "diffVsImmediateCI": {
+            "n": 1053,
+            "estimate": 0,
+            "low": 0,
+            "high": 0,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 2543
+          },
+          "diffVsImmediateClusterCI": {
+            "n": 1053,
+            "estimate": 0,
+            "low": 0,
+            "high": 0,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 2743,
+            "clusters": 60
+          }
+        },
+        {
+          "policyId": "deterministic_carbon",
+          "decisions": 1200,
+          "scored": 672,
+          "meanRealizedIntensity": 257.71,
+          "meanForecastIntensity": 256.19,
+          "meanEstimatedEmissionsGrams": 149.4,
+          "meanDelayHours": 3.24,
+          "deadlineViolationRate": 0.2342,
+          "meanRegretVsOracle": 1.95,
+          "realizedIntensityCI": {
+            "n": 672,
+            "estimate": 257.7148809523816,
+            "low": 246.04953869047628,
+            "high": 269.58197916666677,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 2044
+          },
+          "diffVsImmediateCI": {
+            "n": 672,
+            "estimate": -8.056994047619046,
+            "low": -10.439181547619045,
+            "high": -5.78331845238095,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 2544
+          },
+          "diffVsImmediateClusterCI": {
+            "n": 672,
+            "estimate": -8.056994047619046,
+            "low": -17.821999999999996,
+            "high": -0.5056583072100311,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 2744,
+            "clusters": 57
+          }
+        },
+        {
+          "policyId": "carbon_aware_baseline",
+          "decisions": 1200,
+          "scored": 824,
+          "meanRealizedIntensity": 273.08,
+          "meanForecastIntensity": 273.44,
+          "meanEstimatedEmissionsGrams": 157.4,
+          "meanDelayHours": 1.43,
+          "deadlineViolationRate": 0.0442,
+          "meanRegretVsOracle": 5.1,
+          "realizedIntensityCI": {
+            "n": 824,
+            "estimate": 273.0783131067969,
+            "low": 261.41543689320395,
+            "high": 285.41229368932073,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 2045
+          },
+          "diffVsImmediateCI": {
+            "n": 824,
+            "estimate": -6.3858616504854355,
+            "low": -8.218919902912623,
+            "high": -4.567851941747572,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 2545
+          },
+          "diffVsImmediateClusterCI": {
+            "n": 824,
+            "estimate": -6.3858616504854355,
+            "low": -13.681150442477874,
+            "high": -0.42293833131801645,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 2745,
+            "clusters": 59
+          }
+        },
+        {
+          "policyId": "carbonroute_uncertainty",
+          "decisions": 1090,
+          "scored": 638,
+          "meanRealizedIntensity": 268.06,
+          "meanForecastIntensity": 262.74,
+          "meanEstimatedEmissionsGrams": 155.3,
+          "meanDelayHours": 2.78,
+          "deadlineViolationRate": 0.0092,
+          "meanRegretVsOracle": 5.85,
+          "realizedIntensityCI": {
+            "n": 638,
+            "estimate": 268.0603448275868,
+            "low": 255.67920062695922,
+            "high": 281.08982758620704,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 2046
+          },
+          "diffVsImmediateCI": {
+            "n": 638,
+            "estimate": -7.207100313479622,
+            "low": -9.69299373040752,
+            "high": -4.921645768025076,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 2546
+          },
+          "diffVsImmediateClusterCI": {
+            "n": 638,
+            "estimate": -7.207100313479622,
+            "low": -17.387642956764292,
+            "high": 0.39723502304147523,
+            "level": 0.95,
+            "method": "percentile-bootstrap",
+            "iterations": 2000,
+            "seed": 2746,
+            "clusters": 58
+          }
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Workloads are synthetic (seeded); carbon forecasts and realized values are real Electricity Maps data.",
+    "Windows not yet fully observed are not scored (\"pendingRealized\"); nothing is interpolated or invented.",
+    "Emissions use the ASSUMED energy model (0.125 kW per vCPU); they are not measured.",
+    "Deadline violations use simulated runtimes Normal(d, (cv d)^2); with cv = 0 none can occur.",
+    "Realized values include provider estimates; see dataset.measuredShare.",
+    "Fewer than 10 scored workloads make confidence intervals unreliable; see each interval's note.",
+    "Confidence intervals for the paired difference resample forecast snapshots (cluster bootstrap): workloads on one snapshot share its forecast and realized hours and are not independent. Snapshots of neighbouring hours are still correlated, so intervals may remain somewhat optimistic.",
+    "Per-policy means are over the workloads that policy could be scored on, which differ between policies; compare policies with the paired \"vs Immediate\" difference."
+  ],
+  "gitCommit": "1ba450850b1df2c0b4335336613e8d5cb81d8926",
+  "accuracy": {
+    "zones": [
+      {
+        "zone": "DE",
+        "snapshots": 12,
+        "pairs": 70,
+        "all": {
+          "n": 70,
+          "mae": 35.57142857142857,
+          "rmse": 40.137620400673626,
+          "bias": 35.57142857142857
+        },
+        "measuredOnly": {
+          "n": 47,
+          "mae": 43.93617021276596,
+          "rmse": 47.08457758978528,
+          "bias": 43.93617021276596
+        },
+        "estimatedOnly": {
+          "n": 23,
+          "mae": 18.47826086956522,
+          "rmse": 19.308704952857966,
+          "bias": 18.47826086956522
+        },
+        "byLead": [
+          {
+            "bucket": "0-5 h",
+            "metrics": {
+              "n": 55,
+              "mae": 40.18181818181818,
+              "rmse": 43.84559685574327,
+              "bias": 40.18181818181818
+            }
+          },
+          {
+            "bucket": "6-11 h",
+            "metrics": {
+              "n": 15,
+              "mae": 18.666666666666668,
+              "rmse": 21.66102490649969,
+              "bias": 18.666666666666668
+            }
+          },
+          {
+            "bucket": "12-23 h",
+            "metrics": {
+              "n": 0,
+              "mae": null,
+              "rmse": null,
+              "bias": null
+            }
+          },
+          {
+            "bucket": "24+ h",
+            "metrics": {
+              "n": 0,
+              "mae": null,
+              "rmse": null,
+              "bias": null
+            }
+          }
+        ],
+        "errorBands": [
+          {
+            "bucket": "0-5 h",
+            "n": 55,
+            "status": "ok",
+            "p05": 20,
+            "p50": 32,
+            "p95": 70
+          },
+          {
+            "bucket": "6-11 h",
+            "n": 15,
+            "status": "insufficient-data",
+            "p05": null,
+            "p50": null,
+            "p95": null
+          },
+          {
+            "bucket": "12-23 h",
+            "n": 0,
+            "status": "insufficient-data",
+            "p05": null,
+            "p50": null,
+            "p95": null
+          },
+          {
+            "bucket": "24+ h",
+            "n": 0,
+            "status": "insufficient-data",
+            "p05": null,
+            "p50": null,
+            "p95": null
+          }
+        ]
+      },
+      {
+        "zone": "GB",
+        "snapshots": 12,
+        "pairs": 70,
+        "all": {
+          "n": 70,
+          "mae": 22.042857142857144,
+          "rmse": 27.140639007110458,
+          "bias": -17.385714285714286
+        },
+        "measuredOnly": {
+          "n": 0,
+          "mae": null,
+          "rmse": null,
+          "bias": null
+        },
+        "estimatedOnly": {
+          "n": 70,
+          "mae": 22.042857142857144,
+          "rmse": 27.140639007110458,
+          "bias": -17.385714285714286
+        },
+        "byLead": [
+          {
+            "bucket": "0-5 h",
+            "metrics": {
+              "n": 55,
+              "mae": 25.254545454545454,
+              "rmse": 29.73366625713871,
+              "bias": -21.072727272727274
+            }
+          },
+          {
+            "bucket": "6-11 h",
+            "metrics": {
+              "n": 15,
+              "mae": 10.266666666666667,
+              "rmse": 13.995237285114772,
+              "bias": -3.8666666666666667
+            }
+          },
+          {
+            "bucket": "12-23 h",
+            "metrics": {
+              "n": 0,
+              "mae": null,
+              "rmse": null,
+              "bias": null
+            }
+          },
+          {
+            "bucket": "24+ h",
+            "metrics": {
+              "n": 0,
+              "mae": null,
+              "rmse": null,
+              "bias": null
+            }
+          }
+        ],
+        "errorBands": [
+          {
+            "bucket": "0-5 h",
+            "n": 55,
+            "status": "ok",
+            "p05": -47,
+            "p50": -25,
+            "p95": 10
+          },
+          {
+            "bucket": "6-11 h",
+            "n": 15,
+            "status": "insufficient-data",
+            "p05": null,
+            "p50": null,
+            "p95": null
+          },
+          {
+            "bucket": "12-23 h",
+            "n": 0,
+            "status": "insufficient-data",
+            "p05": null,
+            "p50": null,
+            "p95": null
+          },
+          {
+            "bucket": "24+ h",
+            "n": 0,
+            "status": "insufficient-data",
+            "p05": null,
+            "p50": null,
+            "p95": null
+          }
+        ]
+      },
+      {
+        "zone": "US-CAL-CISO",
+        "snapshots": 12,
+        "pairs": 70,
+        "all": {
+          "n": 70,
+          "mae": 15.414285714285715,
+          "rmse": 17.194268147928167,
+          "bias": -4.957142857142857
+        },
+        "measuredOnly": {
+          "n": 70,
+          "mae": 15.414285714285715,
+          "rmse": 17.194268147928167,
+          "bias": -4.957142857142857
+        },
+        "estimatedOnly": {
+          "n": 0,
+          "mae": null,
+          "rmse": null,
+          "bias": null
+        },
+        "byLead": [
+          {
+            "bucket": "0-5 h",
+            "metrics": {
+              "n": 55,
+              "mae": 16.763636363636362,
+              "rmse": 18.289589686734114,
+              "bias": -6.8
+            }
+          },
+          {
+            "bucket": "6-11 h",
+            "metrics": {
+              "n": 15,
+              "mae": 10.466666666666667,
+              "rmse": 12.374705383698366,
+              "bias": 1.8
+            }
+          },
+          {
+            "bucket": "12-23 h",
+            "metrics": {
+              "n": 0,
+              "mae": null,
+              "rmse": null,
+              "bias": null
+            }
+          },
+          {
+            "bucket": "24+ h",
+            "metrics": {
+              "n": 0,
+              "mae": null,
+              "rmse": null,
+              "bias": null
+            }
+          }
+        ],
+        "errorBands": [
+          {
+            "bucket": "0-5 h",
+            "n": 55,
+            "status": "ok",
+            "p05": -37,
+            "p50": -13,
+            "p95": 18
+          },
+          {
+            "bucket": "6-11 h",
+            "n": 15,
+            "status": "insufficient-data",
+            "p05": null,
+            "p50": null,
+            "p95": null
+          },
+          {
+            "bucket": "12-23 h",
+            "n": 0,
+            "status": "insufficient-data",
+            "p05": null,
+            "p50": null,
+            "p95": null
+          },
+          {
+            "bucket": "24+ h",
+            "n": 0,
+            "status": "insufficient-data",
+            "p05": null,
+            "p50": null,
+            "p95": null
+          }
+        ]
+      },
+      {
+        "zone": "IN-NO",
+        "snapshots": 12,
+        "pairs": 70,
+        "all": {
+          "n": 70,
+          "mae": 11.585714285714285,
+          "rmse": 11.992259408230199,
+          "bias": 11.585714285714285
+        },
+        "measuredOnly": {
+          "n": 0,
+          "mae": null,
+          "rmse": null,
+          "bias": null
+        },
+        "estimatedOnly": {
+          "n": 70,
+          "mae": 11.585714285714285,
+          "rmse": 11.992259408230199,
+          "bias": 11.585714285714285
+        },
+        "byLead": [
+          {
+            "bucket": "0-5 h",
+            "metrics": {
+              "n": 55,
+              "mae": 12.145454545454545,
+              "rmse": 12.468141218904503,
+              "bias": 12.145454545454545
+            }
+          },
+          {
+            "bucket": "6-11 h",
+            "metrics": {
+              "n": 15,
+              "mae": 9.533333333333333,
+              "rmse": 10.0565070145321,
+              "bias": 9.533333333333333
+            }
+          },
+          {
+            "bucket": "12-23 h",
+            "metrics": {
+              "n": 0,
+              "mae": null,
+              "rmse": null,
+              "bias": null
+            }
+          },
+          {
+            "bucket": "24+ h",
+            "metrics": {
+              "n": 0,
+              "mae": null,
+              "rmse": null,
+              "bias": null
+            }
+          }
+        ],
+        "errorBands": [
+          {
+            "bucket": "0-5 h",
+            "n": 55,
+            "status": "ok",
+            "p05": 8,
+            "p50": 12,
+            "p95": 16
+          },
+          {
+            "bucket": "6-11 h",
+            "n": 15,
+            "status": "insufficient-data",
+            "p05": null,
+            "p50": null,
+            "p95": null
+          },
+          {
+            "bucket": "12-23 h",
+            "n": 0,
+            "status": "insufficient-data",
+            "p05": null,
+            "p50": null,
+            "p95": null
+          },
+          {
+            "bucket": "24+ h",
+            "n": 0,
+            "status": "insufficient-data",
+            "p05": null,
+            "p50": null,
+            "p95": null
+          }
+        ]
+      },
+      {
+        "zone": "FR",
+        "snapshots": 12,
+        "pairs": 70,
+        "all": {
+          "n": 70,
+          "mae": 9.271428571428572,
+          "rmse": 9.608775750769263,
+          "bias": -9.071428571428571
+        },
+        "measuredOnly": {
+          "n": 58,
+          "mae": 8.844827586206897,
+          "rmse": 9.192388155425117,
+          "bias": -8.60344827586207
+        },
+        "estimatedOnly": {
+          "n": 12,
+          "mae": 11.333333333333334,
+          "rmse": 11.409060726749887,
+          "bias": -11.333333333333334
+        },
+        "byLead": [
+          {
+            "bucket": "0-5 h",
+            "metrics": {
+              "n": 55,
+              "mae": 8.618181818181819,
+              "rmse": 8.93613705437341,
+              "bias": -8.363636363636363
+            }
+          },
+          {
+            "bucket": "6-11 h",
+            "metrics": {
+              "n": 15,
+              "mae": 11.666666666666666,
+              "rmse": 11.750177303626812,
+              "bias": -11.666666666666666
+            }
+          },
+          {
+            "bucket": "12-23 h",
+            "metrics": {
+              "n": 0,
+              "mae": null,
+              "rmse": null,
+              "bias": null
+            }
+          },
+          {
+            "bucket": "24+ h",
+            "metrics": {
+              "n": 0,
+              "mae": null,
+              "rmse": null,
+              "bias": null
+            }
+          }
+        ],
+        "errorBands": [
+          {
+            "bucket": "0-5 h",
+            "n": 55,
+            "status": "ok",
+            "p05": -13,
+            "p50": -9,
+            "p95": 0
+          },
+          {
+            "bucket": "6-11 h",
+            "n": 15,
+            "status": "insufficient-data",
+            "p05": null,
+            "p50": null,
+            "p95": null
+          },
+          {
+            "bucket": "12-23 h",
+            "n": 0,
+            "status": "insufficient-data",
+            "p05": null,
+            "p50": null,
+            "p95": null
+          },
+          {
+            "bucket": "24+ h",
+            "n": 0,
+            "status": "insufficient-data",
+            "p05": null,
+            "p50": null,
+            "p95": null
+          }
+        ]
+      }
+    ],
+    "overall": {
+      "n": 350,
+      "mae": 18.777142857142856,
+      "rmse": 23.997618929504533,
+      "bias": 3.1485714285714286
+    },
+    "measuredOnly": {
+      "n": 175,
+      "mae": 20.897142857142857,
+      "rmse": 27.233697613697,
+      "bias": 6.965714285714285
+    }
+  }
+}
