@@ -91,7 +91,7 @@ export const ExperimentsPage: React.FC = () => {
           </span>
           <p className="text-slate-300 leading-relaxed">
             This page describes the evaluation design. Actual results from the replay benchmark (real Electricity Maps forecasts and realized values, synthetic workloads) are on the{' '}
-            <Link to="/results" className="underline text-amber-100">Results page</Link>, with sample counts and 95% intervals. The data so far covers less than a day, so no result is
+            <Link to="/results" className="underline text-amber-100">Results page</Link>, with sample counts and 95% intervals. The data so far covers about one day (a conclusive result needs at least seven days and 30 snapshot clusters), so no result is
             statistically conclusive yet. Each metric below is marked implemented, implemented with a qualification, or planned. No number on this page is a result.
           </p>
         </div>
