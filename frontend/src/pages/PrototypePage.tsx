@@ -80,13 +80,18 @@ export const PrototypePage: React.FC = () => {
   // the page starts on the labelled synthetic demo trace instead of opening with an error, and no
   // live request is made. Nothing is loaded until this check has finished.
   const [modeReady, setModeReady] = useState<boolean>(false);
+  // P18: whether live data can be used here at all (signed in AND a provider key on the server).
+  // When it cannot, the Live option is disabled with the reason instead of leading to a disabled Evaluate.
+  const [liveAvailable, setLiveAvailable] = useState<boolean>(false);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const signedIn = api.hasSession();
       const provider = signedIn ? await api.getProviderStatus() : null;
       if (cancelled) return;
-      if (!signedIn || !(provider?.success && provider.data?.configured)) {
+      const live = Boolean(signedIn && provider?.success && provider.data?.configured);
+      setLiveAvailable(live);
+      if (!live) {
         setDataSourceMode('demo');
         setRegion('BENCHMARK-RESEARCH');
       }
@@ -537,12 +542,13 @@ export const PrototypePage: React.FC = () => {
                     : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                 }`}
               >
-                {dataSourceMode === 'live' ? 'DEFAULT: LIVE' : 'DEMO BENCHMARK'}
+                {!modeReady ? 'CHECKING…' : dataSourceMode === 'live' ? 'DEFAULT: LIVE' : 'DEMO DATA'}
               </span>
             </div>
             <select
               aria-label="Carbon data source"
               value={dataSourceMode}
+              disabled={!modeReady}
               onChange={(e) => {
                 const newMode = e.target.value as 'live' | 'demo';
                 // P11: the selected zone is kept; if it cannot be used in the new mode the panel says
@@ -551,13 +557,25 @@ export const PrototypePage: React.FC = () => {
               }}
               className="w-full px-3.5 py-2.5 rounded-lg bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-emerald-500"
             >
-              <option value="live">Live Electricity Maps API (Production)</option>
+              <option value="live" disabled={!liveAvailable}>
+                {liveAvailable
+                  ? 'Live Electricity Maps API (Production)'
+                  : api.hasSession()
+                    ? 'Live Electricity Maps API (not configured on this server)'
+                    : 'Live Electricity Maps API (sign in required)'}
+              </option>
               <option value="demo">Controlled Research Benchmark / Demo Trace</option>
             </select>
             <span className="text-[10px] text-slate-500 block">
-              {dataSourceMode === 'live'
-                ? 'Queries live forecast from Electricity Maps API v3'
-                : 'Uses the synthetic demo trace (labelled synthetic, not real data)'}
+              {!modeReady
+                ? 'Checking whether live data is available…'
+                : dataSourceMode === 'live'
+                  ? 'Queries live forecast from Electricity Maps API v3'
+                  : liveAvailable
+                    ? 'Uses the synthetic demo trace (labelled synthetic, not real data)'
+                    : api.hasSession()
+                      ? 'Uses the synthetic demo trace (labelled synthetic, not real data). Live data needs an Electricity Maps key on the server (owner setting).'
+                      : 'Uses the synthetic demo trace (labelled synthetic, not real data). Sign in for live data.'}
             </span>
           </div>
 
