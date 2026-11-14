@@ -1280,6 +1280,44 @@ export const api = {
     }
   },
 
+  /**
+   * P8: change the signed-in user's password. Every older token stops working on the server; the new
+   * token returned here replaces the stored one so this device stays signed in.
+   * A wrong current password answers 401 but does NOT end the session (it is not an auth failure).
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<ApiResponse<void>> {
+    try {
+      const res = await fetch(`${API_BASE}/auth/password`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ currentPassword, newPassword }) });
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success && json.token) {
+        localStorage.setItem('carbonroute_token', json.token);
+        return { success: true, message: json.message };
+      }
+      if (res.status === 401 && json?.code === 'UNAUTHENTICATED') return authFailure(res, json, 'Your session has ended. Sign in again.');
+      return { success: false, message: json?.message || `Password change failed (${res.status})` };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error changing the password.' };
+    }
+  },
+
+  /** P8, administrators: accounts (never password hashes). */
+  async listUsers(): Promise<ApiResponse<User[]>> {
+    return authedGet<User[]>(`${API_BASE}/admin/users`, 'Could not load accounts');
+  },
+
+  /** P8, administrators: create an account. Validation messages come from the backend. */
+  async createUser(input: { username: string; email: string; password: string; role: string }): Promise<ApiResponse<User>> {
+    try {
+      const res = await fetch(`${API_BASE}/admin/users`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(input) });
+      const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
+      if (res.ok && json?.success) return json;
+      return { success: false, message: json?.message || `Could not create the account (${res.status})` };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error creating the account.' };
+    }
+  },
+
   /** Public provider status: whether live data is configured and the server's call budget (no secrets). */
   async getProviderStatus(): Promise<ApiResponse<{ configured: boolean; historyWindowHours: number; pastRangeAvailable: boolean; callBudget?: { lastHour: number; lastDay: number; maxPerHour: number; maxPerDay: number } }>> {
     try {
