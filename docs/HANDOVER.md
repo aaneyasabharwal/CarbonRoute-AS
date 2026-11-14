@@ -8,7 +8,7 @@ written here; only variable names.
 | Item | Value |
 |---|---|
 | Integration branch | `fix/prototype-flaws` @ `0911964` (all P8 PRs #16–#24 merged; CI 4/4 green) |
-| P9 branch (open PR, not merged) | `task/p9-staging-readiness`, 5 commits on top of `0911964` (§3) |
+| P9 branch (open PR, not merged) | `task/p9-staging-readiness`, 6 commits on top of `0911964` (§3; the last is this handover) |
 | `main` | `80b411a`, untouched; nothing was ever merged or pushed to it |
 | Old Render backend `carbonroute.onrender.com` | suspended (503), untouched, never resumed |
 | Deployed services | **none**. GitHub Pages is disabled; no Render service was created |
