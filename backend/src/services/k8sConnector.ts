@@ -1,9 +1,22 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
+import { validateWorkloadSpec, runsAsImage } from './workloadSpec';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+/**
+ * Runs kubectl with an argument array (F10 / M1.4): no shell is involved, so no value from a
+ * job can be interpreted as shell syntax on the host.
+ */
+function kubectl(args: string[]): Promise<{ stdout: string; stderr: string }> {
+  return execFileAsync('kubectl', args, { timeout: 60_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true }) as Promise<{
+    stdout: string;
+    stderr: string;
+  }>;
+}
 
 export interface K8sJobExecutionRecord {
   success: boolean;
@@ -12,7 +25,7 @@ export interface K8sJobExecutionRecord {
   podId: string;
   podName: string;
   namespace: string;
-  status: 'pending' | 'scheduled' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'scheduled' | 'running' | 'completed' | 'failed' | 'cancelled';
   containerImage: string;
   command: string;
   scheduledStartTime: string;
@@ -25,21 +38,47 @@ export interface K8sJobExecutionRecord {
   clusterMode: 'minikube' | 'offline_fallback';
   clusterNotice: string;
   predictedCarbon: number;
+  /**
+   * Never set by the connector. Realized carbon comes only from provider observations
+   * collected after the scheduled window (POST /api/jobs/:id/observations). The earlier
+   * random "realized" values were removed (audit C2).
+   */
   realizedCarbon?: number;
   carbonError?: number;
+  carbonObservation: 'collect-from-provider-after-window';
   durationSeconds: number;
 }
 
 // In-memory active execution store
 const activeExecutions = new Map<string, K8sJobExecutionRecord>();
 
+/** P8: notified on every execution status change (used to persist the status). */
+type StatusListener = (jobId: string, status: K8sJobExecutionRecord['status'], at: string) => void;
+const statusListeners: StatusListener[] = [];
+
 export class K8sConnector {
   /**
    * Checks if local Minikube / Kubectl cluster is accessible
    */
-  public static async checkClusterHealth(): Promise<{ isAvailable: boolean; message: string }> {
+  /**
+   * P8: cluster status is cached for HEALTH_TTL_MS and concurrent callers share one probe, so
+   * requests cannot make the server spawn kubectl repeatedly.
+   */
+  private static healthCache: { at: number; value: Promise<{ isAvailable: boolean; message: string }> } | null = null;
+  public static HEALTH_TTL_MS = 30_000;
+  public static checkClusterHealth(): Promise<{ isAvailable: boolean; message: string }> {
+    const now = Date.now();
+    if (this.healthCache && now - this.healthCache.at < this.HEALTH_TTL_MS) return this.healthCache.value;
+    const value = this.probeClusterHealth();
+    this.healthCache = { at: now, value };
+    return value;
+  }
+  public static resetHealthCache(): void {
+    this.healthCache = null;
+  }
+  private static async probeClusterHealth(): Promise<{ isAvailable: boolean; message: string }> {
     try {
-      const { stdout } = await execAsync('kubectl cluster-info --request-timeout=2s');
+      const { stdout } = await kubectl(['cluster-info', '--request-timeout=2s']);
       return {
         isAvailable: true,
         message: stdout.split('\n')[0] || 'Live Kubernetes / Minikube cluster accessible.',
@@ -48,7 +87,7 @@ export class K8sConnector {
       return {
         isAvailable: false,
         message:
-          'Local Minikube/Kubernetes cluster not detected or offline. Using verified Local Sandbox Runner (execute "minikube start" to activate live cluster).',
+          'Local Minikube/Kubernetes cluster not detected or offline. Jobs will be simulated (no workload process is run). Run "minikube start" to use a real cluster.',
       };
     }
   }
@@ -67,16 +106,19 @@ export class K8sConnector {
     const cpu = typeof job === 'object' && job !== null ? (job.cpu || 1) : 1;
     const memoryMb = typeof job === 'object' && job !== null ? (job.memoryMb || 512) : 512;
 
-    // Use user-supplied command or container image
+    // Workload (F10 / M1.4): a container image runs with its own entrypoint; a command runs
+    // inside the default workload image via sh -c. Both are validated first. The manifest is
+    // an object, serialised as JSON by the caller, so no value can change its structure.
     let containerImage = 'ghcr.io/carbonroute/workload-synthetic:latest';
-    let containerCommand: string[] = ['python', '/app/workload.py', '--epochs', '5'];
+    let containerCommand: string[] | undefined = ['python', '/app/workload.py', '--epochs', '5'];
 
-    if (typeof job === 'object' && job !== null) {
-      if (job.isContainerImage && job.commandOrImage && !job.commandOrImage.startsWith('python')) {
-        containerImage = job.commandOrImage;
-        containerCommand = ['sh', '-c', 'echo "Starting container workload..." && sleep 2'];
-      } else if (job.commandOrImage) {
-        containerCommand = ['sh', '-c', job.commandOrImage];
+    if (typeof job === 'object' && job !== null && job.commandOrImage) {
+      validateWorkloadSpec({ commandOrImage: job.commandOrImage, isContainerImage: job.isContainerImage });
+      if (runsAsImage(job)) {
+        containerImage = String(job.commandOrImage);
+        containerCommand = undefined;
+      } else {
+        containerCommand = ['sh', '-c', String(job.commandOrImage)];
       }
     }
 
@@ -105,11 +147,18 @@ export class K8sConnector {
           },
           spec: {
             restartPolicy: 'Never',
+            automountServiceAccountToken: false,
+            securityContext: { seccompProfile: { type: 'RuntimeDefault' } },
             containers: [
               {
                 name: 'workload-runner',
                 image: containerImage,
-                command: containerCommand,
+                ...(containerCommand ? { command: containerCommand } : {}),
+                securityContext: {
+                  privileged: false,
+                  allowPrivilegeEscalation: false,
+                  capabilities: { drop: ['ALL'] },
+                },
                 resources: {
                   requests: {
                     cpu: `${cpu}`,
@@ -208,20 +257,49 @@ export class K8sConnector {
       clusterMode: clusterHealth.isAvailable ? 'minikube' : 'offline_fallback',
       clusterNotice: clusterHealth.isAvailable
         ? 'Live Kubernetes Cluster (Connected to Minikube/Local Cluster).'
-        : 'Local Sandbox Runner (Cluster offline; running in verified isolated local sandbox).',
+        : 'Simulated execution (no Kubernetes cluster available): no workload process is run.',
       predictedCarbon: carbon,
+      carbonObservation: 'collect-from-provider-after-window',
       durationSeconds: durationSec,
     };
 
     activeExecutions.set(jobId, record);
 
     if (clusterHealth.isAvailable) {
-      this.executeOnK8s(record, cores, ram);
+      const workload =
+        typeof jobOrId === 'object' && jobOrId !== null
+          ? jobOrId
+          : { id: jobId, commandOrImage: cmd, isContainerImage: false, cpu: cores, memoryMb: ram };
+      const manifest = this.generateJobManifest(workload, 0, k8sJobName);
+      this.executeOnK8s(record, manifest);
     } else {
       this.executeInSandbox(record, durationSec);
     }
 
     return record;
+  }
+
+  /** Registers a listener for execution status changes (P8). */
+  public static onStatusChange(listener: StatusListener): void {
+    statusListeners.push(listener);
+  }
+
+  /** Sets an execution's status and notifies listeners. Every status change goes through here. */
+  public static setStatus(record: K8sJobExecutionRecord, status: K8sJobExecutionRecord['status']): void {
+    record.status = status;
+    const at = new Date().toISOString();
+    for (const l of statusListeners) {
+      try {
+        l(record.jobId, status, at);
+      } catch (err) {
+        console.error('Execution status listener failed:', err);
+      }
+    }
+  }
+
+  /** Forgets in-memory executions, as a restart does (tests only). */
+  public static forgetExecutionsForTests(): void {
+    activeExecutions.clear();
   }
 
   public static getJobExecution(jobId: string): K8sJobExecutionRecord | undefined {
@@ -236,69 +314,76 @@ export class K8sConnector {
     return Array.from(activeExecutions.values());
   }
 
-  private static async executeOnK8s(record: K8sJobExecutionRecord, cpu: number, memoryMb: number) {
-    try {
-      const manifest = `
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: ${record.k8sJobName}
-  namespace: carbonroute-jobs
-  labels:
-    app: carbonroute-workload
-    job-id: "${record.jobId}"
-spec:
-  backoffLimit: 1
-  template:
-    metadata:
-      name: ${record.podName}
-    spec:
-      restartPolicy: Never
-      containers:
-      - name: batch-worker
-        image: ${record.containerImage}
-        command: ["sh", "-c", "${record.command}"]
-        resources:
-          limits:
-            cpu: "${cpu}"
-            memory: "${memoryMb}Mi"
-`;
-      const tempPath = path.join(process.cwd(), `k8s-${record.k8sJobName}.yaml`);
-      fs.writeFileSync(tempPath, manifest);
+  /**
+   * Cancels a job's execution (M1.2). Returns the record, or null if the job has no
+   * execution. Finished executions cannot be cancelled. On a live cluster the Kubernetes Job
+   * is deleted; the simulated runner stops at its next step.
+   */
+  public static async cancelExecution(jobId: string, by: string): Promise<K8sJobExecutionRecord | null> {
+    const record = activeExecutions.get(jobId);
+    if (!record) return null;
+    if (record.status === 'completed' || record.status === 'failed' || record.status === 'cancelled') return record;
+    const wasLive = record.clusterMode === 'minikube';
+    K8sConnector.setStatus(record, 'cancelled');
+    record.completionTime = new Date().toISOString();
+    record.completedAt = record.completionTime;
+    record.logs.push(`[${record.completionTime}] [CarbonRoute Dispatcher] Execution cancelled by ${by}.`);
+    if (wasLive) {
+      await kubectl(['delete', 'job', record.k8sJobName, '-n', 'carbonroute-jobs', '--ignore-not-found']).catch((err: any) => {
+        record.logs.push(`[${new Date().toISOString()}] Could not delete the Kubernetes Job: ${err.message}`);
+      });
+    }
+    return record;
+  }
 
-      record.status = 'scheduled';
+  private static async executeOnK8s(record: K8sJobExecutionRecord, manifest: any) {
+    try {
+      // JSON is valid input for kubectl apply; serialising the object means no job value can
+      // add or change manifest fields (F10 / M1.4). Written to the OS temp folder.
+      const tempPath = path.join(os.tmpdir(), `carbonroute-${record.k8sJobName}-${process.pid}.json`);
+      fs.writeFileSync(tempPath, JSON.stringify(manifest), { mode: 0o600 });
+
+      K8sConnector.setStatus(record, 'scheduled');
       record.logs.push(`[${new Date().toISOString()}] Applied Kubernetes Job manifest to cluster.`);
 
-      await execAsync(`kubectl apply -f "${tempPath}"`);
-      record.status = 'running';
+      await kubectl(['apply', '-f', tempPath]);
+      // The job may have been cancelled while the manifest was being applied. Its delete
+      // then ran before the Job existed, so delete it now and do not mark it running (M1.2).
+      if ((record.status as K8sJobExecutionRecord['status']) === 'cancelled') {
+        record.logs.push(`[${new Date().toISOString()}] Cancelled while the manifest was being applied; deleting the Kubernetes Job.`);
+        await kubectl(['delete', 'job', record.k8sJobName, '-n', 'carbonroute-jobs', '--ignore-not-found']).catch((err: any) => {
+          record.logs.push(`[${new Date().toISOString()}] Could not delete the Kubernetes Job: ${err.message}`);
+        });
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        return;
+      }
+      K8sConnector.setStatus(record, 'running');
       const startTime = new Date();
       record.startedAt = startTime.toISOString();
       record.actualStartTime = startTime.toISOString();
 
       // Poll pod completion
       const checkInterval = setInterval(async () => {
+        if (record.status === 'cancelled') {
+          clearInterval(checkInterval);
+          return;
+        }
         try {
-          const { stdout } = await execAsync(`kubectl get job ${record.k8sJobName} -n carbonroute-jobs -o json`);
+          const { stdout } = await kubectl(['get', 'job', record.k8sJobName, '-n', 'carbonroute-jobs', '-o', 'json']);
           const parsed = JSON.parse(stdout);
           if (parsed.status?.succeeded) {
             clearInterval(checkInterval);
             const compTime = new Date();
-            record.status = 'completed';
+            K8sConnector.setStatus(record, 'completed');
             record.completedAt = compTime.toISOString();
             record.completionTime = compTime.toISOString();
             record.exitCode = 0;
-            const { stdout: logOut } = await execAsync(
-              `kubectl logs job/${record.k8sJobName} -n carbonroute-jobs`
-            ).catch(() => ({ stdout: '' }));
+            const { stdout: logOut } = await kubectl(['logs', `job/${record.k8sJobName}`, '-n', 'carbonroute-jobs']).catch(() => ({ stdout: '' }));
             if (logOut) record.logs.push(...logOut.split('\n'));
-            // Compute realized carbon with measured grid variance
-            const gridVariance = (Math.random() - 0.5) * 0.08;
-            record.realizedCarbon = Math.round(record.predictedCarbon * (1 + gridVariance));
-            record.carbonError = record.realizedCarbon - record.predictedCarbon;
             if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
           } else if (parsed.status?.failed) {
             clearInterval(checkInterval);
-            record.status = 'failed';
+            K8sConnector.setStatus(record, 'failed');
             record.completionTime = new Date().toISOString();
             record.completedAt = record.completionTime;
             record.exitCode = 1;
@@ -309,23 +394,24 @@ spec:
         }
       }, 2000);
     } catch (err: any) {
-      record.status = 'failed';
+      K8sConnector.setStatus(record, 'failed');
       record.logs.push(`[${new Date().toISOString()}] Failed to launch on Kubernetes: ${err.message}`);
     }
   }
 
   private static executeInSandbox(record: K8sJobExecutionRecord, durationSec: number) {
-    record.status = 'scheduled';
+    K8sConnector.setStatus(record, 'scheduled');
     record.logs.push(
-      `[${new Date().toISOString()}] [Local Sandbox Runner] Staging workload execution environment.`
+      `[${new Date().toISOString()}] [Simulation] Simulated execution starting (no workload process will be run).`
     );
 
     setTimeout(() => {
-      record.status = 'running';
+      if (record.status === 'cancelled') return;
+      K8sConnector.setStatus(record, 'running');
       const startTime = new Date();
       record.startedAt = startTime.toISOString();
       record.actualStartTime = startTime.toISOString();
-      record.logs.push(`[${startTime.toISOString()}] [Local Sandbox Runner: ${record.podName}] Process spawned.`);
+      record.logs.push(`[${startTime.toISOString()}] [Simulation: ${record.podName}] Simulated run started.`);
       record.logs.push(`[${startTime.toISOString()}] [Workload Task] Command: ${record.command}`);
 
       const totalEpochs = 5;
@@ -333,31 +419,29 @@ spec:
       let currentEpoch = 0;
 
       const interval = setInterval(() => {
+        if (record.status === 'cancelled') {
+          clearInterval(interval);
+          return;
+        }
         currentEpoch++;
         const pct = Math.round((currentEpoch / totalEpochs) * 100);
         record.logs.push(
-          `[${new Date().toISOString()}] [Epoch ${currentEpoch}/${totalEpochs}] Processing workload tensor batch... (${pct}% complete)`
+          `[${new Date().toISOString()}] [Simulation] Step ${currentEpoch}/${totalEpochs} (${pct}% of simulated duration)`
         );
 
         if (currentEpoch >= totalEpochs) {
           clearInterval(interval);
           const compTime = new Date();
-          record.status = 'completed';
+          K8sConnector.setStatus(record, 'completed');
           record.completedAt = compTime.toISOString();
           record.completionTime = compTime.toISOString();
           record.exitCode = 0;
 
-          // Realized carbon accounting based on predicted + actual grid variance
-          // Stochastic difference reflects real grid conditions during the execution window
-          const gridDrift = (Math.random() - 0.48) * 0.08;
-          record.realizedCarbon = Math.round(record.predictedCarbon * (1.0 + gridDrift));
-          record.carbonError = record.realizedCarbon - record.predictedCarbon;
-
           record.logs.push(
-            `[${compTime.toISOString()}] [Workload Task] Execution finished successfully (Exit Code: 0).`
+            `[${compTime.toISOString()}] [Simulation] Simulated run finished (no workload process was executed).`
           );
           record.logs.push(
-            `[${compTime.toISOString()}] [CarbonRoute Accounting] Predicted: ${record.predictedCarbon} gCO2/kWh, Realized: ${record.realizedCarbon} gCO2/kWh (Variance: ${record.carbonError > 0 ? '+' : ''}${record.carbonError} gCO2/kWh).`
+            `[${compTime.toISOString()}] [CarbonRoute Accounting] Predicted window intensity: ${record.predictedCarbon} gCO2eq/kWh. Realized carbon is not simulated: collect provider observations after the scheduled window.`
           );
         }
       }, stepDuration);

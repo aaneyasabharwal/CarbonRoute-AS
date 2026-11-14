@@ -55,7 +55,7 @@ export const ArchitecturePage: React.FC = () => {
       icon: Activity,
       color: 'text-teal-400',
       summary: 'Acquires 24-hour regional marginal carbon intensity forecasts in gCO2eq/kWh.',
-      details: 'Queries live Electricity Maps REST API with regional zone identifiers (e.g. US-CAL-CISO, US-TEX-ERCO, DE, IN-NO). Gracefully activates Calibrated Local Demo Trace Mode when offline or unauthenticated without throwing uncaught exceptions.',
+      details: 'Queries live Electricity Maps REST API with zone identifiers (e.g. US-CAL-CISO, DE, IN-NO); the global zone catalogue lists all 351 provider zones with country, area and IANA time zone, and states per zone whether live data was verified or a synthetic demo profile exists. Provider failures are returned as errors; the synthetic demo trace is used only in explicit demo mode.',
     },
     {
       id: 'uncertainty-model',
@@ -111,7 +111,7 @@ export const ArchitecturePage: React.FC = () => {
       id: 'resilient-connector',
       num: '09',
       name: 'Resilient Execution Connector',
-      tech: 'Minikube / K8s Client + Process Sandbox Fallback',
+      tech: 'kubectl (Minikube / any cluster) or simulated execution',
       icon: HardDrive,
       color: 'text-cyan-400',
       summary: 'Dispatches workload to active Kubernetes cluster or falls back cleanly to local sandbox.',
@@ -143,7 +143,7 @@ export const ArchitecturePage: React.FC = () => {
           CarbonRoute 10-Layer System Architecture
         </h1>
         <p className="text-sm sm:text-base text-slate-400 max-w-4xl leading-relaxed">
-          The verified architectural topology connecting client interfaces, carbon intensity services, horizon uncertainty modeling, polymorphic scheduling policies, Kubernetes batch dispatch, and empirical carbon accounting.
+          The architecture connecting client interfaces, carbon intensity services, horizon uncertainty modeling, polymorphic scheduling policies, Kubernetes batch dispatch, and empirical carbon accounting.
         </p>
       </div>
 
@@ -262,7 +262,7 @@ export const ArchitecturePage: React.FC = () => {
           <div className="space-y-2 text-xs font-mono">
             <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
               <span className="font-bold text-slate-200">Electricity Maps + Traces</span>
-              <p className="text-slate-400 font-sans text-[11px]">24h carbon intensity forecasts with calibrated fallback profiles.</p>
+              <p className="text-slate-400 font-sans text-[11px]">Carbon intensity forecasts (live) or a labelled synthetic demo trace.</p>
             </div>
             <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
               <span className="font-bold text-slate-200">5-Policy Decision Suite</span>

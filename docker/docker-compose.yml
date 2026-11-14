@@ -9,13 +9,24 @@ services:
     restart: unless-stopped
     ports:
       - "5000:5000"
+    # Secrets (JWT_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD, ...) come from the repository-root
+    # .env, which is git-ignored; copy .env.example and fill it in. They are never written here.
+    # With NODE_ENV=production the backend refuses to start if JWT_SECRET is missing or weak,
+    # or if ADMIN_PASSWORD is missing when the database has no users.
+    env_file:
+      - ../.env
     environment:
       - NODE_ENV=production
       - PORT=5000
       - STORAGE_TYPE=local
-      - JWT_SECRET=carbonroute_docker_production_jwt_secret_2026
-      - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD=CarbonRoute2026!Secure
+      # Inside the image the compiled code lives in /app/dist, so the default database path
+      # would be /database (outside the volume). Point both stores at the mounted folders.
+      - CARBONROUTE_DB_FILE=/app/database/carbonroute.db.json
+      - LOCAL_STORAGE_DIR=/app/storage/uploads
+      # The browser reaches the API through nginx on http://localhost (same origin), and nginx
+      # forwards the client address, so rate limits need TRUST_PROXY.
+      - CORS_ORIGIN=http://localhost
+      - TRUST_PROXY=1
     volumes:
       - ../storage/uploads:/app/storage/uploads
       - ../database:/app/database

@@ -130,13 +130,15 @@ async function runTests() {
     }
   });
 
-  // Test 8: Admin Authentication
+  // Test 8: Admin Authentication. Credentials come from ADMIN_USERNAME / ADMIN_PASSWORD (never hardcoded);
+  // without ADMIN_PASSWORD this test fails with an explanation.
   let adminToken = '';
   await assertTest('Admin Authentication (POST /api/auth/login)', async () => {
+    if (!process.env.ADMIN_PASSWORD) throw new Error('Set ADMIN_PASSWORD (and optionally ADMIN_USERNAME) to the running server admin credentials.');
     const res = await request(
       '/auth/login',
       { method: 'POST', headers: { 'Content-Type': 'application/json' } },
-      { username: 'admin', password: 'CarbonRoute2026!Secure' }
+      { username: process.env.ADMIN_USERNAME || 'admin', password: process.env.ADMIN_PASSWORD }
     );
     if (res.status !== 200 || !res.data.success || !res.data.token) {
       throw new Error(`Admin login failed: ${JSON.stringify(res.data)}`);

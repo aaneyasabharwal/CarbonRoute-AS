@@ -1,6 +1,11 @@
 """
 CarbonRoute FastAPI Scheduling & Execution Backend
 UCS503 Software Engineering Final-Year Project — Team TriFlux
+
+LEGACY / NOT USED (P6 audit, 2026-11): the frontend and all results use the Node.js backend.
+This service still implements the deadline-risk model that was removed from the backend in P1
+(the carbon forecast standard deviation used as a time uncertainty, audit C1), and its demo
+profiles are synthetic. Do not use its outputs as results. See docs/SCHEDULING_METHODOLOGY.md.
 """
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
@@ -18,13 +23,13 @@ app = FastAPI(
     version="1.0.0",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# M1.9: explicit origin allow-list from CORS_ORIGIN; credentials never with a wildcard.
+try:  # run from fastapi_service/ (README) or imported as a package
+    from cors_config import cors_settings  # noqa: E402
+except ImportError:  # pragma: no cover
+    from .cors_config import cors_settings  # noqa: E402
+
+app.add_middleware(CORSMiddleware, **cors_settings(os.environ))
 
 # Models
 class JobSubmissionRequest(BaseModel):

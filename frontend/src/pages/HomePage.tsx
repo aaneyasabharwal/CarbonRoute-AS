@@ -36,7 +36,7 @@ export const HomePage: React.FC = () => {
 
   const builtPrototypeItems = [
     { title: 'Interactive Prototype Vertical Slice', desc: 'End-to-end working execution flow from workload submission to pod log completion.' },
-    { title: 'Multi-Region Carbon Service', desc: 'Electricity Maps live API client with seamless fallback to calibrated 24h ISO traces (CAISO, ERCOT, DE, IN-NO).' },
+    { title: 'Multi-Region Carbon Service', desc: 'Electricity Maps live API client. A synthetic demo trace (CAISO, ERCOT, DE, IN-NO profiles) is used only when demo mode is chosen explicitly, and is labelled synthetic.' },
     { title: 'Horizon Uncertainty Modeling', desc: 'Parametric error dispersion model sigma(t) with Chebyshev erfc tail probability deadline risk.' },
     { title: '5-Policy Benchmark Engine', desc: 'Side-by-side evaluation of Immediate, EDF, Deterministic, Baseline, and CarbonRoute algorithms.' },
     { title: 'Kubernetes Dispatch & Sandbox Fallback', desc: 'Production batch/v1 Job generator with automatic detection and isolated local process runner.' },
@@ -47,7 +47,7 @@ export const HomePage: React.FC = () => {
     { title: 'Full Cluster Minikube Testbed', desc: 'Multi-node Kubernetes testbed deployment with live prometheus-node-exporter telemetry.' },
     { title: 'Large-Scale Trace Ingestion', desc: 'Automated ingestion pipelines for 365-day historical grid intensity across 12 ISO zones.' },
     { title: 'Repeated Seed Evaluations', desc: '10 to 30 independent random seed simulation suites for 95% statistical confidence intervals.' },
-    { title: 'Empirical ECE & Brier Calibration', desc: 'Reliability diagrams and expected calibration error curves populated from Phase 7 benchmark runs.' },
+    { title: 'Risk calibration (not implemented)', desc: 'Brier score / ECE need recorded runtimes and outcomes; no calibration results exist yet (roadmap M9.2).' },
     { title: 'Multi-Job Queue Contention Solver', desc: 'Concurrent batch queue scheduler with multi-tenant capacity and priority preemption.' },
   ];
 
@@ -59,7 +59,7 @@ export const HomePage: React.FC = () => {
       icon: Cpu,
       title: 'Workload Registration & Constraints',
       summary: 'ML Engineer specifies runtime, memory, deadline, and risk tolerance threshold.',
-      details: 'Accepts batch specifications including estimated duration Delta_t, deadline D, required compute cores, and risk tolerance tau in (0, 0.5]. Feasibility check guarantees D >= submission + duration.',
+      details: 'Accepts batch specifications including estimated duration Delta_t, deadline D, required compute cores, and risk tolerance tau in (0, 0.5]. The feasibility check rejects jobs whose deadline is earlier than submission + duration.',
       output: 'Validated Workload Spec with non-negative initial slack.',
     },
     {
@@ -69,7 +69,7 @@ export const HomePage: React.FC = () => {
       icon: Activity,
       title: 'Regional Carbon Signal Ingestion',
       summary: 'Fetches 24-hour marginal grid carbon intensity forecasts.',
-      details: 'Queries live Electricity Maps API for target ISO zone (e.g. CAISO, ERCOT, Germany, Northern India). If API key is missing or offline, seamlessly engages Calibrated Local Demo Trace Mode.',
+      details: 'Queries live Electricity Maps API for target ISO zone (e.g. CAISO, ERCOT, Germany, Northern India). If the API key is missing or the provider fails, the request fails with an error; the synthetic demo trace is used only when demo mode is selected.',
       output: '24-hour hourly carbon intensity array I(t) in gCO2eq/kWh.',
     },
     {
@@ -118,7 +118,7 @@ export const HomePage: React.FC = () => {
       badge: 'Step 7',
       icon: Terminal,
       title: 'Resilient Pod Execution & Streaming',
-      summary: 'Runs container workload in Minikube or local sandbox.',
+      summary: 'Submits a Kubernetes Job when a cluster is reachable; otherwise the execution is simulated (no workload runs).',
       details: 'If cluster is online: dispatches to carbonroute-jobs namespace. If cluster is offline: gracefully executes in local process sandbox, streaming real stdout epochs [Epoch 1/5] to terminal.',
       output: 'Live streamed execution log buffer with progress epochs.',
     },
@@ -130,7 +130,7 @@ export const HomePage: React.FC = () => {
       title: 'Carbon Accounting & Telemetry',
       summary: 'Calculates realized emissions vs immediate baseline.',
       details: 'Pulls realized grid intensity during the actual execution window. Computes true empirical carbon savings vs what would have been emitted under immediate baseline dispatch.',
-      output: 'Verified empirical carbon savings % and execution audit record.',
+      output: 'Forecast vs observed intensity for the scheduled and Immediate windows (assumed energy model).',
     },
   ];
 
@@ -320,7 +320,7 @@ export const HomePage: React.FC = () => {
               Prototype Milestone: What is Built vs Future Roadmap
             </h2>
             <p className="text-xs sm:text-sm text-slate-400 font-sans">
-              CarbonRoute demonstrates a genuine working vertical slice. The system estimates and calibrates deadline-violation risk to support SLA-aware scheduling.
+              CarbonRoute demonstrates a genuine working vertical slice. The system estimates deadline-miss risk from a declared runtime variability; that risk is not yet calibrated against recorded runtimes.
             </p>
           </div>
 
@@ -420,14 +420,14 @@ export const HomePage: React.FC = () => {
             <div className="p-5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2.5">
               <span className="text-emerald-400 font-bold uppercase text-[11px] block">Research Gap</span>
               <p className="text-slate-300 font-sans text-xs leading-relaxed">
-                CarbonRoute estimates and calibrates deadline-violation risk using horizon-dependent variance modeling, providing SLA-aware scheduling and reproducible paired benchmark comparisons.
+                CarbonRoute estimates deadline-miss risk from a declared runtime coefficient of variation and compares policies with reproducible paired replay benchmarks on collected forecasts.
               </p>
             </div>
 
             <div className="p-5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2.5">
               <span className="text-teal-400 font-bold uppercase text-[11px] block">Scientific Position</span>
               <p className="text-slate-300 font-sans text-xs leading-relaxed">
-                CarbonRoute does not claim to invent carbon-aware scheduling or guarantee impossible zero-risk deadlines; its core scientific contribution is an uncertainty-aware, calibrated decision framework.
+                CarbonRoute does not claim to invent carbon-aware scheduling or guarantee impossible zero-risk deadlines; its contribution is a risk-constrained decision framework with honest evaluation; risk calibration is future work.
               </p>
             </div>
           </div>

@@ -3,14 +3,30 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
+import { adminPasswordProblem, ConfigError, MIN_ADMIN_PASSWORD_LENGTH } from '../config/secrets';
 
 export interface User {
   id: string;
   username: string;
   email: string;
   passwordHash: string;
-  role: 'admin' | 'student' | 'evaluator';
+  role: UserRole;
   createdAt: string;
+  /**
+   * Tokens issued before this time are rejected (M1.2). Set when the password changes, so
+   * a rotation also ends every existing session.
+   */
+  tokensValidAfter?: string;
+}
+
+export type UserRole = 'admin' | 'student' | 'evaluator';
+export const USER_ROLES: readonly UserRole[] = ['admin', 'student', 'evaluator'];
+
+/** A token revoked before its expiry (logout). Kept until the token would have expired. */
+export interface RevokedToken {
+  jti: string;
+  userId: string;
+  expiresAt: string;
 }
 
 export type DeliverableType = 'software_grid' | 'planning' | 'midterm' | 'final' | 'other';
@@ -112,6 +128,8 @@ export interface DatabaseSchema {
   teamMembers: TeamMember[];
   roadmapMilestones: RoadmapMilestone[];
   activityLogs: ActivityLog[];
+  /** Only written once a token has been revoked, so older files are left as they were. */
+  revokedTokens?: RevokedToken[];
 }
 
 class JsonDatabase {
@@ -119,9 +137,14 @@ class JsonDatabase {
   private data: DatabaseSchema;
 
   constructor() {
-    const dataDir = path.resolve(__dirname, '../../../database');
+    // CARBONROUTE_DB_FILE lets the test suite use an isolated temporary database file.
+    // When unset, the original location is used unchanged.
+    const overridePath = process.env.CARBONROUTE_DB_FILE;
+    const dataDir = overridePath
+      ? path.dirname(path.resolve(overridePath))
+      : path.resolve(__dirname, '../../../database');
     fs.mkdirSync(dataDir, { recursive: true });
-    this.dbPath = path.join(dataDir, 'carbonroute.db.json');
+    this.dbPath = overridePath ? path.resolve(overridePath) : path.join(dataDir, 'carbonroute.db.json');
     this.data = this.loadDatabase();
     this.seedDefaultsIfEmpty();
   }
@@ -138,6 +161,7 @@ class JsonDatabase {
           teamMembers: parsed.teamMembers || [],
           roadmapMilestones: parsed.roadmapMilestones || [],
           activityLogs: parsed.activityLogs || parsed.auditLogs || [],
+          ...(Array.isArray(parsed.revokedTokens) ? { revokedTokens: parsed.revokedTokens } : {}),
         };
       } catch (err) {
         console.error('Failed to parse database file, initializing default schema:', err);
@@ -160,19 +184,28 @@ class JsonDatabase {
   private seedDefaultsIfEmpty(): void {
     let changed = false;
 
-    // Seed Admin User
+    // Seed the initial admin from configuration (M1.1): there is no default password.
+    // Production refuses to start without a strong ADMIN_PASSWORD when no user exists;
+    // elsewhere the account is not created and a warning explains how to create it.
     if (this.data.users.length === 0) {
-      const salt = bcrypt.genSaltSync(10);
-      const passwordHash = bcrypt.hashSync('CarbonRoute2026!Secure', salt);
-      this.data.users.push({
-        id: uuidv4(),
-        username: 'admin',
-        email: 'admin@carbonroute.org',
-        passwordHash,
-        role: 'admin',
-        createdAt: new Date().toISOString(),
-      });
-      changed = true;
+      const { username, email, password } = config.initialAdmin;
+      const problem = adminPasswordProblem(password);
+      if (problem) {
+        if (config.env === 'production') {
+          throw new ConfigError(`${problem} It is required to create the initial admin account. Refusing to start in production.`);
+        }
+        console.warn(`[db] ${problem} No admin account was created. Set ADMIN_PASSWORD (at least ${MIN_ADMIN_PASSWORD_LENGTH} characters) and restart to create "${username}".`);
+      } else {
+        this.data.users.push({
+          id: uuidv4(),
+          username,
+          email,
+          passwordHash: bcrypt.hashSync(password as string, bcrypt.genSaltSync(10)),
+          role: 'admin',
+          createdAt: new Date().toISOString(),
+        });
+        changed = true;
+      }
     }
 
     // Seed Team Members strictly matching prompt:
@@ -478,6 +511,67 @@ class JsonDatabase {
 
   getUserByUsername(username: string): User | undefined {
     return this.data.users.find((u) => u.username.toLowerCase() === username.toLowerCase() || u.email.toLowerCase() === username.toLowerCase());
+  }
+
+  /**
+   * Replaces a user's password (used to rotate credentials, e.g. the formerly published
+   * default admin password). The new password must pass the same checks as ADMIN_PASSWORD.
+   * The password itself is never logged.
+   */
+  setUserPassword(username: string, newPassword: string, performedBy = 'System'): User {
+    const problem = adminPasswordProblem(newPassword);
+    if (problem) throw new ConfigError(problem.replace('ADMIN_PASSWORD', 'The new password'));
+    const user = this.getUserByUsername(username);
+    if (!user) throw new ConfigError(`User "${username}" does not exist.`);
+    user.passwordHash = bcrypt.hashSync(newPassword, bcrypt.genSaltSync(10));
+    // Every token issued before the change stops working (M1.2).
+    user.tokensValidAfter = new Date().toISOString();
+    this.addAuditLog('PASSWORD_CHANGED', 'User', user.id, `Password changed for ${user.username}`, performedBy);
+    this.saveDatabase();
+    return user;
+  }
+
+  /**
+   * Creates a user account (M1.2: jobs are owned by users, so non-admin accounts must exist).
+   * The password must meet the same strength rules as ADMIN_PASSWORD and is never logged.
+   */
+  createUser(input: { username: string; email: string; password: string; role: UserRole }, performedBy = 'System'): User {
+    const username = String(input.username || '').trim();
+    const email = String(input.email || '').trim();
+    if (!/^[A-Za-z0-9._-]{3,40}$/.test(username)) {
+      throw new ConfigError('Username must be 3-40 characters: letters, digits, ".", "_" or "-".');
+    }
+    if (!/^[^\s@]+@[^\s@]+$/.test(email)) throw new ConfigError('A valid email address is required.');
+    if (!USER_ROLES.includes(input.role)) throw new ConfigError(`Role must be one of: ${USER_ROLES.join(', ')}.`);
+    const problem = adminPasswordProblem(input.password);
+    if (problem) throw new ConfigError(problem.replace('ADMIN_PASSWORD', 'The password'));
+    if (this.getUserByUsername(username) || this.getUserByUsername(email)) {
+      throw new ConfigError('A user with that username or email already exists.');
+    }
+    const user: User = {
+      id: uuidv4(),
+      username,
+      email,
+      passwordHash: bcrypt.hashSync(input.password, bcrypt.genSaltSync(10)),
+      role: input.role,
+      createdAt: new Date().toISOString(),
+    };
+    this.data.users.push(user);
+    this.addAuditLog('USER_CREATED', 'User', user.id, `User ${username} created with role ${input.role}`, performedBy);
+    return user;
+  }
+
+  // Token revocation (M1.2)
+  revokeToken(jti: string, userId: string, expiresAtMs: number): void {
+    const now = Date.now();
+    const kept = (this.data.revokedTokens || []).filter((t) => Date.parse(t.expiresAt) > now && t.jti !== jti);
+    kept.push({ jti, userId, expiresAt: new Date(expiresAtMs).toISOString() });
+    this.data.revokedTokens = kept;
+    this.saveDatabase();
+  }
+
+  isTokenRevoked(jti: string): boolean {
+    return (this.data.revokedTokens || []).some((t) => t.jti === jti);
   }
 
   // Presentation Operations

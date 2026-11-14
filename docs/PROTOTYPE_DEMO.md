@@ -1,4 +1,6 @@
-# 🎓 CarbonRoute Prototype Milestone: Viva & Demonstration Walkthrough
+# CarbonRoute Prototype Milestone: Viva & Demonstration Walkthrough (superseded)
+
+> **Superseded (P6, November 2026).** This walkthrough describes the September prototype, including the removed deadline-risk model ("horizon uncertainty"), a local sandbox runner that does not run workloads, and a test script that has been retired. Use [DEMO.md](DEMO.md) for the current demonstration.
 
 This document outlines the official script and presentation flow for demonstrating the **CarbonRoute Prototype Milestone** to your course supervisor and evaluation committee.
 

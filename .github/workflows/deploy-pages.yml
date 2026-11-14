@@ -42,12 +42,23 @@ jobs:
           cd frontend
           npm ci || npm install
 
+      # P8 (B7): the backend URL comes from the repository VARIABLE VITE_API_URL
+      # (Settings > Secrets and variables > Actions > Variables). It is public information, not a
+      # secret. The build fails if it is missing or names a retired backend; there is no default.
+      - name: Check that the backend URL is configured
+        run: |
+          if [ -z "${{ vars.VITE_API_URL }}" ]; then
+            echo "::error::Repository variable VITE_API_URL is not set. Set it to the backend URL (https://...) before deploying Pages."
+            exit 1
+          fi
+
       - name: Build Frontend for GitHub Pages
         run: |
           cd frontend
           npm run build
         env:
           GITHUB_PAGES: 'true'
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
 
       - name: Prepare SPA Routing & Disable Jekyll
         run: |

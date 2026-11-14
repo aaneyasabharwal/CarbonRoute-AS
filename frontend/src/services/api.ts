@@ -15,20 +15,24 @@ import {
   SchedulingDecisionResponse,
   K8sJobExecutionRecord,
   ExperimentRecord,
+  JobSummary,
+  JobDetails,
+  OracleEvaluation,
+  BenchmarkListItem,
+  BenchmarkResultDetail,
+  MlEvaluationListItem,
+  MlEvaluation,
+  ZoneOption,
+  ZoneCatalogue,
+  JobObservationsResult,
 } from '../types';
+import { resolveBackendUrl } from '../config/apiUrl';
 
-const getInitialBackendUrl = (): string => {
-  const envUrl = (import.meta as any).env?.VITE_API_URL as string;
-  if (envUrl) {
-    return envUrl.replace(/\/api\/?$/, '');
-  }
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return 'http://localhost:5000';
-  }
-  return 'https://carbonroute.onrender.com';
-};
-
-export const BACKEND_URL = getInitialBackendUrl();
+// P8 (B7): no hard-coded remote backend; see src/config/apiUrl.ts.
+export const BACKEND_URL = resolveBackendUrl(
+  (import.meta as any).env?.VITE_API_URL as string | undefined,
+  typeof window !== 'undefined' ? window.location.hostname : undefined
+);
 export const API_BASE = `${BACKEND_URL}/api`;
 
 /**
@@ -561,7 +565,52 @@ const getHeaders = (isFormData: boolean = false): HeadersInit => {
   return headers;
 };
 
+/** Message shown when a job request is not authenticated (M1.2). */
+export const SIGN_IN_REQUIRED_MESSAGE =
+  'Sign in to schedule and inspect jobs: jobs belong to the account that created them.';
+
+/**
+ * Handles a 401 from a protected route: a stored token that the backend rejected (expired,
+ * revoked or signed with an old secret) is removed, and the caller is told to sign in.
+ */
+/** Message when live (Electricity Maps) data is requested without signing in (P0/F9). */
+export const LIVE_DATA_SIGN_IN_MESSAGE =
+  'Sign in to use live Electricity Maps data (it uses a limited API quota). Demo mode works without signing in.';
+
+function authFailure(
+  res: Response,
+  json: any,
+  fallbackMessage: string = SIGN_IN_REQUIRED_MESSAGE
+): { success: false; message: string; authRequired: true } {
+  if (localStorage.getItem('carbonroute_token')) localStorage.removeItem('carbonroute_token');
+  return {
+    success: false,
+    authRequired: true,
+    message: res.status === 401 && json?.message && json?.code === 'UNAUTHENTICATED' && !/^Authentication required/.test(json.message)
+      ? json.message
+      : fallbackMessage,
+  };
+}
+
+/** GET with the sign-in token; 401 becomes a sign-in prompt; failures are returned, never replaced. */
+async function authedGet<T>(url: string, failText: string): Promise<ApiResponse<T>> {
+  try {
+    const res = await fetch(url, { headers: getHeaders() });
+    const json = await res.json().catch(() => null);
+    if (res.status === 401) return authFailure(res, json);
+    if (res.ok && json?.success) return json;
+    return { success: false, message: json?.message || `${failText} (${res.status})` };
+  } catch (err: any) {
+    return { success: false, message: err?.message || `${failText}: the backend is not reachable.` };
+  }
+}
+
 export const api = {
+  /** True when a sign-in token is stored (it may still be rejected if it has expired). */
+  hasSession(): boolean {
+    return Boolean(localStorage.getItem('carbonroute_token'));
+  },
+
   // Auth
   async login(username: string, password: string): Promise<ApiResponse<{ token: string; user: User }>> {
     try {
@@ -1026,126 +1075,20 @@ export const api = {
     riskTolerance: number,
     region?: string
   ): Promise<ApiResponse<FeasibilityResult>> {
+    // M2.5 (audit H4): no client-side result is generated. If the backend cannot answer, the
+    // demonstration reports that instead of showing numbers that were never computed.
     try {
       const res = await fetch(`${API_BASE}/scheduler/simulate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ durationHours, deadlineHours, riskTolerance, region }),
       });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.data) return json;
-      }
-    } catch {}
-
-    // Dynamic Mathematical Fallback (Chebyshev erfc tail risk approximation)
-    const baseCurve = [310, 325, 340, 330, 290, 240, 190, 160, 150, 180, 260, 330];
-    const erfc = (x: number): number => {
-      if (x >= 8.0) return 0;
-      if (x <= -8.0) return 2.0;
-      const z = Math.abs(x);
-      const t = 1.0 / (1.0 + 0.5 * z);
-      const ans =
-        t *
-        Math.exp(
-          -z * z -
-            1.26551223 +
-            t *
-              (1.00002368 +
-                t *
-                  (0.37409196 +
-                    t *
-                      (0.09678418 +
-                        t *
-                          (-0.18628806 +
-                            t *
-                              (0.27886807 +
-                                t *
-                                  (-1.13520398 +
-                                    t *
-                                      (1.48851587 +
-                                        t * (-0.82215223 + t * 0.17087277))))))))
-        );
-      return x >= 0 ? ans : 2.0 - ans;
-    };
-
-    const calcRisk = (h: number, dur: number, ddl: number, mult: number) => {
-      const finish = h + dur;
-      const slack = ddl - finish;
-      if (slack < 0) return { stdDev: 40 * mult, violationRisk: 1.0 };
-      const sigmaTime = Math.max(0.25, (0.15 * dur + 0.12 * Math.sqrt(h)) * mult);
-      const z = slack / sigmaTime;
-      const risk = Math.max(0.0001, Math.min(1.0, 0.5 * erfc(z / Math.SQRT2)));
-      return { stdDev: Math.round(sigmaTime * 10), violationRisk: Math.round(risk * 1000) / 1000 };
-    };
-
-    const timeSlots: TimeSlotCarbon[] = [];
-    for (let h = 0; h < 12; h++) {
-      let sum = 0;
-      for (let w = h; w < h + durationHours; w++) {
-        sum += baseCurve[w % baseCurve.length];
-      }
-      const avgCarbon = Math.round(sum / durationHours);
-      const rLow = calcRisk(h, durationHours, deadlineHours, 0.7);
-      const rHigh = calcRisk(h, durationHours, deadlineHours, 2.4);
-      timeSlots.push({
-        hour: h,
-        predictedCarbon: avgCarbon,
-        uncertaintyLow: rLow,
-        uncertaintyHigh: rHigh,
-      });
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success && json.data) return json;
+      return { success: false, message: json?.message || `Feasibility demonstration failed (${res.status})` };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'The feasibility demonstration needs the backend, which is not reachable.' };
     }
-
-    const maxStart = deadlineHours - durationHours;
-    const feasibleSlots = timeSlots.filter((s) => s.hour <= maxStart);
-    const candA = feasibleSlots.filter((s) => s.uncertaintyLow.violationRisk <= riskTolerance);
-    const slotA = candA.length > 0
-      ? candA.reduce((min, cur) => (cur.predictedCarbon < min.predictedCarbon ? cur : min), candA[0])
-      : feasibleSlots[0];
-
-    const candB = feasibleSlots.filter((s) => s.uncertaintyHigh.violationRisk <= riskTolerance);
-    const slotB = candB.length > 0
-      ? candB.reduce((min, cur) => (cur.predictedCarbon < min.predictedCarbon ? cur : min), candB[0])
-      : feasibleSlots[0];
-
-    return {
-      success: true,
-      data: {
-        input: { durationHours, deadlineHours, riskTolerance, region: region || 'US-CAL-CISO' },
-        timeSlots,
-        scenarios: {
-          scenarioA: {
-            name: 'Low Forecast Uncertainty (High Confidence)',
-            predictedCarbonCurve: 'Solar duck curve with midday low',
-            uncertaintyLevel: `Low (sigma ~ ${slotA.uncertaintyLow.stdDev})`,
-            selectedStartHour: slotA.hour,
-            selectedWindow: `T+${slotA.hour}:00 to T+${slotA.hour + durationHours}:00`,
-            predictedCarbonAtStart: slotA.predictedCarbon,
-            estimatedViolationRisk: slotA.uncertaintyLow.violationRisk,
-            riskToleranceSatisfied: slotA.uncertaintyLow.violationRisk <= riskTolerance,
-            decisionRationale: `Delaying to T+${slotA.hour}:00 achieves ${slotA.predictedCarbon} gCO2/kWh with ${(slotA.uncertaintyLow.violationRisk * 100).toFixed(1)}% risk, well below ${(riskTolerance * 100).toFixed(0)}% tolerance.`,
-          },
-          scenarioB: {
-            name: 'High Forecast Uncertainty (Low Confidence)',
-            predictedCarbonCurve: 'Solar duck curve with midday low',
-            uncertaintyLevel: `High (sigma ~ ${slotB.uncertaintyHigh.stdDev})`,
-            selectedStartHour: slotB.hour,
-            selectedWindow: `T+${slotB.hour}:00 to T+${slotB.hour + durationHours}:00`,
-            predictedCarbonAtStart: slotB.predictedCarbon,
-            estimatedViolationRisk: slotB.uncertaintyHigh.violationRisk,
-            riskToleranceSatisfied: slotB.uncertaintyHigh.violationRisk <= riskTolerance,
-            decisionRationale:
-              slotB.hour < slotA.hour
-                ? `High uncertainty increases late window risk to ${(slotA.uncertaintyHigh.violationRisk * 100).toFixed(1)}% (exceeding ${(riskTolerance * 100).toFixed(0)}%). CarbonRoute shifts execution earlier to T+${slotB.hour}:00 to guarantee completion within risk limits.`
-                : `CarbonRoute selects window T+${slotB.hour}:00 satisfying the risk bound.`,
-          },
-        },
-        feasibilityConclusion:
-          slotA.hour !== slotB.hour
-            ? `Mathematical Proof: Identical carbon forecast produces different scheduling decisions (T+${slotA.hour} vs T+${slotB.hour}) due to horizon forecast uncertainty.`
-            : `Both scenarios satisfy the ${(riskTolerance * 100).toFixed(0)}% risk constraint at T+${slotA.hour}.`,
-      },
-    };
   },
 
   // Prototype & Scheduling Methods
@@ -1153,10 +1096,11 @@ export const api = {
     try {
       const res = await fetch(`${API_BASE}/jobs`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify(jobData),
       });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Job submission failed (${res.status})` };
     } catch (err: any) {
@@ -1169,19 +1113,22 @@ export const api = {
     jobData?: Partial<WorkloadJob>;
     region?: string;
     uncertaintyMultiplier?: number;
+    /** Declared runtime coefficient of variation, 0-1 (0 = deterministic). */
+    runtimeCv?: number;
     mode?: 'live' | 'demo';
     dataSource?: 'live' | 'demo';
   }): Promise<ApiResponse<SchedulingDecisionResponse>> {
     try {
       const res = await fetch(`${API_BASE}/schedule`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify({
           ...payload,
           mode: payload.mode || payload.dataSource || 'live',
         }),
       });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Scheduling failed (${res.status})` };
     } catch (err: any) {
@@ -1196,10 +1143,11 @@ export const api = {
     try {
       const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/dispatch`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify(payload || {}),
       });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Dispatch failed (${res.status})` };
     } catch (err: any) {
@@ -1209,8 +1157,9 @@ export const api = {
 
   async getJobStatus(jobId: string): Promise<ApiResponse<K8sJobExecutionRecord>> {
     try {
-      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/status`);
+      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/status`, { headers: getHeaders() });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Status check failed (${res.status})` };
     } catch (err: any) {
@@ -1220,8 +1169,9 @@ export const api = {
 
   async getJobResults(jobId: string): Promise<ApiResponse<K8sJobExecutionRecord>> {
     try {
-      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/results`);
+      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/results`, { headers: getHeaders() });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Results query failed (${res.status})` };
     } catch (err: any) {
@@ -1232,8 +1182,9 @@ export const api = {
   async getJobManifest(jobId: string, hour?: number): Promise<ApiResponse<any>> {
     try {
       const q = hour !== undefined ? `?hour=${encodeURIComponent(hour)}` : '';
-      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/manifest${q}`);
+      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/manifest${q}`, { headers: getHeaders() });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Manifest query failed (${res.status})` };
     } catch (err: any) {
@@ -1247,8 +1198,10 @@ export const api = {
       if (region) params.set('region', region);
       if (mode) params.set('mode', mode);
       const queryStr = params.toString() ? `?${params.toString()}` : '';
-      const res = await fetch(`${API_BASE}/carbon/forecast${queryStr}`);
+      // Live data needs sign-in (it spends the provider quota); demo data is public.
+      const res = await fetch(`${API_BASE}/carbon/forecast${queryStr}`, { headers: getHeaders() });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json, LIVE_DATA_SIGN_IN_MESSAGE);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Carbon forecast query failed (${res.status})` };
     } catch (err: any) {
@@ -1256,14 +1209,76 @@ export const api = {
     }
   },
 
-  async getCarbonRegions(): Promise<ApiResponse<{ code: string; name: string }[]>> {
+  /**
+   * Live mode: every zone the backend's Electricity Maps key can access.
+   * Demo mode: the built-in synthetic profiles. A failure is returned as a failure.
+   */
+  /** P11: the global zone catalogue (static, public; every provider zone with availability levels). */
+  async getZoneCatalogue(): Promise<ApiResponse<ZoneCatalogue>> {
     try {
-      const res = await fetch(`${API_BASE}/carbon/regions`);
+      const res = await fetch(`${API_BASE}/carbon/catalogue`);
       const json = await res.json().catch(() => null);
+      if (res.ok && json && json.success) return json;
+      return { success: false, message: json?.message || `Zone catalogue unavailable (${res.status})` };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error loading the zone catalogue.' };
+    }
+  },
+
+  async getCarbonRegions(mode: 'live' | 'demo' = 'live'): Promise<ApiResponse<ZoneOption[]> & { source?: string }> {
+    try {
+      const res = await fetch(`${API_BASE}/carbon/regions${mode === 'demo' ? '?mode=demo' : ''}`, { headers: getHeaders() });
+      const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json, LIVE_DATA_SIGN_IN_MESSAGE);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Regions query failed (${res.status})` };
     } catch (err: any) {
       return { success: false, message: err.message || 'Network error fetching regions.' };
+    }
+  },
+
+  /** Collects provider observations for the job's scheduled window (never invented). */
+  async collectObservations(jobId: string): Promise<ApiResponse<JobObservationsResult>> {
+    try {
+      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/observations`, { method: 'POST', headers: getHeaders() });
+      const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
+      if (res.ok && json && json.success) return json;
+      return { success: false, message: json?.message || `Observation collection failed (${res.status})` };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error collecting observations.' };
+    }
+  },
+
+  /**
+   * Downloads the job report (self-contained HTML or JSON). Reports are only available to the
+   * job's owner and administrators, so the request carries the sign-in token; a plain link
+   * cannot send it (M1.2).
+   */
+  async downloadReport(jobId: string, format: 'json' | 'html' = 'html'): Promise<ApiResponse<void>> {
+    try {
+      const res = await fetch(
+        `${API_BASE}/jobs/${encodeURIComponent(jobId)}/report${format === 'html' ? '?format=html' : ''}`,
+        { headers: getHeaders() }
+      );
+      if (res.status === 401) return authFailure(res, await res.json().catch(() => null));
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        return { success: false, message: json?.message || `Report download failed (${res.status})` };
+      }
+      const blob = format === 'html' ? await res.blob() : new Blob([JSON.stringify(await res.json(), null, 2)], { type: 'application/json' });
+      const safeId = jobId.replace(/[^a-zA-Z0-9-]/g, '');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `carbonroute-report-${safeId}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error downloading the report.' };
     }
   },
 
@@ -1278,14 +1293,65 @@ export const api = {
     }
   },
 
+  /**
+   * P8: change the signed-in user's password. Every older token stops working on the server; the new
+   * token returned here replaces the stored one so this device stays signed in.
+   * A wrong current password answers 401 but does NOT end the session (it is not an auth failure).
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<ApiResponse<void>> {
+    try {
+      const res = await fetch(`${API_BASE}/auth/password`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ currentPassword, newPassword }) });
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success && json.token) {
+        localStorage.setItem('carbonroute_token', json.token);
+        return { success: true, message: json.message };
+      }
+      if (res.status === 401 && json?.code === 'UNAUTHENTICATED') return authFailure(res, json, 'Your session has ended. Sign in again.');
+      return { success: false, message: json?.message || `Password change failed (${res.status})` };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error changing the password.' };
+    }
+  },
+
+  /** P8, administrators: accounts (never password hashes). */
+  async listUsers(): Promise<ApiResponse<User[]>> {
+    return authedGet<User[]>(`${API_BASE}/admin/users`, 'Could not load accounts');
+  },
+
+  /** P8, administrators: create an account. Validation messages come from the backend. */
+  async createUser(input: { username: string; email: string; password: string; role: string }): Promise<ApiResponse<User>> {
+    try {
+      const res = await fetch(`${API_BASE}/admin/users`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(input) });
+      const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
+      if (res.ok && json?.success) return json;
+      return { success: false, message: json?.message || `Could not create the account (${res.status})` };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error creating the account.' };
+    }
+  },
+
+  /** Public provider status: whether live data is configured and the server's call budget (no secrets). */
+  async getProviderStatus(): Promise<ApiResponse<{ configured: boolean; historyWindowHours: number; pastRangeAvailable: boolean; callBudget?: { lastHour: number; lastDay: number; maxPerHour: number; maxPerDay: number } }>> {
+    try {
+      const res = await fetch(`${API_BASE}/carbon/provider`);
+      const json = await res.json().catch(() => null);
+      if (res.ok && json && json.success) return json;
+      return { success: false, message: json?.message || `Provider status failed (${res.status})` };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error loading provider status.' };
+    }
+  },
+
   async recordExperiment(expData: any): Promise<ApiResponse<ExperimentRecord>> {
     try {
       const res = await fetch(`${API_BASE}/experiments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify(expData),
       });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Failed to record experiment (${res.status})` };
     } catch (err: any) {
@@ -1293,10 +1359,56 @@ export const api = {
     }
   },
 
+  // ---- P4: job management and results (backend data only; no fallbacks) ----
+
+  /** Signed-in user's jobs (administrators: all). Optional status filter. */
+  async listJobs(filters: { status?: string } = {}): Promise<ApiResponse<JobSummary[]>> {
+    const q = filters.status ? `?status=${encodeURIComponent(filters.status)}` : '';
+    return authedGet<JobSummary[]>(`${API_BASE}/jobs${q}`, 'Could not load jobs');
+  },
+
+  async getJobDetails(jobId: string): Promise<ApiResponse<JobDetails>> {
+    return authedGet<JobDetails>(`${API_BASE}/jobs/${encodeURIComponent(jobId)}`, 'Could not load the job');
+  },
+
+  async cancelJob(jobId: string): Promise<ApiResponse<JobSummary>> {
+    try {
+      const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST', headers: getHeaders() });
+      const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
+      if (res.ok && json?.success) return json;
+      return { success: false, message: json?.message || `Cancel failed (${res.status})` };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error cancelling the job.' };
+    }
+  },
+
+  /** Hindsight (Oracle) evaluation: offline only, never a scheduling decision. */
+  async getJobOracle(jobId: string): Promise<ApiResponse<OracleEvaluation>> {
+    return authedGet<OracleEvaluation>(`${API_BASE}/jobs/${encodeURIComponent(jobId)}/oracle`, 'Could not load the hindsight evaluation');
+  },
+
+  async listBenchmarks(): Promise<ApiResponse<BenchmarkListItem[]>> {
+    return authedGet<BenchmarkListItem[]>(`${API_BASE}/results/benchmarks`, 'Could not load benchmark results');
+  },
+
+  async listMlEvaluations(): Promise<ApiResponse<MlEvaluationListItem[]>> {
+    return authedGet<MlEvaluationListItem[]>(`${API_BASE}/results/ml`, 'Could not load model evaluations');
+  },
+
+  async getMlEvaluation(id: string): Promise<ApiResponse<MlEvaluation>> {
+    return authedGet<MlEvaluation>(`${API_BASE}/results/ml/${encodeURIComponent(id)}`, 'Could not load the model evaluation');
+  },
+
+  async getBenchmark(id: string): Promise<ApiResponse<BenchmarkResultDetail>> {
+    return authedGet<BenchmarkResultDetail>(`${API_BASE}/results/benchmarks/${encodeURIComponent(id)}`, 'Could not load the benchmark result');
+  },
+
   async getExperiments(): Promise<ApiResponse<ExperimentRecord[]>> {
     try {
-      const res = await fetch(`${API_BASE}/experiments`);
+      const res = await fetch(`${API_BASE}/experiments`, { headers: getHeaders() });
       const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Failed to fetch experiments (${res.status})` };
     } catch (err: any) {

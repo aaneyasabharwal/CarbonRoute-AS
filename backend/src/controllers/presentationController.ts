@@ -1,3 +1,4 @@
+import { internalError } from '../utils/httpErrors';
 import { Request, Response } from 'express';
 import { db, DeliverableType, PresentationStatus } from '../models/db';
 import { storageProvider } from '../storage/storageProvider';
@@ -140,11 +141,7 @@ export const createPresentationVersion = async (req: AuthRequest, res: Response)
       data: newPresentation,
     });
   } catch (error: any) {
-    console.error('Error creating presentation version:', error);
-    return res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to upload and register presentation version.',
-    });
+    return internalError(res, error, 'Error creating presentation version', 'Failed to upload and register the presentation version.');
   }
 };
 

@@ -1,16 +1,24 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import { resolveJwtSecret } from './secrets';
 
 // Load .env from root or backend directory
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
+// No hardcoded secrets (M1.1): production refuses to start without a strong JWT_SECRET.
+const jwt = resolveJwtSecret(process.env);
+
 export const config = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '5000', 10),
-  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  jwtSecret: process.env.JWT_SECRET || 'carbonroute_super_secure_jwt_production_secret_2026_key',
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  // Comma-separated browser origins allowed to call the API (M1.6). Defaults to local dev servers.
+  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173',
+  jwtSecret: jwt.secret,
+  jwtSecretSource: jwt.source,
+  // P8: 12 h by default. Tokens are held in browser localStorage (readable by any injected script), so
+  // a short lifetime limits how long a stolen token is useful.
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '12h',
   
   // Electricity Maps Live API Key
   electricityMapsApiKey: process.env.ELECTRICITY_MAPS_API_KEY || '',
@@ -29,10 +37,11 @@ export const config = {
     forcePathStyle: process.env.AWS_S3_FORCE_PATH_STYLE === 'true',
   },
 
-  // Admin Credentials Default for Initial Setup
+  // Initial admin account, created only when the user table is empty. There is no default
+  // password: ADMIN_PASSWORD must be set (and strong) for the account to be created.
   initialAdmin: {
     username: process.env.ADMIN_USERNAME || 'admin',
     email: process.env.ADMIN_EMAIL || 'admin@carbonroute.org',
-    password: process.env.ADMIN_PASSWORD || 'CarbonRoute2026!Secure',
+    password: process.env.ADMIN_PASSWORD?.trim() || undefined,
   }
 };

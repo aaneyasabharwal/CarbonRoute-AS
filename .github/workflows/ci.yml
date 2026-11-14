@@ -1,0 +1,216 @@
+# Continuous integration for CarbonRoute (remediation task M0.3).
+#
+# Runs the backend and frontend checks on every pull request and on pushes to
+# the remediation, task and main branches. It only reads the repository: it
+# needs no secrets and deploys nothing (deployment stays in deploy-pages.yml).
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - fix/prototype-flaws
+      - main
+  push:
+    branches:
+      - fix/prototype-flaws
+      - main
+      - 'task/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch or PR cancels the older, still-running check.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (typecheck, test, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20 (same major version as the Docker image)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies (exactly as locked)
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck source and tests
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # P11: the committed zone catalogue must be exactly what its versioned sources produce.
+      - name: Zone catalogue is reproducible from data/zones/sources
+        run: |
+          node ../scripts/zones/build-zone-catalogue.mjs > /dev/null
+          git diff --exit-code -- src/carbon/zoneCatalogue.generated.ts
+
+      # P7 review: adversarial multi-process test of the collector lock (needs the build).
+      - name: Collector lock stress test (multi-process, random SIGKILLs)
+        run: node test/stress/collectorLockStress.cjs 25 8 1500
+
+      - name: Stress oracle self-check (a broken lock must be detected)
+        run: |
+          set +e
+          STRESS_BROKEN_LOCK=1 node test/stress/collectorLockStress.cjs 2 6 800
+          code=$?
+          set -e
+          test "$code" -eq 1 && echo "oracle detected the broken lock"
+
+  frontend:
+    name: Frontend (typecheck, test, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20 (same major version as the Pages deployment)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies (exactly as locked)
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck source and tests
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: A Pages build without VITE_API_URL must fail (P8, no default backend)
+        run: |
+          if GITHUB_PAGES=true npm run build > /tmp/pages-noapi.log 2>&1; then
+            echo "Pages build succeeded without VITE_API_URL"; exit 1
+          fi
+          grep -q "VITE_API_URL is required" /tmp/pages-noapi.log && echo "refused as expected"
+
+      - name: A retired backend in a frontend .env file must fail the build (P8 review)
+        run: |
+          printf 'VITE_API_URL=https://carbonroute.onrender.com\n' > .env.production
+          if npm run build > /tmp/envfile.log 2>&1; then
+            rm .env.production; echo "build accepted a retired backend from .env.production"; exit 1
+          fi
+          rm .env.production
+          grep -q "retired backend" /tmp/envfile.log && echo "refused as expected"
+
+      - name: Build for GitHub Pages (as deploy-pages.yml does, with a placeholder API URL)
+        run: npm run build
+        env:
+          GITHUB_PAGES: 'true'
+          VITE_API_URL: https://api.example.invalid
+
+      - name: No source file or built bundle points at the retired backend
+        run: |
+          if grep -rIl "carbonroute.onrender.com" src dist --exclude=apiUrl.ts; then
+            echo "retired backend referenced"; exit 1
+          fi
+          grep -rlq "api.example.invalid" dist/assets && echo "bundle uses the configured API URL"
+
+  python:
+    name: Python service checks (standard library only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: FastAPI CORS settings tests (M1.9)
+        run: python -m unittest discover -s fastapi_service/tests -v
+
+  docker:
+    name: Docker images (build and smoke test, no push)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Decoy files that must NEVER reach an image (.dockerignore). They are created only in
+      # this throwaway runner; the values are random and not secrets of any deployment.
+      - name: Plant decoy .env and local database files
+        run: |
+          echo "DECOY_SECRET=$(openssl rand -hex 16)" > .env
+          echo '{"decoy":true}' > database/carbonroute.db.json
+          echo '{"decoy":true}' > database/carbonroute.scheduling.db.json
+
+      - name: Build backend image
+        run: docker build -f docker/Dockerfile.backend -t carbonroute-backend:ci .
+
+      - name: Build frontend image
+        run: docker build -f docker/Dockerfile.frontend -t carbonroute-frontend:ci .
+
+      - name: No .env or local database inside the images
+        run: |
+          docker run --rm --entrypoint sh carbonroute-backend:ci -c 'test ! -e /app/.env && test ! -e /app/database/carbonroute.db.json && test ! -e /app/database/carbonroute.scheduling.db.json && test -e /app/database/schema.sql'
+          docker run --rm --entrypoint sh carbonroute-frontend:ci -c 'test ! -e /usr/share/nginx/html/.env'
+          echo "images contain no .env and no local database"
+
+      - name: Backend (production mode) and frontend (nginx) run together
+        run: |
+          docker network create crnet
+          mkdir -p /tmp/crdb
+          docker run -d --name backend --network crnet \
+            -e NODE_ENV=production \
+            -e JWT_SECRET="$(openssl rand -base64 48)" \
+            -e ADMIN_PASSWORD="$(openssl rand -base64 18)" \
+            -e CORS_ORIGIN=http://localhost:8080 \
+            -e TRUST_PROXY=1 \
+            -e CARBONROUTE_DB_FILE=/app/database/carbonroute.db.json \
+            -v /tmp/crdb:/app/database \
+            carbonroute-backend:ci
+          docker run -d --name frontend --network crnet -p 8080:80 carbonroute-frontend:ci
+          for i in $(seq 1 30); do curl -fsS http://localhost:8080/api/health && break; sleep 1; done
+          echo; echo "API reachable through nginx on the same origin:"
+          curl -fsS http://localhost:8080/api/health
+          echo; echo "SPA deep link served by nginx:"
+          curl -fsS -o /dev/null -w "%{http_code}\n" http://localhost:8080/results
+          test -e /tmp/crdb/carbonroute.db.json && echo "database written to the mounted volume"
+          echo "Unauthenticated job list is refused:"
+          test "$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/jobs)" = "401"
+          docker logs backend 2>&1 | tail -20
+          docker rm -f backend frontend
+
+      - name: Production mode refuses to start without JWT_SECRET
+        run: |
+          set +e
+          docker run --rm -e NODE_ENV=production carbonroute-backend:ci
+          code=$?
+          set -e
+          test "$code" -ne 0 && echo "refused to start (exit $code)"
+
+      - name: Compose file is valid
+        run: |
+          cp .env.example .env
+          docker compose -f docker/docker-compose.yml config --quiet && echo "compose config valid"
