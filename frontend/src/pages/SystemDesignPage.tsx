@@ -48,9 +48,9 @@ export const SystemDesignPage: React.FC = () => {
     },
     {
       id: 'UC-02',
-      title: 'Horizon-Dependent Carbon & Uncertainty Forecasting',
+      title: 'Carbon Forecast Acquisition',
       actor: 'CarbonRoute Scheduler Core / Grid Signal Provider',
-      goal: 'Acquire 24-hour regional grid carbon intensity signal with calibrated forecast error growth over time.',
+      goal: 'Acquire a 24-hour regional carbon intensity forecast (live, or labelled synthetic demo data).',
       preconditions: 'Target ISO/RTO regional grid zone identified (e.g., CAISO, ERCOT, Germany, Northern India).',
       trigger: 'Scheduler requests intensity profile for scheduling window [t_now, t_now + 24h].',
       mainFlow: [

@@ -49,6 +49,12 @@ export class UncertaintyService {
       return { violationRisk: slack < 0 ? 1 : 0, runtimeStdDevHours: 0, slackHours: slack, model: 'deterministic' };
     }
     const sigma = cv * durationHours;
+    // A job (d > 0) that starts at or after its deadline cannot finish by it. The Normal model
+    // puts some mass on runtimes <= 0, so 1 - Phi would give < 1 here; the scheduler never
+    // evaluates such starts (it only considers t + d <= deadline), but the function is exact.
+    if (deadlineHours - startHour <= 0) {
+      return { violationRisk: 1, runtimeStdDevHours: sigma, slackHours: slack, model: 'declared-runtime-cv' };
+    }
     const risk = 1 - normalCdf(slack / sigma);
     return {
       violationRisk: Math.min(1, Math.max(0, risk)),

@@ -1265,8 +1265,8 @@ export const PrototypePage: React.FC = () => {
                     </div>
                     <div className="pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 leading-relaxed">
                       {(detPol?.estimatedDeadlineRisk || 0) > riskTolerance
-                        ? `Greedily chases lowest point forecast, but uncertainty pushes risk to ${((detPol?.estimatedDeadlineRisk || 0) * 100).toFixed(1)}%, exceeding safety threshold.`
-                        : 'Selects the lowest point forecast window without accounting for forecast uncertainty variance.'}
+                        ? `Chases the lowest point forecast; with the declared runtime variability its deadline-miss risk is ${((detPol?.estimatedDeadlineRisk || 0) * 100).toFixed(1)}%, above the tolerance.`
+                        : 'Selects the lowest point-forecast window without checking deadline-miss risk.'}
                     </div>
                   </div>
 
@@ -1754,7 +1754,7 @@ export const PrototypePage: React.FC = () => {
         </section>
       )}
 
-      {/* 7. SECTION G: KEY FEASIBILITY DEMO (SAME FORECAST, DIFFERENT UNCERTAINTY) */}
+      {/* 7. SECTION G: KEY FEASIBILITY DEMO (SAME FORECAST, DIFFERENT RUNTIME CV) */}
       <section className="space-y-4">
         <div className="pb-2 border-b border-slate-800 space-y-1">
           <div className="inline-flex items-center space-x-2 px-3 py-1 rounded bg-teal-500/10 border border-teal-500/30 text-teal-300 text-xs font-mono">
@@ -1762,12 +1762,12 @@ export const PrototypePage: React.FC = () => {
             <span>Key Research Question Demonstration</span>
           </div>
           <h2 className="text-2xl font-bold text-white font-mono">
-            Same Forecast, Different Uncertainty Demonstration
+            Same Forecast, Different Runtime Variability
           </h2>
           <p className="text-xs text-slate-400 max-w-3xl leading-relaxed font-mono">
-            Proves that CarbonRoute does not simply select the lowest predicted carbon window. When forecast uncertainty
-            rises, CarbonRoute adapts by choosing an earlier, risk-calibrated start window even when the predicted carbon
-            intensity curve is 100% identical.
+            Shows that CarbonRoute does not simply select the lowest predicted carbon window. When the declared runtime
+            variability (CV) rises, CarbonRoute moves to an earlier window that keeps the deadline-miss risk within tolerance,
+            even though the carbon forecast is identical. Synthetic data.
           </p>
         </div>
 

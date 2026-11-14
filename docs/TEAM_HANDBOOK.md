@@ -131,6 +131,25 @@ Example: slack 32 minutes, d = 2 h, CV = 0.1 → σ = 12 min → P(miss) = 1 −
 
 CV is **declared, not learned**: we have no recorded real runtimes yet to calibrate it.
 
+**What this risk does *not* include:** carbon forecast uncertainty. The risk is about *time*
+(will the run finish by the deadline?), and depends only on the declared runtime variability. An
+earlier version mixed the carbon forecast's standard deviation into a time uncertainty ("horizon
+uncertainty", σ(t)); that was dimensionally wrong and was removed. Any "±" next to a forecast value
+is display only and never enters the risk.
+
+Edge cases (implemented in `uncertaintyService.ts`, tested in
+`backend/test/scheduling/riskEdgeCases.test.ts`):
+
+| Case | CV = 0 (deterministic) | CV > 0 |
+|---|---|---|
+| Window ends before the deadline (slack > 0) | 0 | 1 − Φ(slack / (CV·d)), below 0.5 |
+| Deadline exactly equals the expected completion (slack = 0) | 0 (finishes exactly on time) | exactly 0.5 |
+| Deadline earlier than the expected completion (slack < 0) | 1 | above 0.5 |
+| Start at or after the deadline | 1 | 1 (handled explicitly; the scheduler never evaluates such starts) |
+| Largest CV (1.0) | n/a | σ = d; e.g. slack = d gives 1 − Φ(1) ≈ 15.9% |
+
+CV = 0 is a separate branch, so there is no division by zero. CV values outside 0–1 are rejected.
+
 ### 5.4 The five policies (same snapshot, same candidates)
 
 | Policy | Rule | Role |
