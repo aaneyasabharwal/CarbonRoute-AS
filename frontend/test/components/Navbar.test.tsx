@@ -51,6 +51,16 @@ describe('Navbar', () => {
     expect(document.getElementById('nav-more-menu')).toBeNull();
   });
 
+  // P13 regression: a second "Launch Prototype" button (>= 1536 px) overlapped "More" when signed in
+  // with a long username (measured in a browser). The highlighted Prototype link is the only one.
+  it('has a single Prototype link in the bar (no duplicate button that could overlap More)', () => {
+    renderNav('/dashboard');
+    const header = document.querySelector('header')!;
+    const links = [...header.querySelectorAll('a[href="/prototype"]')].filter((a) => !a.closest('#mobile-menu'));
+    expect(links).toHaveLength(1);
+    expect(header.textContent).not.toMatch(/Launch Prototype/);
+  });
+
   it('mobile: the menu button toggles a menu with all 14 destinations and Sign in', () => {
     renderNav('/');
     const toggle = screen.getByRole('button', { name: 'Open menu' });

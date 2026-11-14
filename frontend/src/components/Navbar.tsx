@@ -18,7 +18,6 @@ import {
   BarChart3,
   Network,
   FolderDown,
-  ArrowRight,
   Shield,
   User as UserIcon,
   LayoutDashboard,
@@ -173,14 +172,9 @@ export const Navbar: React.FC = () => {
           </nav>
 
           {/* Actions (>= 1024 px) */}
+          {/* P13: the separate "Launch Prototype" button (>= 1536 px) duplicated the highlighted
+              Prototype link and overlapped "More" when signed in with a long username; removed. */}
           <div className="hidden lg:flex items-center gap-2 shrink-0">
-            <Link
-              to="/prototype"
-              className="hidden 2xl:inline-flex items-center px-3 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-bold text-xs hover:bg-emerald-400 transition-all font-mono shadow-sm group whitespace-nowrap"
-            >
-              <span>Launch Prototype</span>
-              <ArrowRight className="w-3.5 h-3.5 ml-1 group-hover:translate-x-0.5 transition-transform" aria-hidden="true" />
-            </Link>
             {isAuthenticated ? (
               <div className="flex items-center gap-1 pl-2 border-l border-slate-800 text-xs">
                 {/* P8: Account for everyone signed in, Admin only for administrators. */}
