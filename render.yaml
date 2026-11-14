@@ -53,9 +53,9 @@ services:
         value: ../results/published/benchmark-results
       - key: ML_RESULTS_DIR
         value: ../results/published/ml-results
-      # Optional: live Electricity Maps data. Leave empty for the synthetic demo trace only.
-      - key: ELECTRICITY_MAPS_API_KEY
-        sync: false
+      # No ELECTRICITY_MAPS_API_KEY on the free demo (P10): it would share the trial quota with the
+      # research collector. The site then uses the labelled synthetic demo trace. To enable live data
+      # later, add ELECTRICITY_MAPS_API_KEY in the service's Environment tab.
       - key: EM_MAX_CALLS_PER_HOUR
         value: "60"
       - key: EM_MAX_CALLS_PER_DAY

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
+import { BackendStatusBanner } from './components/BackendStatusBanner';
 import { HomePage } from './pages/HomePage';
 import { ProjectPage } from './pages/ProjectPage';
 import { HowItWorksPage } from './pages/HowItWorksPage';
@@ -28,6 +29,7 @@ export const App: React.FC = () => {
         <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 bg-tech-grid relative">
           <div className="absolute inset-0 bg-radial-gradient pointer-events-none" />
           <Navbar />
+          <BackendStatusBanner />
           <main className="flex-grow z-10">
             <Routes>
               {/* Primary CarbonRoute Navigation Routes */}

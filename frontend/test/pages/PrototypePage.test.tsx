@@ -2,7 +2,7 @@
  * Scheduling page against a stubbed backend (hand-written test data in the API's shape).
  */
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { PrototypePage } from '../../src/pages/PrototypePage';
@@ -37,8 +37,9 @@ const liveForecast = {
   },
 };
 
-function backend(scheduleData: unknown) {
+function backend(scheduleData: unknown, providerConfigured = true) {
   return stubFetch((url, init) => {
+    if (url === `${API_BASE}/carbon/provider`) return { body: { success: true, configured: providerConfigured, historyWindowHours: 24, pastRangeAvailable: false, data: { configured: providerConfigured, historyWindowHours: 24, pastRangeAvailable: false } } };
     if (url.startsWith(`${API_BASE}/carbon/regions`)) return { body: { success: true, source: 'electricitymaps', data: zones } };
     if (url.startsWith(`${API_BASE}/carbon/forecast`)) return { body: { success: true, data: liveForecast } };
     if (url.startsWith(`${API_BASE}/cluster/health`)) return { body: { success: true, data: { isAvailable: false, message: 'offline' } } };
@@ -59,6 +60,27 @@ const renderPage = () =>
       <PrototypePage />
     </MemoryRouter>
   );
+
+// Live data needs a signed-in user (the backend answers 401 otherwise).
+beforeEach(() => localStorage.setItem("carbonroute_token", "test-token"));
+
+describe("PrototypePage: which data source it starts with (P9, public staging)", () => {
+  it("signed out: starts on the labelled demo trace and makes no live request", async () => {
+    localStorage.removeItem("carbonroute_token");
+    const fetchMock = backend({ status: "INFEASIBLE", reason: "x", recommendation: null });
+    renderPage();
+    await waitFor(() => expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("mode=demo"))).toBe(true));
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("mode=live"))).toBe(false);
+    expect((screen.getByLabelText(/Data source|Carbon Data Source/i, { selector: "select" }) as HTMLSelectElement).value).toBe("demo");
+  });
+
+  it("signed in but no provider key on the server: starts on the demo trace", async () => {
+    const fetchMock = backend({ status: "INFEASIBLE", reason: "x", recommendation: null }, false);
+    renderPage();
+    await waitFor(() => expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("mode=demo"))).toBe(true));
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("mode=live"))).toBe(false);
+  });
+});
 
 describe('PrototypePage (M5 real-data workflow)', () => {
   it('lists zones from the backend and labels the live forecast as real with no invented uncertainty', async () => {

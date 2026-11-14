@@ -75,6 +75,26 @@ export const PrototypePage: React.FC = () => {
 
   // 2. Data & Scheduling State
   const [dataSourceMode, setDataSourceMode] = useState<'live' | 'demo'>('live');
+  // P9 (public staging): live data needs a signed-in user AND a provider key on the server. Otherwise
+  // the page starts on the labelled synthetic demo trace instead of opening with an error, and no
+  // live request is made. Nothing is loaded until this check has finished.
+  const [modeReady, setModeReady] = useState<boolean>(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const signedIn = api.hasSession();
+      const provider = signedIn ? await api.getProviderStatus() : null;
+      if (cancelled) return;
+      if (!signedIn || !(provider?.success && provider.data?.configured)) {
+        setDataSourceMode('demo');
+        setRegion('BENCHMARK-RESEARCH');
+      }
+      setModeReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [forecast, setForecast] = useState<CarbonForecastData | null>(null);
   const [forecastError, setForecastError] = useState<string | null>(null);
   const [decision, setDecision] = useState<SchedulingDecisionResponse | null>(null);
@@ -126,11 +146,13 @@ export const PrototypePage: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!modeReady) return;
     loadForecast(region, dataSourceMode);
     checkCluster();
-  }, [region, dataSourceMode]);
+  }, [region, dataSourceMode, modeReady]);
 
   useEffect(() => {
+    if (!modeReady) return;
     let cancelled = false;
     setRegionsError(null);
     api.getCarbonRegions(dataSourceMode).then((res) => {
@@ -148,7 +170,7 @@ export const PrototypePage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [dataSourceMode]);
+  }, [dataSourceMode, modeReady]);
 
   const visibleRegions = regionFilter.trim()
     ? regions.filter((r) =>
@@ -557,6 +579,7 @@ export const PrototypePage: React.FC = () => {
               </span>
             </div>
             <select
+              aria-label="Carbon data source"
               value={dataSourceMode}
               onChange={(e) => {
                 const newMode = e.target.value as 'live' | 'demo';
