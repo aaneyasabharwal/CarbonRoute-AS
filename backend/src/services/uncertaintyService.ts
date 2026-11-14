@@ -32,6 +32,25 @@ export interface DeadlineRiskResult {
 /** Largest accepted runtime coefficient of variation. */
 export const MAX_RUNTIME_CV = 1;
 
+/**
+ * P17: the runtime CV values a user may declare through the API (0 = deterministic runtime).
+ * The engine itself accepts any cv in [0, MAX_RUNTIME_CV] (the built-in feasibility demo and the
+ * research replay use other values); only user input is restricted to this list.
+ */
+export const RUNTIME_CV_OPTIONS = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1] as const;
+
+/**
+ * Returns the canonical option equal to `input` (a number, or a numeric string, within 1e-9),
+ * or null when it is not one of RUNTIME_CV_OPTIONS. Booleans, empty strings and other types are null.
+ */
+export function toRuntimeCvOption(input: unknown): number | null {
+  if (typeof input !== 'number' && !(typeof input === 'string' && input.trim() !== '')) return null;
+  const n = Number(input);
+  if (!Number.isFinite(n)) return null;
+  const match = RUNTIME_CV_OPTIONS.find((v) => Math.abs(v - n) < 1e-9);
+  return match === undefined ? null : match;
+}
+
 /** Standard normal CDF via erfc. */
 export function normalCdf(z: number): number {
   return 0.5 * UncertaintyService.erfc(-z / Math.SQRT2);

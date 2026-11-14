@@ -131,6 +131,23 @@ Example: slack 32 minutes, d = 2 h, CV = 0.1 → σ = 12 min → P(miss) = 1 −
 
 CV is **declared, not learned**: we have no recorded real runtimes yet to calibrate it.
 
+**Choosing CV.** The Scheduler offers exactly 11 values: **0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7,
+0.8, 0.9, 1.0** (default 0). The API accepts only these and rejects anything else with 400. CV is
+the runtime's standard deviation as a share of its planned duration: CV 0.2 on a 2 h job means a
+typical deviation of about ±24 minutes. It is your assumption about how predictable the job is:
+
+| CV | Interpretation (assumption you declare) | Effect on the decision |
+|---|---|---|
+| 0 | runtime is exact | risk is 0 or 1; CarbonRoute chooses the same window as Greedy |
+| 0.1–0.3 | fairly predictable job | late, low-carbon windows with little slack are rejected |
+| 0.4–0.6 | quite variable job | needs a lot of slack; fewer feasible windows |
+| 0.7–1.0 | very unpredictable job | needs slack of several durations; often infeasible with a tight deadline |
+
+With a larger CV, a window needs more slack to stay within τ. Example for d = 2 h, τ = 5% (z = 1.645):
+needed slack ≈ 1.645 · CV · d, i.e. about 20 min at CV 0.1, 1 h at CV 0.3 and 3.3 h at CV 1.0.
+The chosen CV is shown with the decision on the Scheduler page, in My Jobs, and in the HTML/JSON
+report. Benchmarks use CV 0 and 0.2; the feasibility demonstration uses 0.05 and 0.25 internally.
+
 **What this risk does *not* include:** carbon forecast uncertainty. The risk is about *time*
 (will the run finish by the deadline?), and depends only on the declared runtime variability. An
 earlier version mixed the carbon forecast's standard deviation into a time uncertainty ("horizon
@@ -148,7 +165,7 @@ Edge cases (implemented in `uncertaintyService.ts`, tested in
 | Start at or after the deadline | 1 | 1 (handled explicitly; the scheduler never evaluates such starts) |
 | Largest CV (1.0) | n/a | σ = d; e.g. slack = d gives 1 − Φ(1) ≈ 15.9% |
 
-CV = 0 is a separate branch, so there is no division by zero. CV values outside 0–1 are rejected.
+CV = 0 is a separate branch, so there is no division by zero.
 
 ### 5.4 The five policies (same snapshot, same candidates)
 

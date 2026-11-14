@@ -44,6 +44,7 @@ import { FeasibilityDemoVisualizer } from '../components/FeasibilityDemoVisualiz
 import { ZoneSelector, zoneUsability } from '../components/ZoneSelector';
 import { CarbonObservationPanel } from '../components/CarbonObservationPanel';
 import { DecisionExplanationPanel } from '../components/DecisionExplanationPanel';
+import { RUNTIME_CV_OPTIONS, DEFAULT_RUNTIME_CV, runtimeCvLabel } from '../lib/runtimeCv';
 
 /** Formats a UTC ISO time in the viewer's local time zone. */
 const formatLocal = (iso?: string | null) =>
@@ -61,7 +62,7 @@ export const PrototypePage: React.FC = () => {
   const [region, setRegion] = useState<string>('US-CAL-CISO');
   const [riskTolerance, setRiskTolerance] = useState<number>(0.05);
   // Declared runtime coefficient of variation (P6): 0 = deterministic runtime.
-  const [runtimeCv, setRuntimeCv] = useState<number>(0);
+  const [runtimeCv, setRuntimeCv] = useState<number>(DEFAULT_RUNTIME_CV);
 
   // Regions: live = every zone the backend's Electricity Maps key can access; demo = synthetic profiles.
   // P11: the global zone catalogue (every provider zone; static, no provider call).
@@ -630,10 +631,11 @@ export const PrototypePage: React.FC = () => {
               onChange={(e) => setRuntimeCv(parseFloat(e.target.value))}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200"
             >
-              <option value={0}>0: runtime is exact (deterministic)</option>
-              <option value={0.1}>0.1</option>
-              <option value={0.2}>0.2</option>
-              <option value={0.3}>0.3</option>
+              {RUNTIME_CV_OPTIONS.map((cv) => (
+                <option key={cv} value={cv}>
+                  {runtimeCvLabel(cv)}
+                </option>
+              ))}
             </select>
             <span className="text-[10px] text-slate-500 block">Declared by you, not learned: runtime ~ Normal(d, (CV&middot;d)&sup2;)</span>
           </div>

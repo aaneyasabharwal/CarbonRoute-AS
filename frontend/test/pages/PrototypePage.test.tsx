@@ -161,6 +161,28 @@ describe('PrototypePage (M5 real-data workflow)', () => {
     expect(bodyOf(calls()[1]).runtimeCv).toBe(0.2);
   });
 
+  // P17: exactly 11 options, 0 (deterministic) first and default; each one is sent as a number.
+  it('offers exactly the 11 CV values and sends each selected value to the backend', async () => {
+    const fetchMock = backend({ status: 'INFEASIBLE', reason: 'too late', recommendation: null });
+    renderPage();
+    await screen.findByRole('option', { name: /DE — Germany/ });
+    const select = screen.getByLabelText('Runtime variability (CV)') as HTMLSelectElement;
+    const values = Array.from(select.options).map((o) => Number(o.value));
+    expect(values).toEqual([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]);
+    expect(select.value).toBe('0');
+    expect(select.options[0].text).toMatch(/deterministic/);
+    expect(select.options[10].text).toMatch(/^1\.0/);
+    const calls = () => fetchMock.mock.calls.filter((c) => String(c[0]) === `${API_BASE}/schedule`);
+    for (const [i, cv] of values.entries()) {
+      fireEvent.change(select, { target: { value: String(cv) } });
+      fireEvent.click(screen.getByRole('button', { name: /Evaluate 5 Schedulers/ }));
+      await waitFor(() => expect(calls().length).toBe(i + 1));
+      const sent = bodyOf(calls()[i]).runtimeCv;
+      expect(typeof sent).toBe('number');
+      expect(sent).toBe(cv);
+    }
+  });
+
   // Regression (defect 1, dashboard): the recommendation card uses the time-weighted forecast
   // (demo job-7f42a910: recommended 117 vs Immediate 117.33 -> 0.28%), not the engine's
   // hourly-slot saving (1.7%).
