@@ -63,3 +63,18 @@ describe('global zones in the scheduling workflow', () => {
     for (const c of r.candidateWindows) expect(Date.parse(c.endUtc)).toBeLessThanOrEqual(start + 12 * H);
   });
 });
+
+describe('demo scheduling for zones without their own profile (P13)', () => {
+  it('KE schedules on the generic synthetic trace, labelled synthetic, under KE and Africa/Nairobi', async () => {
+    const store = new SchedulingStore(path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'cr-generic-')), 's.json'));
+    const now = Date.UTC(2026, 10, 15, 6);
+    const r = (await scheduleWorkflow(
+      { name: 'generic', commandOrImage: 'busybox', isContainerImage: true, zone: 'KE', durationHours: 2, cpu: 1, memoryMb: 128, riskTolerance: 0.05, runtimeCv: 0.2, arrivalAt: new Date(now).toISOString(), deadlineAt: new Date(now + 10 * H).toISOString(), mode: 'demo' },
+      { now: () => now, store }
+    )) as any;
+    expect(r.status).toBe('RECOMMENDED');
+    expect(r.timeline.timezone).toBe('Africa/Nairobi');
+    expect(r.evaluatedPolicies).toHaveLength(5);
+    expect(JSON.stringify(r)).not.toMatch(/"dataClass":"real"/);
+  });
+});

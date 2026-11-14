@@ -195,11 +195,14 @@ nothing is invented.
 | In the catalogue | 351 | the zone exists |
 | Listed by the provider for our trial key | 351 | the provider *says* forecast/history are available (a listing is not proof) |
 | Live data verified | 7 (DE, FR, GB, IN, IN-NO, IN-SO, US-CAL-CISO) | we actually read data with our key |
-| Synthetic demo profile | 4 (DE, IN-NO, US-CAL-CISO, US-TEX-ERCO) + research benchmark | fake data for the public demo |
+| Own synthetic demo profile | 4 (DE, IN-NO, US-CAL-CISO, US-TEX-ERCO) + research benchmark | zone-specific fake data for the public demo |
+| Demo scheduling possible | **all 351** | the other 347 use the **generic synthetic trace**: one synthetic curve shared by all of them, labelled "not <zone> data" |
 
 - The selector lets you search by name, zone id, country, continent or area, and filter by continent
-  and availability. A zone without data for the chosen mode stays selected, Evaluate is disabled and
-  the reason is shown. **The system never silently substitutes another region.**
+  and availability. In demo mode **every zone can be scheduled**; zones without their own profile use
+  the generic synthetic trace, and the forecast title and panel say "not <zone> data". In live mode a zone the
+  server cannot serve stays selected, Evaluate is disabled and the reason is shown. **Nothing is ever
+  silently substituted.**
 
 ---
 
@@ -370,8 +373,8 @@ student and one evaluator account on the Account page.
 **Sequence (about 15 min):**
 1. Home / How It Works: the problem.
 2. Dashboard: everything comes from the backend; "not configured" = synthetic data on the free demo.
-3. Prototype → zone selector: search "kenya", "south america"; show the availability panel; KE has no
-   demo profile → Evaluate disabled with the reason (no substitution).
+3. Prototype → zone selector: search "kenya", "south america"; show the availability panel. KE has no
+   own demo profile, so it runs on the generic synthetic trace, which the page labels "not KE data".
 4. Choose **DE**, preset "Controlled Benchmark Demo", CV 0.2 → **Evaluate 5 Schedulers**.
 5. Walk through the candidate windows, the five policies, the recommendation and the explanation.
 6. **Dispatch** → labelled simulated; a second dispatch is refused.

@@ -56,23 +56,35 @@ describe('zone catalogue contents', () => {
     expect(verified).toEqual(['DE', 'FR', 'GB', 'IN', 'IN-NO', 'IN-SO', 'US-CAL-CISO']);
     expect(catalogueZones().filter((z) => z.syntheticDemo).map((z) => z.zone).sort()).toEqual(['DE', 'IN-NO', 'US-CAL-CISO', 'US-TEX-ERCO']);
     expect(catalogueZone('KE')!.verifiedLive).toBeNull(); // listed by the provider, never read
-    expect(zoneAvailability('KE', false)).toMatchObject({ inCatalogue: true, live: false, demo: false });
+    expect(zoneAvailability('KE', false)).toMatchObject({ inCatalogue: true, live: false, demo: true, demoTrace: 'generic' });
+    expect(zoneAvailability('DE', false)).toMatchObject({ demo: true, demoTrace: 'zone-profile' });
     expect(zoneAvailability('XX-NOPE', true).inCatalogue).toBe(false);
   });
 });
 
-describe('no silent region substitution (P11)', () => {
-  it('demo data for a zone without a synthetic profile is refused, not replaced by another region', async () => {
-    await expect(CarbonService.getForecast('KE', 24, 'demo')).rejects.toThrow(/no synthetic demo profile/i);
+describe('demo data for every catalogue zone, never silently substituted (P11, P13)', () => {
+  it('a zone without its own profile gets the GENERIC synthetic trace, labelled so, under its own id and time zone', async () => {
+    const ke = await CarbonService.getForecast('KE', 24, 'demo');
+    expect(ke.region).toBe('KE');
+    expect(ke.dataClass).toBe('synthetic');
+    expect(ke.syntheticTrace).toBe('generic');
+    expect(ke.regionName).toMatch(/generic synthetic trace/);
+    expect(ke.regionName).toMatch(/not KE data/);
+    expect(ke.timezone).toBe('Africa/Nairobi');
     const de = await CarbonService.getForecast('DE', 24, 'demo');
     expect(de.region).toBe('DE');
+    expect(de.syntheticTrace).toBe('zone-profile');
+    await expect(CarbonService.getForecast('XX-NOT-A-ZONE', 24, 'demo')).rejects.toThrow(/not in the zone catalogue/);
   });
 
-  it('the API says why (422) and the public catalogue endpoint lists every zone', async () => {
+  it('demo forecast works for a catalogue zone, an unknown zone is refused (422), and the catalogue endpoint lists every zone', async () => {
     const { default: app } = await import('../../src/app');
     const r = await request(app).get('/api/carbon/forecast?region=KE&mode=demo');
-    expect(r.status).toBe(422); // the API's status for invalid parameters
-    expect(r.body.message).toMatch(/no synthetic demo profile/i);
+    expect(r.status).toBe(200);
+    expect(r.body.data.syntheticTrace).toBe('generic');
+    const bad = await request(app).get('/api/carbon/forecast?region=XX-NOT-A-ZONE&mode=demo');
+    expect(bad.status).toBe(422); // the API's status for invalid parameters
+    expect(bad.body.message).toMatch(/not in the zone catalogue/);
     const c = await request(app).get('/api/carbon/catalogue');
     expect(c.status).toBe(200);
     expect(c.body.data.zones).toHaveLength(351);

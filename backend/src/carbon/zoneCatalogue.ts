@@ -63,12 +63,14 @@ export function catalogueTimezone(zone: string): string | null {
  */
 export function zoneAvailability(zone: string, liveConfigured: boolean) {
   const z = byZone.get(zone);
-  if (!z) return { inCatalogue: false, live: false, demo: false, reason: `Zone ${zone} is not in the zone catalogue.` };
+  if (!z) return { inCatalogue: false, live: false, demo: false, demoTrace: null, reason: `Zone ${zone} is not in the zone catalogue.` };
   const live = liveConfigured && z.providerListed.forecast;
   return {
     inCatalogue: true,
     live,
-    demo: z.syntheticDemo,
+    // P13: every catalogue zone can use demo data: its own synthetic profile or the generic trace.
+    demo: true,
+    demoTrace: z.syntheticDemo ? ('zone-profile' as const) : ('generic' as const),
     reason: !liveConfigured
       ? 'Live data is not configured on this server (no provider key).'
       : !z.providerListed.forecast

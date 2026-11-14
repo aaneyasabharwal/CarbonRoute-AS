@@ -1,6 +1,7 @@
 import { ElectricityMapsClient, electricityMaps } from '../carbon/electricityMaps';
 import { ForecastSnapshot, ZoneInfo, ProviderError } from '../carbon/types';
 import { timezoneForZone } from '../carbon/zoneTimezones';
+import { catalogueZone } from '../carbon/zoneCatalogue';
 
 export interface HourlyCarbonPoint {
   hour: number;
@@ -41,6 +42,8 @@ export interface CarbonForecastData {
   maxCarbon: number;
   /** IANA time zone of the zone for display, or null if unknown. Timestamps are UTC. */
   timezone: string | null;
+  /** Demo data only (P13): the zone's own synthetic profile, the generic synthetic trace, or the benchmark. */
+  syntheticTrace?: 'zone-profile' | 'generic' | 'benchmark';
   /** The exact provider forecast (live mode only), including issue and fetch times. */
   snapshot?: ForecastSnapshot;
 }
@@ -147,16 +150,24 @@ export class PreparedTraceDataProvider implements ICarbonDataProvider {
     nowMs: number = Date.now()
   ): Promise<CarbonForecastData> {
     const validHorizon = Math.max(1, Math.min(48, Number(horizonHours) || 24));
-    // P11: never substitute another region. A zone without a synthetic profile is refused with the
-    // list of zones that have one (before P11 it silently got the BENCHMARK-RESEARCH trace).
-    if (!REGIONAL_PROFILES[region]) {
+    // P13: every catalogue zone can be scheduled on demo data. A zone with its own synthetic profile
+    // uses it; any other catalogue zone uses the GENERIC synthetic trace, labelled as such everywhere
+    // (it is the same curve for every such zone and is not that zone's data). The zone keeps its own
+    // id and time zone. A zone outside the catalogue is still refused (P11: no silent substitution).
+    const own = REGIONAL_PROFILES[region];
+    const catalogueEntry = catalogueZone(region);
+    if (!own && !catalogueEntry) {
       throw new ProviderError(
         'INVALID_PARAMETER',
-        `There is no synthetic demo profile for zone ${String(region).slice(0, 40)}. Demo profiles exist for: ${Object.keys(REGIONAL_PROFILES).join(', ')}. Use one of them, or live data where it is configured.`
+        `Zone ${String(region).slice(0, 40)} is not in the zone catalogue. Use a catalogue zone (GET /api/carbon/catalogue) or the research benchmark.`
       );
     }
+    const syntheticTrace: 'zone-profile' | 'generic' | 'benchmark' = region === 'BENCHMARK-RESEARCH' ? 'benchmark' : own ? 'zone-profile' : 'generic';
     const selectedRegion = region;
-    const profile = REGIONAL_PROFILES[selectedRegion];
+    const profile = own ?? {
+      ...REGIONAL_PROFILES['BENCHMARK-RESEARCH'],
+      name: `${catalogueEntry!.name} — generic synthetic trace (the same synthetic curve for every zone without its own profile; not ${region} data)`,
+    };
     // P3 / M5.4: the synthetic trace starts at the beginning of the current UTC hour (like the
     // provider's hourly forecasts), so identical requests in the same hour give identical
     // timestamps and decisions.
@@ -197,6 +208,7 @@ export class PreparedTraceDataProvider implements ICarbonDataProvider {
       dataClass: 'synthetic',
       uncertaintySource: 'synthetic-demo-model',
       timezone: selectedRegion === 'BENCHMARK-RESEARCH' ? null : timezoneForZone(selectedRegion),
+      syntheticTrace,
       traceVersion: 'v1.0-ucs503-calibrated',
       forecastHorizonHours: validHorizon,
       timeResolution: '60 minutes (Hourly)',

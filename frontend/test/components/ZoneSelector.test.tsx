@@ -69,7 +69,7 @@ describe('ZoneSelector', () => {
     expect(options().filter((v) => v !== BENCHMARK_ZONE)).toEqual(['DE']);
   });
 
-  it('a zone without a demo profile stays selected and says why demo scheduling is unavailable', () => {
+  it('a zone without its own demo profile is schedulable on the generic synthetic trace, labelled as not its data (P13)', () => {
     render(<Harness />);
     fireEvent.change(screen.getByRole('combobox', { name: 'Target Grid Region' }), { target: { value: 'KE' } });
     expect((screen.getByRole('combobox', { name: 'Target Grid Region' }) as HTMLSelectElement).value).toBe('KE');
@@ -77,13 +77,15 @@ describe('ZoneSelector', () => {
     expect(panel).toHaveTextContent('Kenya');
     expect(panel).toHaveTextContent('Africa/Nairobi');
     expect(panel).toHaveTextContent('Live data not verified for this zone');
-    expect(screen.getByTestId('zone-usable')).toHaveTextContent(/No synthetic demo profile exists for KE/);
+    expect(panel).toHaveTextContent('No own demo profile (demo uses the generic synthetic trace)');
+    expect(screen.getByTestId('zone-usable')).toHaveTextContent(/generic synthetic trace.*not KE data/);
   });
 
   it('usability rules: demo profile, live configuration, sign-in, benchmark', () => {
     const cat = catalogue(false);
     expect(zoneUsability('DE', 'demo', cat, false).usable).toBe(true);
-    expect(zoneUsability('KE', 'demo', cat, true).usable).toBe(false);
+    expect(zoneUsability('KE', 'demo', cat, true)).toMatchObject({ usable: true, generic: true });
+    expect(zoneUsability('DE', 'demo', cat, true).generic).toBeUndefined();
     expect(zoneUsability('DE', 'live', cat, true).reason).toMatch(/not configured on this server/);
     expect(zoneUsability('KE', 'live', catalogue(true), false).reason).toMatch(/sign-in/);
     expect(zoneUsability('KE', 'live', catalogue(true), true).usable).toBe(true);

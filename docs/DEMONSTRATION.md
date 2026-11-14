@@ -22,7 +22,7 @@ Screenshots: `docs/screenshots/`.
 |---|---|---|---|
 | 1 | Home → How It Works | the problem and pipeline | Batch jobs are flexible in time; grid carbon intensity varies by hour and place; forecasts are uncertain and jobs have deadlines. |
 | 2 | Dashboard | provider and execution status, latest benchmark, model status | Every number comes from the backend. "Not configured" means this free demo has no Electricity Maps key: it uses labelled synthetic data. |
-| 3 | Prototype → zone selector | search "kenya", "south america", "IN-NO"; continent and availability filters | 351 real grid zones from the Electricity Maps catalogue, every one selectable. The panel separates: in the catalogue, listed by the provider, **verified** live (7 zones), synthetic demo profile (4). KE has no demo profile, so Evaluate is disabled and says why — the system never substitutes another region. |
+| 3 | Prototype → zone selector | search "kenya", "south america", "IN-NO"; continent and availability filters | 351 real grid zones from the Electricity Maps catalogue, every one selectable. The panel separates: in the catalogue, listed by the provider, **verified** live (7 zones), own synthetic demo profile (4). KE has no own profile, so demo scheduling uses the generic synthetic trace, and the page says "not KE data"; nothing is silently substituted. |
 | 4 | Prototype → schedule | choose **DE**, preset "1. Controlled Benchmark Demo", runtime CV 0.2, press **Evaluate 5 Schedulers** | Nothing is scheduled until you press it. The forecast is labelled synthetic. |
 | 5 | Prototype → results | candidate windows, policy comparison, recommendation, explanation | Immediate and EDF start now; Greedy picks the lowest forecast ignoring risk; CarbonAware uses a fixed buffer; CarbonRoute picks the lowest forecast whose deadline-miss probability is within τ. The explanation quotes the binding constraint. |
 | 6 | Prototype → dispatch | **Dispatch** | Labelled "Simulated execution: no workload process is run". A second dispatch is refused. |
@@ -46,7 +46,7 @@ minimum): zero slack means a 50 % miss risk > τ, so the result is an explicit *
 | 2. Data Pipeline | US-TEX-ERCO | local times in America/Chicago |
 | 3. Nightly Backup | IN-NO | local times in Asia/Kolkata |
 | any, CV 0.2, deadline = duration (slider minimum) | any demo zone | INFEASIBLE with the reason (risk above τ) |
-| any | KE (no demo profile) | Evaluate disabled: "No synthetic demo profile exists for KE…" |
+| CV 0.2, deadline in 4–10 h | KE or MW (no own profile) | schedules on the generic synthetic trace, labelled "not KE/MW data"; CarbonRoute avoids the risky last window |
 
 ## 4. Explaining the model to faculty
 

@@ -37,7 +37,7 @@ to `main`** (GitHub Pages) · #30–#31 documentation of the Pages deployment.
 | Python | 5 tests |
 | CI | 4 jobs (incl. collector-lock stress test, zone-catalogue reproducibility, Docker smoke test): green |
 | Browser audit | 16 pages × 1920/1440/1366/1024/768/390: no overflow, no clipped navigation (local signed in and public signed out) |
-| Public checks | health, CORS, CSP, 401s, catalogue (351), no region substitution (422), bundle without secrets; signed-in flows 22/22 (`scripts/staging-check.mjs`, owner run) |
+| Public checks | health, CORS, CSP, 401s, catalogue (351), no silent region substitution, bundle without secrets; signed-in flows 22/22 (`scripts/staging-check.mjs`, owner run) |
 
 ## 4. What was done in the final phase (P11)
 
@@ -46,7 +46,7 @@ to `main`** (GitHub Pages) · #30–#31 documentation of the Pages deployment.
   apart (listed 351 / verified 7 / demo 4), built reproducibly from versioned sources, CI-checked.
 - **Global selector**: every zone selectable; search, filters, grouping; honest availability panel;
   Evaluate disabled with the reason when a zone cannot be used in the chosen mode.
-- **Defects fixed** (regression tests): silent demo-region substitution (now 422); 185 zones without
+- **Defects fixed** (regression tests): silent demo-region substitution (now labelled: own profile or the generic synthetic trace, P13); 185 zones without
   a time zone; catalogue build differing on CRLF checkouts; navigation wrapping/overflow at
   1366–1440 px; Results selector overflow at 390 px; stale "less than a day" text.
 - **Scheduler**: mathematics unchanged; tests for catalogue time zones, aggregates in UTC and a
