@@ -10,16 +10,19 @@ a tolerance τ. Every decision stores the forecast it used, explains itself, is 
 policies, and can later be checked against what the grid actually did.
 
 **Status (November 2026): research prototype, not production-ready.** What works, what is only
-partly validated and what is missing is listed in [docs/FINAL_REPORT.md](docs/FINAL_REPORT.md). In short:
+partly validated and what is missing is listed in [docs/FINAL_REPORT.md](docs/FINAL_REPORT.md).
+This README describes `fix/prototype-flaws` **after the P8 pull requests #16–#22 are merged** (they
+are open for review; [docs/SPRINT_PROGRESS.md](docs/SPRINT_PROGRESS.md) lists what each contains). In short:
 
 | Works and is tested | Limited or not done |
 |---|---|
-| Live Electricity Maps forecasts with provenance; measured vs estimated values kept apart | 5 h of collected data (needs ≥ 7 days); no evidence of carbon savings yet |
+| Live Electricity Maps forecasts with provenance; measured vs estimated values kept apart | Under 1 day of collected data (needs ≥ 7 days); no evidence of carbon savings yet |
 | Risk-constrained scheduling engine, 5 policies, explicit infeasible results, explanations | Deadline risk uses a **declared** runtime variability, not calibrated |
-| Accounts, ownership, revocable tokens, rate limits, provider call budget, CORS allow-list | JSON-file storage, single process; token stored in browser `localStorage` |
-| Observation collection, forecast-vs-realized reports, offline oracle | No measured energy (emissions use an assumed model) |
+| Accounts (admin-issued), password change, ownership, revocable tokens, rate limits, provider call budget, CORS allow-list, CSP | JSON-file storage, single process; token stored in browser `localStorage` (12 h lifetime) |
+| Job lifecycle with persisted execution status; observation collection, forecast-vs-realized reports, offline oracle | No measured energy (emissions use an assumed model) |
 | Replay benchmark and forecast-error ML pipeline with pre-registered rules | ML model **not trained** (insufficient data); no cost-aware policy (no price data) |
-| Reproducible demo on collected data | Execution is simulated unless a Kubernetes cluster is connected; dispatch is manual |
+| Reproducible demo and research report from saved results; collector with an OS-enforced lock | Execution is simulated unless a Kubernetes cluster is connected; dispatch is manual |
+| CI: backend, frontend, Python, Docker image build + smoke test, collector-lock stress test | Not deployed: the old hosted backend is suspended; a new staging service awaits approval |
 
 ## Architecture
 
@@ -28,7 +31,7 @@ React SPA (frontend/) --HTTPS/JSON--> Express API (backend/) --> Electricity Map
                                          |  scheduling engine, explanations, reports
                                          |  JSON database + scheduling store (database/)
                                          +--> kubectl / Kubernetes (optional; otherwise simulated)
-Offline scripts (backend/): collect -> benchmark / ml / coverage / demo -> ../CarbonRoute-AS-data/
+Offline scripts (backend/): collect -> benchmark / ml / coverage / demo / report -> ../CarbonRoute-AS-data/
 ```
 
 Details and data flow: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -61,10 +64,15 @@ cd backend && npm run dev      # API on http://localhost:5000
 cd frontend && npm run dev     # app on http://localhost:5173
 ```
 
-Main pages: **Prototype** (schedule a job, explanation, policy comparison, dispatch), **My Jobs**
-(decisions, cancel, collect observations, report), **Results** (benchmarks and model evaluation).
-The other pages (Home, Project, How it works, Architecture, System design, Roadmap, Team, Resources,
-Presentations) are project information.
+Main pages: **Dashboard** (your jobs, latest benchmark, model status, provider and execution mode),
+**Prototype** (schedule a job, explanation, policy comparison, dispatch), **My Jobs** (decisions,
+status, cancel, collect observations, report), **Results** (benchmarks and model evaluation),
+**Account** (password change; administrators also manage accounts). The other pages (Home, Project,
+How it works, Architecture, System design, Roadmap, Team, Resources, Presentations) are project
+information.
+
+There is no public self-registration: an administrator creates accounts on the Account page or with
+`npm run user:create`.
 
 Production build: `npm run build` in each of `backend/` (then `npm start`) and `frontend/`. Docker:
 `docker compose -f docker/docker-compose.yml up -d --build`. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
@@ -78,6 +86,7 @@ npm run coverage -- --data ../../CarbonRoute-AS-data/em-collection            # 
 npm run benchmark -- --data ../../CarbonRoute-AS-data/em-collection           # forecast accuracy + policy replay
 npm run ml       -- --data ../../CarbonRoute-AS-data/em-collection            # forecast-error model (gated)
 npm run demo     -- --data ../../CarbonRoute-AS-data/em-collection            # one job end to end, reproducible
+npm run report                                                                 # research report from saved results
 ```
 
 Results are written outside the repository. Current numbers and their limits:
@@ -91,10 +100,12 @@ cd frontend && npm run typecheck && npm test && npm run build
 python -m unittest discover -s fastapi_service/tests -v
 ```
 
-CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs all three on every pull request into
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs all three, plus a Docker image build and
+smoke test and a multi-process collector-lock stress test, on every pull request into
 `fix/prototype-flaws` or `main` and on pushes to `task/**`. Tests use fixtures and temporary folders;
-they make no provider calls and read no secrets. Legacy scripts in `tests/` need a running server and
-are not part of CI.
+they make no provider calls and read no secrets. Testing strategy, suites and current counts:
+[docs/TESTING.md](docs/TESTING.md). Legacy scripts in `tests/` need a running server and are not part
+of CI.
 
 ## Documentation
 
@@ -110,8 +121,12 @@ are not part of CI.
 | [ELECTRICITY_MAPS.md](docs/ELECTRICITY_MAPS.md) | Provider capabilities verified, measured vs estimated data, coverage |
 | [API_SPEC.md](docs/API_SPEC.md) | REST endpoints, authentication, ownership, errors |
 | [ENVIRONMENT.md](docs/ENVIRONMENT.md) | Every environment variable |
+| [SECURITY.md](docs/SECURITY.md) | Security controls, how each is verified, accepted risks |
+| [TESTING.md](docs/TESTING.md) | Testing strategy, suites, quality gates, current results |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Security settings, Docker, hosted setup, credential rotation |
+| [DEPLOYMENT_READINESS.md](docs/DEPLOYMENT_READINESS.md) | Blockers, credential rotation plan, staging checklist and settings |
 | [FINAL_REPORT.md](docs/FINAL_REPORT.md) | Verification results, defects, limitations, completion status |
+| [SPRINT_PROGRESS.md](docs/SPRINT_PROGRESS.md) | P8 sprint log: branches, PRs, defects fixed, collector status |
 
 `docs/PROTOTYPE_IMPLEMENTATION.md` and `docs/PROTOTYPE_DEMO.md` describe the September prototype and are
 kept for history only; parts of them (the old risk model) are invalid.

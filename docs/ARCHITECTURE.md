@@ -43,6 +43,20 @@ Other folders: `fastapi_service/` is a **legacy** Python prototype (not used; st
 removed risk model); `scheduler/` and `simulator/` contain early specification stubs; `docker/` holds
 the container build; `storage/uploads/presentations/` holds published presentation PDFs.
 
+## Frontend pages and their backend calls
+
+| Page | Backend | Notes |
+|---|---|---|
+| Dashboard | `/carbon/provider`, `/cluster/health` (public); `/jobs`, `/results/*` (signed in) | real data only; per-section loading, empty, error states |
+| Prototype | `/carbon/regions`, `/carbon/forecast`, `/schedule`, `/jobs/:id/dispatch`, observations | live or labelled synthetic demo |
+| My Jobs | `/jobs`, `/jobs/:id`, cancel, observations, report, oracle | owner's jobs only |
+| Results | `/results/benchmarks`, `/results/ml` | snapshot-cluster intervals, insufficient-data shown honestly |
+| Account | `/auth/password`; `/admin/users` (administrators) | no public registration |
+| Project pages | presentations, resources, team, roadmap | content management for administrators |
+
+The backend URL comes from `VITE_API_URL` at build time (required for GitHub Pages); there is no
+default remote backend.
+
 ## Data flow: scheduling one job (`POST /api/schedule`)
 
 1. **Authentication and limits.** JWT verified (signature, expiry, revocation list, password-change
@@ -56,7 +70,8 @@ the container build; `storage/uploads/presentations/` holds published presentati
    provider fails, the request fails and **nothing is stored** (no synthetic substitute). Demo mode uses
    the synthetic trace, labelled `dataClass: synthetic`.
 4. **Engine** (`schedulerService`): hourly candidate windows inside [arrival, deadline], each with its
-   mean forecast and deadline-miss risk; five policies evaluated on the same candidates; CarbonRoute
+   mean forecast and deadline-miss risk computed from the **exact** deadline and the actual start
+   instant (the arrival instant for the first window; P8); five policies evaluated on the same candidates; CarbonRoute
    picks the lowest-forecast window with risk ≤ τ or returns `INFEASIBLE_RISK` / `NO_FEASIBLE_WINDOW`.
    Cost-aware and oracle are reported as unavailable for scheduling.
 5. **Wall-clock conversion and explanation**: each policy's window in UTC, its time-weighted forecast
@@ -64,7 +79,10 @@ the container build; `storage/uploads/presentations/` holds published presentati
 6. **Store**: job (with owner), snapshot, decision (engine version, result, energy assumption).
 7. **Dispatch** (`POST /jobs/:id/dispatch`, by the user): Kubernetes Job via `kubectl apply` when a
    cluster is reachable, otherwise a **simulated** execution in which no workload runs. Dispatch is
-   immediate on request; there is no timer that starts the job at the recommended time.
+   immediate on request; there is no timer that starts the job at the recommended time. A job is
+   dispatched only with a recommended window and only once (P8). Every executor status change is
+   persisted on the stored execution, so status survives a restart; a run cut off by a restart is
+   reported as `interrupted`.
 8. **Observations** (`POST /jobs/:id/observations`, after the window ends and within 24 h): provider
    history for the scheduled and Immediate windows; each value labelled `measured` or
    `provider-estimate`; missing intervals listed, never filled.
@@ -79,11 +97,11 @@ npm run collect  -> em-collection/collection-<date>.jsonl   (real forecasts + re
                        |
       +----------------+-----------------+--------------------+
       v                v                 v                    v
-npm run coverage  npm run benchmark  npm run ml          npm run demo
-(quality per      (forecast accuracy (forecast-error     (one job replayed through
- zone)             + replay of 5     model with          the production workflow,
-                   policies on       pre-registered      plus benchmark and ML
-                   synthetic         thresholds)         summaries)
+npm run coverage  npm run benchmark  npm run ml          npm run demo        npm run report
+(quality per      (forecast accuracy (forecast-error     (one job replayed   (research report
+ zone)             + replay of 5     model with          through the         from the saved
+                   policies on       pre-registered      production          results, with
+                   synthetic         thresholds)         workflow)           guardrails)
                    workloads)
                        |                 |
                        v                 v
@@ -91,13 +109,18 @@ npm run coverage  npm run benchmark  npm run ml          npm run demo
 ```
 
 Every result file records the git commit, the SHA-256 of its input files and its configuration/seed.
+The collector holds an operating-system-enforced lock (a listening socket on `127.0.0.1`, port derived
+from the folder) so only one collector can append to a folder; see COLLECTOR.md.
 
 ## Trust boundaries and security
 
 - Secrets only in environment variables (`.env` git-ignored; `.dockerignore` keeps `.env` and local
   databases out of images). Production refuses to start without a valid `JWT_SECRET`.
 - Users see only their own jobs (other ids answer 404); administrator access to other users' jobs is
-  audited.
+  audited. Accounts are created by administrators only (`/admin/users`, Account page); users change
+  their own password (`/auth/password`), which invalidates every older token.
+- Unexpected errors return a generic message with a reference id; details stay in the server log.
+- Full list of controls and how each is verified: [SECURITY.md](SECURITY.md).
 - Provider quota protected by authentication on live routes, per-user rate limits and a server-wide
   call budget.
 - Kubernetes manifests are built as objects and passed to `kubectl` as JSON with argument arrays

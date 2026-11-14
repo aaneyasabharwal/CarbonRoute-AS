@@ -5,6 +5,10 @@ Date: 2026-11-13 (UTC). Branch `task/p6-final-delivery` from `fix/prototype-flaw
 This report states what was verified, by what evidence, and what is not done. Implemented does not
 mean production-ready.
 
+> **P8 (2026-11-13/14): §8 is the current status and supersedes §5.** It describes
+> `fix/prototype-flaws` with PRs #16–#22 merged; until they are merged, those changes exist only on
+> their branches.
+
 > **P7 review (2026-11-13).** Every claim below was re-checked against its evidence. Corrections:
 > the backend test count includes 11 legacy `it.fails` tests (they pass because the old behaviour is
 > still asserted to fail); Kubernetes submission is verified by unit tests only; the live
@@ -131,3 +135,83 @@ deployment of the remediated system; merge of `fix/prototype-flaws` into `main`.
   headers). Nothing else on Render was changed; no service or disk was created; no credential was
   rotated. Open deployment blockers, including the unconfigured Pages `VITE_API_URL`, are in
   [DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md).
+
+## 7. P8 completion sprint (branches `task/p8-*`, PRs #16–#22, not merged)
+
+Defects found and fixed, each with a regression test that fails on the old code:
+
+| Id | Defect | PR |
+|---|---|---|
+| S1 | Login response time revealed whether a username exists | #16 |
+| S2 | Public `/cluster/health` returned `kubectl` output (control-plane address) and spawned `kubectl` on every request | #16 |
+| S3 | Public compute endpoints were not rate limited | #16 |
+| S4 | Unexpected errors returned exception text (paths, internals) to clients | #16 |
+| S7/S8 | No password change (token invalidation unreachable); no account management except the CLI | #16 (API), #22 (UI) |
+| N1 | Every signed-in user saw the Admin link; the mobile menu had no account links | #22 |
+| B7 | The frontend silently defaulted to the suspended old backend; Pages workflow set no API URL | #17 |
+| L1 | Execution status lived only in memory (restart showed completed jobs as scheduled) | #18 |
+| L2 | A job could be dispatched repeatedly | #18 |
+| L3 | A job without a recommended window could be dispatched | #18 |
+| E1 | Deadline risk floored the deadline (over-conservative) and measured the arrival slot from the start of its hour (under-estimated an immediate start); the two errors partly masked each other | #19 |
+| R1 | No reproducible research report; interpretation of intervals was manual | #20 |
+| D1 | The Dashboard was a placeholder preview with no data | #21 |
+| T1 | A collector test failed on Windows checkouts (CRLF) | #16, #18, #19, #20 |
+
+Verification of the combined tree (all seven branches merged locally, 2026-11-13 23:58 UTC): backend
+typecheck, **329 tests (11 `it.fails`)**, build; frontend typecheck, **116 tests**, build; Pages build
+with a URL passes and without one fails (by design); Python 5 tests; live end-to-end API check
+**30/30**. Each PR is green in CI (4/4 jobs: Backend incl. lock stress test, Frontend, Python, Docker).
+Details: [TESTING.md](TESTING.md), [SPRINT_PROGRESS.md](SPRINT_PROGRESS.md).
+
+Real data at the end of the sprint's analysis (23:48 UTC): 12 collection runs, 120 calls, 0 failures,
+0.40 days; benchmark on 60 snapshots, 170 realized values (61.2 % measured); ML insufficient-data
+(140 / 9 / 21 rows). See RESEARCH_SUMMARY.md.
+
+## 8. Completion status (after PRs #16–#22)
+
+Labels: *CI* = automated tests run in CI; *real data* = exercised on collected Electricity Maps data;
+*local* = verified on this machine only. Nothing is *deployed*.
+
+**1. Fully implemented and verified**
+- Authentication and sessions: bcrypt passwords, HS256 JWT (12 h) with revocation, password change
+  invalidating older tokens, constant-cost login, rate limits, admin-only account creation (CI).
+- Authorisation: job ownership (404 for others), audited administrator access, admin-only content and
+  account routes (CI).
+- Input/output hardening: CORS allow-list, CSP, 1 MB JSON limit, generic 500s with references, storage
+  allow-list, Kubernetes manifest/argument safety, cluster status without internals (CI).
+- Provider integration: Electricity Maps client with provenance, quality labels, horizons, caching and
+  call budget (CI; real data: 120 collector calls, live scheduling in the end-to-end check).
+- Scheduling engine: five policies on identical inputs, exact-instant deadline risk, explicit
+  infeasible results, explanations, oracle offline only (CI; real data via replay and demo).
+- Job lifecycle: submit/validate/persist/schedule/explain/view/cancel/dispatch-once, persisted
+  execution status with honest 'interrupted', reports (CI; local end-to-end 30/30).
+- Experiments: replay benchmark with snapshot-cluster intervals, forecast accuracy, reproducible demo,
+  research report with guardrails (CI; real data).
+- Collector: OS-enforced lock, fenced appends, all entry points (CI incl. multi-process stress; running
+  on real data).
+- Frontend: Dashboard, Prototype, My Jobs, Results, Account against real API shapes with loading,
+  empty, error and sign-in states; authentication-aware navigation (CI).
+- CI: backend, frontend, Python, Docker image build and smoke test, lock stress test.
+
+**2. Implemented but incompletely validated**
+- Policy comparison and forecast accuracy on real data: 0.40 days, not conclusive (report banner).
+- ML pipeline on real data: only the insufficient-data path has run on real data; evaluation and
+  promotion paths are tested on synthetic fixtures.
+- Kubernetes submission: unit-tested (manifest, argument arrays, cancellation race); never run against
+  a real cluster.
+- Docker images: built and smoke-tested in CI only; never run locally.
+- Deadline-risk model: mathematically tested; the runtime CV is declared, not calibrated.
+
+**3. Partially implemented**
+- Deployment: configuration, readiness report, rotation plan and staging checklist exist; the old
+  backend is suspended; no new service exists (needs approval and possibly cost); Pages needs the
+  repository variable `VITE_API_URL`.
+- Forecast uncertainty: empirical error bands exist for one lead bucket per zone; not used in decisions.
+- Execution: simulated path complete and persisted; real execution untested; no scheduled start.
+
+**4. Not implemented**
+- Seven days of collected data; a trained or promoted model.
+- Measured energy and realized emissions; cost-aware scheduling (no price data).
+- Multi-job queueing/capacity; resource utilisation metrics.
+- Durable multi-instance storage (PostgreSQL); httpOnly-cookie sessions.
+- Any deployment of the remediated system; merge to `main`.
