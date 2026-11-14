@@ -168,7 +168,12 @@ export class EngineInfeasibleError extends Error {
 const round2 = (x: number) => Math.round(x * 100) / 100;
 const round1 = (x: number) => Math.round(x * 10) / 10;
 const pct = (p: number) => `${(p * 100).toFixed(1)}%`;
-const label = (s: number, e: number) => `T+${s}:00 → T+${e}:00`;
+/** Hours after the forecast start as h:mm (a mid-hour arrival starts at e.g. T+0:59, not T+0.98). */
+const clock = (h: number) => {
+  const m = Math.round(h * 60);
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+};
+const label = (s: number, e: number) => `T+${clock(s)} → T+${clock(e)}`;
 
 /** Engine options. A plain number (the removed uncertaintyMultiplier) is ignored. */
 export interface EngineOptions {
@@ -280,7 +285,7 @@ export class SchedulerService {
         slotIndex: t,
         startHour: t,
         endHour: end,
-        windowLabel: label(t, end),
+        windowLabel: label(startOf(t), end),
         predictedCarbonIntensity: avg === null ? NaN : round2(avg),
         predictedCarbonImpactGrams: avg === null ? NaN : round1(avg * energyKwh),
         stdDev: sigma === null ? null : round2(sigma),
@@ -292,7 +297,7 @@ export class SchedulerService {
               : `${round2(avg)} ± ${round2(sigma)} gCO2eq/kWh (synthetic σ)`,
         deadlineRisk: risk,
         deadlineRiskPct: pct(risk),
-        slackHours: slack,
+        slackHours: round2(slack),
         waitingTimeHours: t - arrival,
         isFeasible: classification === 'FEASIBLE',
         meetsDeadline: end <= deadline,

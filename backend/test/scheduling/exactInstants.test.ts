@@ -111,6 +111,17 @@ describe('deadline risk uses exact instants (P8)', () => {
     expect(last.deadlineRisk).toBeCloseTo(0.5, 6);
   });
 
+  it('labels and slack of a mid-hour arrival are readable clock offsets, not raw fractions (P8 review)', async () => {
+    // Arrival 13:59:26, deadline 12 h later: before the fix the first window read
+    // "T+0:00 → T+2.990635:00" and its slack "9.999999166666665h".
+    const r = await run(59 + 26 / 60, 12 * 60 + 59 + 26 / 60);
+    const first = r.candidateWindows[0];
+    expect(first.windowLabel).toBe('T+0:59 → T+2:59');
+    expect(first.slackHours).toBe(10);
+    expect(r.candidateWindows[1].windowLabel).toBe('T+1:00 → T+3:00');
+    for (const c of r.candidateWindows) expect(String(c.slackHours).replace(/^-/, '').split('.')[1]?.length ?? 0).toBeLessThanOrEqual(2);
+  });
+
   it('rejects an invalid arrival offset', () => {
     const job = { id: 'j', name: 'j', commandOrImage: 'x', isContainerImage: false, durationHours: 1, deadlineHours: 5, arrivalHour: 0, arrivalOffsetHours: 1, cpu: 1, memoryMb: 128, region: 'TST', riskTolerance: 0.1, createdAt: 'x' };
     expect(() => SchedulerService.evaluatePolicies(job as any, [100, 100, 100, 100, 100, 100] as any, {})).toThrow(/arrivalOffsetHours/);
