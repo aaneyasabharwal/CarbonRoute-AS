@@ -445,7 +445,7 @@ export function parseZone(code: string, z: any): ZoneInfo {
     parentZone: z?.zoneParentKey ?? null,
     tier: z?.tier,
     timezone: timezoneForZone(code, z?.countryCode),
-    timezoneSource: timezoneForZone(code, z?.countryCode) ? 'curated-mapping' : 'unknown',
+    timezoneSource: timezoneForZone(code, z?.countryCode) ? 'zone-catalogue' : 'unknown',
     capabilities: access
       ? {
           latest: has('carbon-intensity/latest'),

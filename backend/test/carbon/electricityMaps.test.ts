@@ -174,14 +174,17 @@ describe('latest, power breakdown and zones (recorded responses)', () => {
     const zones = await clientWith([{ body: fixture('recorded-zones-subset.json') }]).client.getZones();
     const byCode = Object.fromEntries(zones.map((z) => [z.zone, z]));
     expect(Object.keys(byCode).sort()).toEqual(['DE', 'FR', 'GB', 'IN', 'IN-NO', 'US-CAL-CISO']);
-    expect(byCode['IN-NO']).toMatchObject({ zoneName: 'Northern India', countryCode: 'IN', timezone: 'Asia/Kolkata', timezoneSource: 'curated-mapping' });
+    expect(byCode['IN-NO']).toMatchObject({ zoneName: 'Northern India', countryCode: 'IN', timezone: 'Asia/Kolkata', timezoneSource: 'zone-catalogue' });
     expect(byCode['US-CAL-CISO'].timezone).toBe('America/Los_Angeles');
     expect(byCode.DE.capabilities).toEqual({ latest: true, history: true, forecast: true, pastRange: false, powerBreakdown: true });
   });
 
   it('zones without an access list report unknown capabilities, and unmapped zones have no time zone', async () => {
-    const zones = await clientWith([{ body: JSON.stringify({ 'US-NW-AVA': { zoneName: 'Avista', countryCode: 'US' } }) }]).client.getZones();
-    expect(zones[0]).toMatchObject({ zone: 'US-NW-AVA', timezone: null, timezoneSource: 'unknown', capabilities: null });
+    const zones = await clientWith([{ body: JSON.stringify({ 'US-NW-AVA': { zoneName: 'Avista', countryCode: 'US' }, 'XX-NOT-IN-CATALOGUE': { zoneName: 'Unknown', countryCode: 'XX' } }) }]).client.getZones();
+    // P11: US-NW-AVA was unmapped before the global zone catalogue; it now has its catalogue time zone.
+    expect(zones[0]).toMatchObject({ zone: 'US-NW-AVA', timezone: 'America/Los_Angeles', timezoneSource: 'zone-catalogue', capabilities: null });
+    // A zone outside the catalogue and the curated mapping still has no time zone (never guessed).
+    expect(zones[1]).toMatchObject({ zone: 'XX-NOT-IN-CATALOGUE', timezone: null, timezoneSource: 'unknown' });
   });
 });
 

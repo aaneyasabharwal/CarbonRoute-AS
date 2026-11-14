@@ -34,7 +34,7 @@ export interface ZoneInfo {
   tier?: string;
   /** IANA time zone, or null when no reliable mapping is known. */
   timezone: string | null;
-  timezoneSource: 'curated-mapping' | 'unknown';
+  timezoneSource: 'zone-catalogue' | 'curated-mapping' | 'unknown';
   /** Signals this API key can read for the zone, taken from the provider's `access` list. */
   capabilities: {
     latest: boolean;

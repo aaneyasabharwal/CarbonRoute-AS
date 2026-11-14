@@ -7,6 +7,8 @@
  * map to null and are shown in UTC only, rather than guessing.
  */
 
+import { catalogueZone } from './zoneCatalogue';
+
 /** Zone codes that need their own entry (sub-national zones or multi-time-zone countries). */
 const ZONE_OVERRIDES: Record<string, string> = {
   // United States (only balancing areas that sit within one time zone)
@@ -147,6 +149,11 @@ const SINGLE_ZONE_COUNTRIES: Record<string, string> = {
 };
 
 export function timezoneForZone(zone: string, countryCode?: string): string | null {
+  // P11: the global zone catalogue (IANA-checked, every provider zone) is authoritative; a zone it
+  // leaves unresolved (an aggregate spanning several time zones) stays null. Zones outside the
+  // catalogue fall back to the curated mapping below.
+  const entry = catalogueZone(zone);
+  if (entry) return entry.timezone;
   if (ZONE_OVERRIDES[zone]) return ZONE_OVERRIDES[zone];
   const country = (countryCode || zone.split('-')[0]).toUpperCase();
   return SINGLE_ZONE_COUNTRIES[country] ?? null;

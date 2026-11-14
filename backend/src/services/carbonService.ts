@@ -1,5 +1,5 @@
 import { ElectricityMapsClient, electricityMaps } from '../carbon/electricityMaps';
-import { ForecastSnapshot, ZoneInfo } from '../carbon/types';
+import { ForecastSnapshot, ZoneInfo, ProviderError } from '../carbon/types';
 import { timezoneForZone } from '../carbon/zoneTimezones';
 
 export interface HourlyCarbonPoint {
@@ -147,7 +147,15 @@ export class PreparedTraceDataProvider implements ICarbonDataProvider {
     nowMs: number = Date.now()
   ): Promise<CarbonForecastData> {
     const validHorizon = Math.max(1, Math.min(48, Number(horizonHours) || 24));
-    const selectedRegion = REGIONAL_PROFILES[region] ? region : 'BENCHMARK-RESEARCH';
+    // P11: never substitute another region. A zone without a synthetic profile is refused with the
+    // list of zones that have one (before P11 it silently got the BENCHMARK-RESEARCH trace).
+    if (!REGIONAL_PROFILES[region]) {
+      throw new ProviderError(
+        'INVALID_PARAMETER',
+        `There is no synthetic demo profile for zone ${String(region).slice(0, 40)}. Demo profiles exist for: ${Object.keys(REGIONAL_PROFILES).join(', ')}. Use one of them, or live data where it is configured.`
+      );
+    }
+    const selectedRegion = region;
     const profile = REGIONAL_PROFILES[selectedRegion];
     // P3 / M5.4: the synthetic trace starts at the beginning of the current UTC hour (like the
     // provider's hourly forecasts), so identical requests in the same hour give identical
