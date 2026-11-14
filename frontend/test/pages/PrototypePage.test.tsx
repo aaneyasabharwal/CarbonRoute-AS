@@ -15,6 +15,22 @@ const zones = [
   { code: 'US-CAL-CISO', name: 'California ISO', countryName: 'USA', timezone: 'America/Los_Angeles' },
 ];
 
+// P11: the selector reads the global zone catalogue (hand-written test data in the API's shape).
+const catalogueZone = (zone: string, name: string, countryName: string | null, continent: string, area: string, timezone: string, demo = false) => ({
+  zone, name, zoneName: name, countryCode: zone.slice(0, 2), countryName, continent, area, timezone, timezoneSource: 'test',
+  parentZone: null, subZones: [], aggregate: false, tier: 'TIER_A', commerciallyAvailable: true,
+  providerListed: { latest: true, history: true, forecast: true }, verifiedLive: null, syntheticDemo: demo, flags: [],
+});
+const catalogue = (liveConfigured: boolean) => ({
+  meta: { version: '2026-11-14', zones: 3, sources: {}, counts: {} },
+  liveConfigured,
+  zones: [
+    catalogueZone('DE', 'Germany', 'Germany', 'Europe', 'Western Europe', 'Europe/Berlin', true),
+    catalogueZone('IN-NO', 'Northern India', 'India', 'Asia', 'Southern Asia', 'Asia/Kolkata', true),
+    catalogueZone('US-CAL-CISO', 'California ISO', 'USA', 'Americas', 'Northern America', 'America/Los_Angeles', true),
+  ],
+});
+
 const liveForecast = {
   source: 'Electricity Maps API',
   region: 'US-CAL-CISO',
@@ -39,6 +55,7 @@ const liveForecast = {
 
 function backend(scheduleData: unknown, providerConfigured = true) {
   return stubFetch((url, init) => {
+    if (url === `${API_BASE}/carbon/catalogue`) return { body: { success: true, data: catalogue(providerConfigured) } };
     if (url === `${API_BASE}/carbon/provider`) return { body: { success: true, configured: providerConfigured, historyWindowHours: 24, pastRangeAvailable: false, data: { configured: providerConfigured, historyWindowHours: 24, pastRangeAvailable: false } } };
     if (url.startsWith(`${API_BASE}/carbon/regions`)) return { body: { success: true, source: 'electricitymaps', data: zones } };
     if (url.startsWith(`${API_BASE}/carbon/forecast`)) return { body: { success: true, data: liveForecast } };
@@ -88,7 +105,7 @@ describe('PrototypePage (M5 real-data workflow)', () => {
     backend({ status: 'INFEASIBLE', reason: 'too late', recommendation: null });
     renderPage();
     await waitFor(() => expect(screen.getByRole('option', { name: /IN-NO — Northern India \(India\)/ })).toBeInTheDocument());
-    expect(screen.getByText(/3 zones available from Electricity Maps/)).toBeInTheDocument();
+    expect(screen.getByTestId('zone-count')).toHaveTextContent('Showing 3 of 3 zones');
     expect(await screen.findByText('REAL FORECAST · ELECTRICITY MAPS')).toBeInTheDocument();
     expect(screen.getByText(/The provider gives no forecast uncertainty/)).toBeInTheDocument();
   });

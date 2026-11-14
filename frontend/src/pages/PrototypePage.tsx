@@ -37,10 +37,11 @@ import {
   PolicyEvaluationResult,
   SchedulingDecisionResponse,
   K8sJobExecutionRecord,
-  ZoneOption,
+  ZoneCatalogue,
   JobObservationsResult,
 } from '../types';
 import { FeasibilityDemoVisualizer } from '../components/FeasibilityDemoVisualizer';
+import { ZoneSelector, zoneUsability } from '../components/ZoneSelector';
 import { CarbonObservationPanel } from '../components/CarbonObservationPanel';
 import { DecisionExplanationPanel } from '../components/DecisionExplanationPanel';
 
@@ -63,9 +64,9 @@ export const PrototypePage: React.FC = () => {
   const [runtimeCv, setRuntimeCv] = useState<number>(0);
 
   // Regions: live = every zone the backend's Electricity Maps key can access; demo = synthetic profiles.
-  const [regions, setRegions] = useState<ZoneOption[]>([]);
-  const [regionFilter, setRegionFilter] = useState<string>('');
-  const [regionsError, setRegionsError] = useState<string | null>(null);
+  // P11: the global zone catalogue (every provider zone; static, no provider call).
+  const [catalogue, setCatalogue] = useState<ZoneCatalogue | null>(null);
+  const [catalogueError, setCatalogueError] = useState<string | null>(null);
 
   // Infeasible decisions and post-execution observations
   const [infeasibleReason, setInfeasibleReason] = useState<string | null>(null);
@@ -117,6 +118,9 @@ export const PrototypePage: React.FC = () => {
   // Auto-scroll logs
   const terminalLogsRef = useRef<HTMLDivElement>(null);
 
+  // Whether the selected zone can be scheduled in the selected data mode on this server.
+  const usability = zoneUsability(region, dataSourceMode, catalogue, api.hasSession());
+
   // Load Carbon Forecast on Region or Data Source Mode change
   const loadForecast = async (targetRegion: string, mode: 'live' | 'demo' = dataSourceMode) => {
     setForecastError(null);
@@ -147,37 +151,28 @@ export const PrototypePage: React.FC = () => {
 
   useEffect(() => {
     if (!modeReady) return;
-    loadForecast(region, dataSourceMode);
     checkCluster();
-  }, [region, dataSourceMode, modeReady]);
+    // P11: no request for a zone that cannot be used in this mode; the reason is shown instead.
+    if (!usability.usable) {
+      setForecast(null);
+      setForecastError(null);
+      return;
+    }
+    loadForecast(region, dataSourceMode);
+  }, [region, dataSourceMode, modeReady, usability.usable]);
 
   useEffect(() => {
-    if (!modeReady) return;
     let cancelled = false;
-    setRegionsError(null);
-    api.getCarbonRegions(dataSourceMode).then((res) => {
+    api.getZoneCatalogue().then((res) => {
       if (cancelled) return;
-      if (res.success && res.data) {
-        const list = dataSourceMode === 'demo'
-          ? res.data
-          : [...res.data].sort((a, b) => a.code.localeCompare(b.code));
-        setRegions(list);
-      } else {
-        setRegions([]);
-        setRegionsError(res.message || 'unknown error');
-      }
+      if (res.success && res.data) setCatalogue(res.data);
+      else setCatalogueError(res.message || 'unknown error');
     });
     return () => {
       cancelled = true;
     };
-  }, [dataSourceMode, modeReady]);
+  }, []);
 
-  const visibleRegions = regionFilter.trim()
-    ? regions.filter((r) =>
-        `${r.code} ${r.name} ${r.countryName || ''}`.toLowerCase().includes(regionFilter.trim().toLowerCase())
-      )
-    : regions;
-  const selectedZone = regions.find((r) => r.code === region);
 
   const handleCollectObservations = async () => {
     if (!activeJobId) return;
@@ -528,41 +523,8 @@ export const PrototypePage: React.FC = () => {
             <span className="text-[10px] text-slate-500 block">e.g. carbonroute/test-workload:latest or python workload.py</span>
           </div>
 
-          {/* Grid Region */}
-          <div className="space-y-1.5">
-            <label className="text-slate-300 font-semibold block" htmlFor="region-select">Target Grid Region</label>
-            {regions.length > 1 && (
-              <input
-                type="search"
-                value={regionFilter}
-                onChange={(e) => setRegionFilter(e.target.value)}
-                placeholder={`Search ${regions.length} zones (e.g. India, DE, CAISO)`}
-                aria-label="Search grid zones"
-                className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
-              />
-            )}
-            <select
-              id="region-select"
-              value={region}
-              onChange={(e) => setRegion(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-lg bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-emerald-500"
-            >
-              {!visibleRegions.some((r) => r.code === region) && <option value={region}>{region}</option>}
-              {visibleRegions.map((r) => (
-                <option key={r.code} value={r.code}>
-                  {r.code} — {r.name}
-                  {r.countryName && r.countryName !== r.name ? ` (${r.countryName})` : ''}
-                </option>
-              ))}
-            </select>
-            <span className="text-[10px] text-slate-500 block">
-              {regionsError
-                ? `Zone list unavailable: ${regionsError}`
-                : dataSourceMode === 'live'
-                  ? `${regions.length} zones available from Electricity Maps${selectedZone?.timezone ? ` · local time zone ${selectedZone.timezone}` : ' · local time zone unknown (times shown in UTC)'}`
-                  : 'Synthetic demo profiles (not real data)'}
-            </span>
-          </div>
+          {/* Grid Region (P11: the complete global catalogue) */}
+          <ZoneSelector value={region} onChange={setRegion} mode={dataSourceMode} catalogue={catalogue} error={catalogueError} signedIn={api.hasSession()} />
 
           {/* Carbon Data Source Mode */}
           <div className="space-y-1.5">
@@ -583,12 +545,9 @@ export const PrototypePage: React.FC = () => {
               value={dataSourceMode}
               onChange={(e) => {
                 const newMode = e.target.value as 'live' | 'demo';
+                // P11: the selected zone is kept; if it cannot be used in the new mode the panel says
+                // why (no silent replacement by another region).
                 setDataSourceMode(newMode);
-                if (newMode === 'demo' && (region === 'US-CAL-CISO' || !region)) {
-                  setRegion('BENCHMARK-RESEARCH');
-                } else if (newMode === 'live' && region === 'BENCHMARK-RESEARCH') {
-                  setRegion('US-CAL-CISO');
-                }
               }}
               className="w-full px-3.5 py-2.5 rounded-lg bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-emerald-500"
             >
@@ -682,7 +641,7 @@ export const PrototypePage: React.FC = () => {
           <div className="md:col-span-3 flex justify-end">
             <button
               type="submit"
-              disabled={loadingSchedule}
+              disabled={loadingSchedule || !usability.usable}
               className="px-6 py-3 rounded-xl bg-emerald-500 text-slate-950 font-bold hover:bg-emerald-400 transition-all font-mono flex items-center space-x-2 shadow-lg shadow-emerald-950/50 disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${loadingSchedule ? 'animate-spin' : ''}`} />
@@ -690,6 +649,12 @@ export const PrototypePage: React.FC = () => {
             </button>
           </div>
         </form>
+
+        {!usability.usable && (
+          <p className="mt-4 text-xs text-amber-300 font-mono" role="status" data-testid="zone-unusable">
+            Evaluation is disabled for {region}: {usability.reason}
+          </p>
+        )}
 
         {!evaluatedOnce && (
           <p className="mt-4 text-xs text-slate-400 font-mono" data-testid="evaluate-hint">
