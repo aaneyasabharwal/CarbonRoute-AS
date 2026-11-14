@@ -196,7 +196,11 @@ export async function scheduleWorkflow(
   const coverageEnd = Date.parse(points[points.length - 1].timestamp) + HOUR;
 
   const arrivalHour = Math.max(0, Math.floor((arrival - start) / HOUR));
-  const deadlineHoursFromStart = Math.floor((deadline - start) / HOUR);
+  // P8: exact instants. Flooring the deadline made a window ending before it look as if it had no
+  // slack (50 % risk at cv > 0), and measuring the arrival slot from the start of its hour made an
+  // immediate start look safer than it is.
+  const deadlineHoursFromStart = (deadline - start) / HOUR;
+  const arrivalOffsetHours = Math.min(0.999999, Math.max(0, (arrival - start) / HOUR - arrivalHour));
   if (arrivalHour + dur > points.length) {
     return infeasible(
       `The forecast only covers until ${iso(coverageEnd)}, which is too short to evaluate even an immediate ${dur} h run.`,
@@ -213,6 +217,7 @@ export async function scheduleWorkflow(
     durationHours: dur,
     deadlineHours: deadlineHoursFromStart,
     arrivalHour,
+    arrivalOffsetHours,
     cpu: input.cpu,
     memoryMb: input.memoryMb,
     region: zone,

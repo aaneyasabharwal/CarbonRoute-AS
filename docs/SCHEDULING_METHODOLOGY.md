@@ -35,6 +35,13 @@ time, so it is not part of the deadline risk. The runtime is modelled as
 $R \sim \mathcal{N}(d, (cv \cdot d)^2)$, giving
 $$P_{\text{miss}}(t) = P(t + R > D) = 1 - \Phi\!\left(\frac{D - t - d}{cv \cdot d}\right).$$
 
+- **Exact instants (P8).** $D$ is the exact deadline in hours after the forecast start (fractional,
+  not rounded to a slot), and $t$ is the window's **actual** start: the arrival instant for a window in
+  the arrival slot, otherwise the slot start. Before P8 the deadline was floored to a whole hour (a
+  window ending 32 min before the deadline was treated as having no slack) and the arrival slot was
+  measured from the start of its hour (an immediate start looked up to an hour safer than it was).
+  Regression tests: `backend/test/scheduling/exactInstants.test.ts`. Benchmark replays use whole hours
+  and are unaffected.
 - $cv = 0$ (the default): deterministic, $P_{\text{miss}} = 0$ if $t + d \le D$, otherwise 1.
 - $cv$ is **declared by the user**; it is not learned. Empirical runtime distributions need recorded
   executions (roadmap M9.1). Start delays are not modelled.

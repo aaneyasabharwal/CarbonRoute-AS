@@ -38,8 +38,15 @@ export interface WorkloadJob {
   commandOrImage: string;
   isContainerImage: boolean;
   durationHours: number;
+  /** Deadline in hours after the forecast start; may be fractional (exact instant). */
   deadlineHours: number;
   arrivalHour: number;
+  /**
+   * P8: the job arrives this many hours after the start of slot `arrivalHour` (0 <= x < 1). A job
+   * starting in the arrival slot starts at the arrival instant, not at the slot start, so its
+   * deadline risk is computed from that instant.
+   */
+  arrivalOffsetHours?: number;
   cpu: number;
   memoryMb: number;
   region: string;
@@ -210,6 +217,10 @@ export class SchedulerService {
     if (!Number.isInteger(arrival) || arrival < 0) throw new Error('arrivalHour must be a non-negative whole number.');
     const deadline = Number(job.deadlineHours);
     if (!Number.isFinite(deadline)) throw new Error('deadlineHours must be a number.');
+    const arrivalOffset = Number(job.arrivalOffsetHours ?? 0);
+    if (!(arrivalOffset >= 0 && arrivalOffset < 1)) throw new Error('arrivalOffsetHours must be in [0, 1).');
+    /** Actual start instant (hours after the forecast start) of a window that starts in slot t. */
+    const startOf = (t: number) => (t === arrival ? arrival + arrivalOffset : t);
     const tau = Number(job.riskTolerance);
     if (!(tau > 0 && tau < 1)) throw new Error('riskTolerance must be between 0 and 1 (exclusive).');
     const cvInput = opts.runtimeCv ?? job.runtimeCv ?? 0;
@@ -250,8 +261,8 @@ export class SchedulerService {
     const candidates: (CandidateWindowEvaluation & { exactAvg: number | null })[] = [];
     for (let t = arrival; t <= lastStart; t++) {
       const { avg, sigma } = windowStats(t);
-      const end = t + dur;
-      const risk = UncertaintyService.deadlineRisk(t, dur, deadline, runtimeCv).violationRisk;
+      const end = startOf(t) + dur;
+      const risk = UncertaintyService.deadlineRisk(startOf(t), dur, deadline, runtimeCv).violationRisk;
       const slack = deadline - end;
       let classification: WindowClassification;
       let reason: string;
@@ -324,7 +335,7 @@ export class SchedulerService {
     if (gapFree.length === 0) {
       const reason =
         candidates.length === 0
-          ? `No start slot exists: a ${dur} h job arriving at slot ${arrival} cannot finish by slot ${deadline} within the ${points.length}-hour forecast.`
+          ? `No start slot exists: a ${dur} h job arriving at slot ${arrival} cannot finish by T+${Number(deadline.toFixed(2))} h within the ${points.length}-hour forecast.`
           : 'Every candidate window contains missing forecast data; nothing is filled in.';
       return { ...common(), status: 'NO_FEASIBLE_WINDOW', reason, recommendedDecision: null };
     }
