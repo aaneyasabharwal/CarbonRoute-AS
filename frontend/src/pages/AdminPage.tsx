@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Lock,
   UploadCloud,
@@ -29,7 +30,7 @@ import { PresentationItem, Resource } from '../types';
 import { AdminUploadModal } from '../components/AdminUploadModal';
 
 export const AdminPage: React.FC = () => {
-  const { isAuthenticated, user, login, logout, loading: authLoading } = useAuth();
+  const { isAuthenticated, isAdmin, user, login, logout, loading: authLoading } = useAuth();
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -81,10 +82,11 @@ export const AdminPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
+    // P9: only administrators use the content manager (the backend refuses everyone else).
+    if (isAuthenticated && isAdmin) {
       loadAdminData();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isAdmin]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -205,9 +207,9 @@ export const AdminPage: React.FC = () => {
             <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400">
               <Lock className="w-6 h-6" />
             </div>
-            <h1 className="text-xl font-bold text-white font-mono">CarbonRoute Admin Login</h1>
+            <h1 className="text-xl font-bold text-white font-mono">Sign in to CarbonRoute</h1>
             <p className="text-xs text-slate-400 font-mono">
-              Course Deliverables &amp; Content Management Portal
+              For every account (student, evaluator, administrator). Accounts are created by an administrator; there is no self-registration.
             </p>
           </div>
 
@@ -250,9 +252,33 @@ export const AdminPage: React.FC = () => {
               disabled={loginLoading}
               className="w-full py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-bold hover:bg-emerald-400 transition-colors font-mono disabled:opacity-50 shadow-sm"
             >
-              {loginLoading ? 'Authenticating...' : 'Sign In as Admin'}
+              {loginLoading ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
+        </div>
+      </div>
+    );
+  }
+
+  // P9: a signed-in non-administrator gets their own pages, not the content manager.
+  if (!isAdmin) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-16">
+        <div className="glass-card rounded-2xl p-8 border border-slate-800 space-y-4 font-mono text-xs text-slate-300" data-testid="signed-in-non-admin">
+          <h1 className="text-xl font-bold text-white">Signed in</h1>
+          <p>
+            You are signed in as <strong className="text-white">{user?.username}</strong> ({user?.role}). The deliverables and content
+            manager is for administrators only.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Link to="/dashboard" className="py-2 rounded-lg border border-slate-700 text-center text-slate-100 hover:bg-slate-900">Dashboard</Link>
+            <Link to="/prototype" className="py-2 rounded-lg bg-emerald-500 text-center text-slate-950 font-bold hover:bg-emerald-400">Schedule a job</Link>
+            <Link to="/jobs" className="py-2 rounded-lg border border-slate-700 text-center text-slate-100 hover:bg-slate-900">My jobs</Link>
+            <Link to="/account" className="py-2 rounded-lg border border-slate-700 text-center text-slate-100 hover:bg-slate-900">Account</Link>
+          </div>
+          <button type="button" onClick={() => logout()} className="w-full py-2 rounded-lg border border-slate-700 text-rose-300 hover:bg-slate-900">
+            Sign out
+          </button>
         </div>
       </div>
     );

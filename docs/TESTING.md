@@ -1,8 +1,8 @@
 # Testing strategy and quality gates
 
 How CarbonRoute is tested, what each suite covers, and the current results. Counts are for
-`fix/prototype-flaws` with the P8 code pull requests #16–#22 and #24 merged, including the review fixes (checked
-locally on the combined tree, 2026-11-14 06:30 UTC); each PR is also green in CI on its own.
+`fix/prototype-flaws` `task/p9-staging-readiness` (P8 PRs #16–#24 merged plus the P9 fixes; checked locally,
+2026-11-14 07:30 UTC); each PR is also green in CI on its own.
 
 ## Principles
 
@@ -40,14 +40,15 @@ locally on the combined tree, 2026-11-14 06:30 UTC); each PR is also green in CI
 | Gate | Where | Result (combined tree, 2026-11-13) |
 |---|---|---|
 | Backend typecheck (source + tests) | local, CI | pass |
-| Backend tests | local, CI | **331 passed in 24 files, of which 11 are `it.fails`** (320 assert current behaviour) |
+| Backend tests | local, CI | **332 passed in 24 files, of which 11 are `it.fails`** (321 assert current behaviour) |
 | Backend build | local, CI | pass |
 | Frontend typecheck | local, CI | pass |
-| Frontend tests | local, CI | **117 passed in 14 files** |
+| Frontend tests | local, CI | **121 passed in 15 files** |
 | Frontend build; GitHub Pages build | local, CI | pass; a Pages build **without** `VITE_API_URL`, or any build whose `frontend/.env*` names the retired backend, fails by design |
 | Python tests | local, CI | 5 passed |
 | Docker images: build, no `.env`/database inside, backend in production mode behind nginx, refuses to start without `JWT_SECRET`, compose valid | CI only (Docker not installed locally) | pass |
 | Collector-lock stress test + oracle self-check | CI (25 rounds × 8 processes); locally 150 rounds × 10 processes | 0 violations; broken lock detected |
+| Staging check `scripts/staging-check.mjs` (22 checks + persistence after restart) | rehearsal of the Render setup in production mode; run it against real staging (docs/STAGING.md) | **22/22, 4/4** |
 | Live end-to-end API check (30 checks: auth, CORS, CSP, ownership, live scheduling with provenance, explanation, observations, report, simulated dispatch, results, logout, no secrets in logs) | local only (one real provider call; script outside the repository because it creates accounts with generated passwords) | **30/30** |
 
 ## Not covered

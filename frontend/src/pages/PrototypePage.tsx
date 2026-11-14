@@ -170,6 +170,7 @@ export const PrototypePage: React.FC = () => {
   // Execute Scheduling Evaluation
   const handleEvaluateSchedule = async (e?: React.FormEvent, overrideMode?: 'live' | 'demo') => {
     if (e) e.preventDefault();
+    setEvaluatedOnce(true);
     const mode = overrideMode || dataSourceMode;
     setLoadingSchedule(true);
     setScheduleError(null);
@@ -213,10 +214,9 @@ export const PrototypePage: React.FC = () => {
     }
   };
 
-  // Run Scheduling once on mount
-  useEffect(() => {
-    handleEvaluateSchedule();
-  }, []);
+  // P9: scheduling runs only when the user asks. It used to run on every visit, which stored a job
+  // the user never submitted and spent live provider calls each time the page was opened.
+  const [evaluatedOnce, setEvaluatedOnce] = useState(false);
 
   // Dispatch Job to Kubernetes
   const handleDispatchJob = async () => {
@@ -667,6 +667,13 @@ export const PrototypePage: React.FC = () => {
             </button>
           </div>
         </form>
+
+        {!evaluatedOnce && (
+          <p className="mt-4 text-xs text-slate-400 font-mono" data-testid="evaluate-hint">
+            Set the workload and press <strong className="text-slate-200">Evaluate 5 Schedulers</strong>. Each evaluation is saved as a
+            job in My jobs{dataSourceMode === "live" ? " and uses one live Electricity Maps request" : ""}; nothing is scheduled until you press it.
+          </p>
+        )}
 
         {/* Live Error Banner with One-Click Demo Mode Fallback Option */}
         {(scheduleError || forecastError) && (

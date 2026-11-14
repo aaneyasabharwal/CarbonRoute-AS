@@ -1,0 +1,143 @@
+{
+  "kind": "carbonroute-ml-evaluation",
+  "createdAt": "2026-11-13T23:48:23.207Z",
+  "dataset": {
+    "sha256": "46a5a644d1b4291acd23e55cb3bdf1b4906db9dcb491f51e0f12d7eb624b7d6f",
+    "rows": 350,
+    "measuredRows": 175,
+    "zones": [
+      "DE",
+      "FR",
+      "GB",
+      "IN-NO",
+      "US-CAL-CISO"
+    ],
+    "firstIssue": "2026-11-13T13:32:30.748Z",
+    "lastIssue": "2026-11-13T23:06:35.459Z",
+    "spanDays": 0.4,
+    "leadHours": {
+      "min": 0,
+      "max": 10
+    }
+  },
+  "thresholds": {
+    "minTrainRows": 500,
+    "minValidationRows": 100,
+    "minTestRows": 200,
+    "minSpanDays": 7
+  },
+  "promotionRule": {
+    "maxMaeRatio": 0.95,
+    "requireCiBelowZero": true,
+    "clusterBy": "target-hour",
+    "minTestClusters": 30,
+    "measuredCheckMinRows": 30,
+    "bootstrapIterations": 2000,
+    "seed": 20261113
+  },
+  "providerErrorAllRows": {
+    "all": {
+      "n": 350,
+      "mae": 18.777142857142856,
+      "rmse": 23.997618929504533,
+      "bias": 3.1485714285714286
+    },
+    "measuredOnly": {
+      "n": 175,
+      "mae": 20.897142857142857,
+      "rmse": 27.233697613697,
+      "bias": 6.965714285714285
+    }
+  },
+  "anomalies": {
+    "method": "robust-z of forecast error per zone (median / MAD), unsupervised",
+    "interpretation": "Unsupervised statistical screening flags for manual review. They are NOT confirmed provider failures or data errors, and no detection accuracy is claimed.",
+    "threshold": 3.5,
+    "zones": [
+      {
+        "zone": "DE",
+        "rows": 70,
+        "status": "ok",
+        "flagged": []
+      },
+      {
+        "zone": "FR",
+        "rows": 70,
+        "status": "ok",
+        "flagged": [
+          {
+            "targetTime": "2026-11-13T13:00:00.000Z",
+            "leadHours": 0,
+            "error": 7,
+            "z": 10.79,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T14:00:00.000Z",
+            "leadHours": 1,
+            "error": 0,
+            "z": 6.07,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-13T14:00:00.000Z",
+            "leadHours": 0,
+            "error": 0,
+            "z": 6.07,
+            "quality": "measured"
+          }
+        ]
+      },
+      {
+        "zone": "GB",
+        "rows": 70,
+        "status": "ok",
+        "flagged": []
+      },
+      {
+        "zone": "IN-NO",
+        "rows": 70,
+        "status": "ok",
+        "flagged": []
+      },
+      {
+        "zone": "US-CAL-CISO",
+        "rows": 70,
+        "status": "ok",
+        "flagged": []
+      }
+    ]
+  },
+  "notes": [
+    "Targets are realized values from Electricity Maps history; provider estimates are included and reported separately (measuredOnly).",
+    "Features use only information available when the forecast was fetched (leakage-checked).",
+    "Splits are chronological with a gap: no target hour of an earlier split overlaps a later split.",
+    "Thresholds and the promotion rule were fixed in code before evaluation.",
+    "Anomaly flags are unsupervised screening flags, not a validated detector."
+  ],
+  "status": "insufficient-data",
+  "statusReasons": [
+    "Data spans 0.4 days; at least 7 are required.",
+    "Training rows 140 < 500.",
+    "Validation rows 9 < 100.",
+    "Test rows 21 < 200.",
+    "No model was fitted. Reliable training is pending more collected data."
+  ],
+  "split": {
+    "train": 140,
+    "validation": 9,
+    "test": 21,
+    "measured": {
+      "train": 84,
+      "validation": 5,
+      "test": 6
+    },
+    "droppedForGap": 180,
+    "validationStart": "2026-11-13T20:33:04.507Z",
+    "testStart": "2026-11-13T21:06:22.603Z"
+  },
+  "candidate": null,
+  "testScores": null,
+  "promotion": null,
+  "gitCommit": "1ba450850b1df2c0b4335336613e8d5cb81d8926"
+}
