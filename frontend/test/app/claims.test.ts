@@ -22,6 +22,12 @@ const FORBIDDEN: RegExp[] = [
   /minimi[sz]e realized/i,
   /real container/i,
   /actual carbon emissions/i,
+  // P16: the runtime-CV risk does not model carbon forecast uncertainty
+  /different uncertainty|(low|high) uncertainty/i,
+  /uncertainty pushes risk/i,
+  /models forecast error variance/i,
+  /erfc\(slack/i,
+  /calibrated violation probability/i,
 ];
 
 describe('no overstated claims in the site text', () => {

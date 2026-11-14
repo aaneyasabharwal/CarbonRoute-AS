@@ -80,7 +80,7 @@ export const HomePage: React.FC = () => {
       title: 'Deadline-Miss Risk',
       summary: 'Estimates the probability that a job started in each slot misses its deadline.',
       details: 'Runtime R ~ Normal(d, (cv * d)^2) with a runtime variability cv declared by the user (not learned). For every candidate start t: P(miss) = 1 - Phi((D - t - d) / (cv * d)). With cv = 0 this reduces to "ends by the deadline".',
-      output: 'Hourly uncertainty standard deviation vector and 95% confidence bands.',
+      output: 'Deadline-miss probability for every candidate start slot (model-based, not calibrated).',
     },
     {
       id: 4,

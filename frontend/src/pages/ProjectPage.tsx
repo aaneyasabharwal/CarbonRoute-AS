@@ -28,7 +28,7 @@ export const ProjectPage: React.FC = () => {
     'Build a simulator representing cloud regions, workloads, carbon intensity, cost and capacity.',
     'Implement baseline scheduling policies (Immediate, EDF, Cost-Aware, Deterministic Carbon, Baseline).',
     'Implement carbon-aware scheduling.',
-    'Model forecast uncertainty and forecast errors across multiple time horizons.',
+    'Measure carbon forecast errors across multiple lead times.',
     'Develop an uncertainty-aware scheduling approach.',
     'Estimate deadline-violation probability formally: P(deadline violation | scheduling decision).',
     'Evaluate risk calibration using Brier score and Reliability Diagrams.',
@@ -42,7 +42,7 @@ export const ProjectPage: React.FC = () => {
     'Discrete-event Cloud & Region Simulator',
     'Standardized & Versioned Carbon Traces',
     'Multi-Policy Scheduling Algorithms (6+ policies)',
-    'Forecast Uncertainty & Error Distribution Modeling',
+    'Forecast Error Measurement (MAE / RMSE / bias by lead time)',
     'Deadline-Risk Calibration (Brier Score / ECE)',
     'Parametric Stress Testing Suite',
     'FastAPI REST Service Endpoints',
@@ -93,7 +93,7 @@ export const ProjectPage: React.FC = () => {
     {
       name: 'Uncertainty-Aware (CarbonRoute)',
       category: 'Proposed Core',
-      desc: 'Formally models forecast error variance and shifts workloads toward lower-carbon windows while enforcing P(deadline violation | decision) <= tau.',
+      desc: 'Shifts workloads toward lower-carbon forecast windows while enforcing P(deadline miss | decision) <= tau, with the miss probability from a declared runtime variability (CV). Forecast error is measured, not part of the risk.',
       tradeoff: 'Carbon-aware placement under an explicit deadline-risk budget (risk not yet calibrated).',
     },
     {

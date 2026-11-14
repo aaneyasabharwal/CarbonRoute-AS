@@ -35,7 +35,7 @@ export const ArchitecturePage: React.FC = () => {
       icon: Code2,
       color: 'text-emerald-400',
       summary: 'Responsive research portal, 8-step pipeline visualizer, live scheduler, and presentation archive.',
-      details: 'Provides parameter customization (duration, deadline, CPU, RAM, risk tolerance tau), visual 24-hour carbon forecast bar chart with uncertainty envelopes, 5-policy comparative performance table, and streaming terminal output.',
+      details: 'Provides parameter customization (duration, deadline, CPU, RAM, risk tolerance tau), visual 24-hour carbon forecast bar chart, 5-policy comparative performance table, and the execution log.',
     },
     {
       id: 'api-layer',
@@ -80,12 +80,12 @@ export const ArchitecturePage: React.FC = () => {
     {
       id: 'risk-calibrator',
       num: '06',
-      name: 'Tail Risk Probability Quantifier',
-      tech: 'Chebyshev erfc Gaussian Tail Approximation',
+      name: 'Deadline-Miss Probability',
+      tech: 'Normal CDF via the erfc approximation',
       icon: ShieldCheck,
       color: 'text-rose-400',
       summary: 'Estimates deadline violation probability P(violation) for any candidate dispatch slot.',
-      details: 'Evaluates P(violation) = 0.5 * erfc(Slack / (sqrt(2) * sigma)). Ensures that delayed green windows are rejected if available execution slack is insufficient to absorb forecast runtime drift.',
+      details: 'Evaluates P(miss) = 1 - Phi((D - t - d) / (cv * d)) with the declared runtime CV (cv = 0: risk 0 or 1). Windows whose risk exceeds tau are rejected. Carbon forecast uncertainty is not part of this risk.',
     },
     {
       id: 'decision-engine',
