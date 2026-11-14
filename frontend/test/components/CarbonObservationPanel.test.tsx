@@ -54,7 +54,7 @@ const result = (over: Partial<JobObservationsResult> = {}): JobObservationsResul
   },
   emissions: {
     realized: { available: false, label: 'Realized emissions unavailable', reason: 'No energy consumption was recorded for this execution (it was simulated and no power measurement exists), so realized emissions cannot be calculated.' },
-    estimated: { label: 'Estimated emissions (assumed energy)', grams: null, energyKwh: 0.25, energyBasis: 'Prototype assumption. Not measured.', intensityQuality: null, reason: 'Not calculable: the observed intensity is not available for the whole window.' },
+    estimated: { label: 'Estimated emissions (assumed energy)', grams: null, energyKwh: 0.25, energyBasis: 'Assumption. Not measured.', intensityQuality: null, reason: 'Not calculable: the observed intensity is not available for the whole window.' },
   },
   windowComparison: {
     available: false,
@@ -89,7 +89,7 @@ const demoResult = (overEmissions: Partial<JobObservationsResult['emissions']> =
   },
   emissions: {
     realized: { available: false, label: 'Realized emissions unavailable', reason: 'No energy consumption was recorded for this execution (it was simulated and no power measurement exists), so realized emissions cannot be calculated.' },
-    estimated: { label: 'Estimated emissions (assumed energy)', grams: 30.8, energyKwh: 0.25, energyBasis: 'Prototype assumption: 0.125 kW per requested vCPU (minimum 0.1 kW). Not measured.', intensityQuality: 'measured', reason: 'Observed intensity multiplied by an ASSUMED energy use.' },
+    estimated: { label: 'Estimated emissions (assumed energy)', grams: 30.8, energyKwh: 0.25, energyBasis: 'Assumption: 0.125 kW per requested vCPU (minimum 0.1 kW). Not measured.', intensityQuality: 'measured', reason: 'Observed intensity multiplied by an ASSUMED energy use.' },
     ...overEmissions,
   } as JobObservationsResult['emissions'],
   windowComparison: {

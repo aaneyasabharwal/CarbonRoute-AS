@@ -104,7 +104,7 @@ export const JobsPage: React.FC = () => {
           ) : jobs.data.length === 0 ? (
             <EmptyState title={status ? `No ${status} jobs` : 'No jobs yet'}>
               <p>
-                Schedule one on the <Link className="underline" to="/prototype">Prototype</Link> page.
+                Schedule one on the <Link className="underline" to="/scheduler">Scheduler</Link> page.
               </p>
             </EmptyState>
           ) : (

@@ -176,7 +176,7 @@ const DEFAULT_ROADMAP: RoadmapMilestone[] = [
     displayOrder: 1,
     phaseNumber: 1,
     weekRange: 'WEEKS 1–2',
-    title: 'Requirements, research and initial simulator prototype',
+    title: 'Requirements, research and initial simulator',
     description: 'Problem formulation, literature review, carbon intensity data ingestion specification, baseline simulator architecture, and website deployment.',
     deliverables: ['Planning Presentation V1', 'Project Portal Deployment', 'Initial Simulator Spec'],
     status: 'in-progress',
@@ -214,7 +214,7 @@ const DEFAULT_ROADMAP: RoadmapMilestone[] = [
       {
         id: 'task-w1-2-4',
         phaseId: 'w1-2',
-        title: 'Initial simulator prototype architecture specification',
+        title: 'Initial simulator architecture specification',
         description: 'Draft mathematical formulation, discrete-event queue architecture, and trace interface spec.',
         status: 'in-progress',
         completedAt: null,

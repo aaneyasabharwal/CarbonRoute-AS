@@ -18,7 +18,7 @@ this handbook alone is enough for the presentation and viva.
 | Backend API | https://carbonroute-staging-api.onrender.com (health: `/api/health`) |
 | Code | https://github.com/aaneyasabharwal/CarbonRoute-AS (branches `main` and `fix/prototype-flaws`) |
 | Hosting cost | ₹0 (Render Free, no card on file; GitHub Pages free) |
-| Status | Working research prototype, publicly deployed; research results **not yet statistically conclusive** |
+| Status | Working research system (not production-ready), publicly deployed; research results **not yet statistically conclusive** |
 | Admin login | Held by Aaneya only (never written in any document) |
 
 **Before any demo:** open the site a minute early (the free backend sleeps after 15 idle minutes),
@@ -54,7 +54,7 @@ intensity **among the windows whose probability of missing the deadline is at mo
 ## 3. What a user can do (the product)
 
 1. **Sign in** (accounts are created by the admin; no self-registration).
-2. **Prototype page:** choose a grid zone (351 available), a data source (live or synthetic demo),
+2. **Scheduler page** (called Prototype before 15 Nov; `/prototype` still redirects): choose a grid zone (351 available), a data source (live or synthetic demo),
    job duration, deadline, risk tolerance τ and runtime variability (CV). Press **Evaluate 5 Schedulers**.
    Nothing is scheduled until that button is pressed.
 3. See the **forecast**, every **candidate window** (feasible or rejected, with its risk), the
@@ -373,9 +373,9 @@ student and one evaluator account on the Account page.
 **Sequence (about 15 min):**
 1. Home / How It Works: the problem.
 2. Dashboard: everything comes from the backend; "not configured" = synthetic data on the free demo.
-3. Prototype → zone selector: search "kenya", "south america"; show the availability panel. KE has no
+3. Scheduler → zone selector: search "kenya", "south america"; show the availability panel. KE has no
    own demo profile, so it runs on the generic synthetic trace, which the page labels "not KE data".
-4. Choose **DE**, preset "Controlled Benchmark Demo", CV 0.2 → **Evaluate 5 Schedulers**.
+4. On the Scheduler choose **DE**, preset "Controlled Benchmark Demo", CV 0.2 → **Evaluate 5 Schedulers**.
 5. Walk through the candidate windows, the five policies, the recommendation and the explanation.
 6. **Dispatch** → labelled simulated; a second dispatch is refused.
 7. My Jobs → the job, its report.
