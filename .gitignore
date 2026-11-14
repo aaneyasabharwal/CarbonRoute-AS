@@ -28,3 +28,6 @@ Thumbs.db
 
 # Staging verification state (job id and usernames only)
 staging-check.state.json
+
+# Staging runtime data (render.yaml free plan)
+runtime-data/
