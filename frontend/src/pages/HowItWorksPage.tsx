@@ -323,16 +323,16 @@ export const HowItWorksPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Try in Prototype CTA */}
+            {/* Try in the Scheduler */}
             <div className="pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="text-xs text-slate-400">
                 Want to observe this step running live against actual grid traces and container sandboxes?
               </div>
               <Link
-                to="/prototype"
+                to="/scheduler"
                 className="inline-flex items-center px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs hover:bg-emerald-400 font-mono transition-all shadow-sm group"
               >
-                <span>Experience in Interactive Prototype</span>
+                <span>Try it in the Scheduler</span>
                 <ArrowRight className="w-4 h-4 ml-1.5 group-hover:translate-x-1 transition-transform" />
               </Link>
             </div>

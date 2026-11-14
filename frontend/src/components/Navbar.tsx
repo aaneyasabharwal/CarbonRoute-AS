@@ -35,7 +35,7 @@ import { useAuth } from '../context/AuthContext';
  */
 export const PRIMARY_LINKS = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-  { name: 'Prototype', path: '/prototype', icon: Cpu, highlight: true },
+  { name: 'Scheduler', path: '/scheduler', icon: Cpu, highlight: true },
   { name: 'My Jobs', path: '/jobs', icon: History },
   { name: 'Results', path: '/results', icon: BarChart3 },
   { name: 'Experiments', path: '/experiments', icon: FlaskConical },
@@ -115,9 +115,6 @@ export const Navbar: React.FC = () => {
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-lg tracking-tight text-white font-mono">CARBONROUTE</span>
-                <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60 uppercase">
-                  Prototype
-                </span>
               </div>
               <span className="text-[11px] text-emerald-400/90 font-mono tracking-wide font-medium whitespace-nowrap">Team TriFlux &bull; UCS503</span>
             </div>
@@ -172,8 +169,8 @@ export const Navbar: React.FC = () => {
           </nav>
 
           {/* Actions (>= 1024 px) */}
-          {/* P13: the separate "Launch Prototype" button (>= 1536 px) duplicated the highlighted
-              Prototype link and overlapped "More" when signed in with a long username; removed. */}
+          {/* P13: a separate launch button (>= 1536 px) duplicated the highlighted Scheduler link and
+              overlapped "More" when signed in with a long username; removed. */}
           <div className="hidden lg:flex items-center gap-2 shrink-0">
             {isAuthenticated ? (
               <div className="flex items-center gap-1 pl-2 border-l border-slate-800 text-xs">

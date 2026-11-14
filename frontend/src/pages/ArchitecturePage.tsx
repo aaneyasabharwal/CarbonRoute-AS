@@ -34,7 +34,7 @@ export const ArchitecturePage: React.FC = () => {
       tech: 'React 18 + TypeScript + Vite + Tailwind CSS',
       icon: Code2,
       color: 'text-emerald-400',
-      summary: 'Responsive research portal, 8-step pipeline visualizer, live prototype runner, and presentation archive.',
+      summary: 'Responsive research portal, 8-step pipeline visualizer, live scheduler, and presentation archive.',
       details: 'Provides parameter customization (duration, deadline, CPU, RAM, risk tolerance tau), visual 24-hour carbon forecast bar chart with uncertainty envelopes, 5-policy comparative performance table, and streaming terminal output.',
     },
     {
@@ -211,10 +211,10 @@ export const ArchitecturePage: React.FC = () => {
             </div>
 
             <Link
-              to="/prototype"
+              to="/scheduler"
               className="inline-flex items-center px-3 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-bold text-xs font-mono hover:bg-emerald-400 transition-all shrink-0"
             >
-              <span>Test in Prototype</span>
+              <span>Try in the Scheduler</span>
               <ArrowRight className="w-3.5 h-3.5 ml-1" />
             </Link>
           </div>
@@ -248,7 +248,7 @@ export const ArchitecturePage: React.FC = () => {
             </div>
             <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
               <span className="font-bold text-slate-200">Express / FastAPI Gateway</span>
-              <p className="text-slate-400 font-sans text-[11px]">RESTful prototype endpoints, schema validation, CORS security.</p>
+              <p className="text-slate-400 font-sans text-[11px]">RESTful API endpoints, schema validation, CORS security.</p>
             </div>
           </div>
         </div>

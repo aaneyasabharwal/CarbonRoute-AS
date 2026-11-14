@@ -301,7 +301,7 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
                       <option value="Testing">Testing</option>
                       <option value="Dataset / ML">Dataset / ML</option>
                       <option value="Reports">Reports</option>
-                      <option value="Prototype">Prototype</option>
+                      <option value="Prototype">Software release</option>
                       <option value="Final Deliverables">Final Deliverables</option>
                     </select>
                   </div>

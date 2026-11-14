@@ -272,7 +272,7 @@ export const AdminPage: React.FC = () => {
           </p>
           <div className="grid grid-cols-2 gap-2">
             <Link to="/dashboard" className="py-2 rounded-lg border border-slate-700 text-center text-slate-100 hover:bg-slate-900">Dashboard</Link>
-            <Link to="/prototype" className="py-2 rounded-lg bg-emerald-500 text-center text-slate-950 font-bold hover:bg-emerald-400">Schedule a job</Link>
+            <Link to="/scheduler" className="py-2 rounded-lg bg-emerald-500 text-center text-slate-950 font-bold hover:bg-emerald-400">Schedule a job</Link>
             <Link to="/jobs" className="py-2 rounded-lg border border-slate-700 text-center text-slate-100 hover:bg-slate-900">My jobs</Link>
             <Link to="/account" className="py-2 rounded-lg border border-slate-700 text-center text-slate-100 hover:bg-slate-900">Account</Link>
           </div>
@@ -789,7 +789,7 @@ export const AdminPage: React.FC = () => {
                     <option value="Testing">Testing</option>
                     <option value="Dataset / ML">Dataset / ML</option>
                     <option value="Reports">Reports</option>
-                    <option value="Prototype">Prototype</option>
+                    <option value="Prototype">Software release</option>
                     <option value="Final Deliverables">Final Deliverables</option>
                   </select>
                 </div>

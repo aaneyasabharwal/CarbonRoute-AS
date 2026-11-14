@@ -362,7 +362,7 @@ class JsonDatabase {
         {
           id: 'w1-2',
           weekRange: 'WEEKS 1–2',
-          title: 'Requirements, research and initial simulator prototype',
+          title: 'Requirements, research and initial simulator',
           description: 'Problem formulation, literature review, carbon intensity data ingestion specification, baseline simulator architecture, and website deployment.',
           status: 'in-progress',
           deliverables: ['Planning Presentation V1', 'Project Portal Deployment', 'Initial Simulator Spec'],
@@ -784,7 +784,7 @@ class JsonDatabase {
           {
             id: 'task-w1-2-4',
             phaseId: 'w1-2',
-            title: 'Initial simulator prototype architecture specification',
+            title: 'Initial simulator architecture specification',
             description: 'Draft mathematical formulation, discrete-event queue architecture, and trace interface spec.',
             status: 'in-progress',
             completedAt: null,

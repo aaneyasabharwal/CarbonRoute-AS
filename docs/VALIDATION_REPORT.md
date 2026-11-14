@@ -32,7 +32,7 @@ below was produced and checked on 2026-11-14; nothing is carried over unverified
 
 ## 3. Browser viewport audit
 
-16 pages (Home, Project, How It Works, Architecture, Dashboard, Prototype, My Jobs, Results,
+16 pages (Home, Project, How It Works, Architecture, Dashboard, Scheduler (then called Prototype), My Jobs, Results,
 Experiments, System Design, Roadmap, Team, Resources, Planning V1, Account, sign-in) at 100 % zoom,
 measured in a real browser: document width vs viewport, every element's right edge, navigation
 label wrapping, header height.
@@ -69,7 +69,7 @@ https://carbonroute-staging-web.onrender.com (Render) · API https://carbonroute
 | Public demo forecast | 200, labelled synthetic |
 | All site routes and the bundle | 200 |
 | Bundle contains the API key value / `JWT_SECRET` / the retired backend host | no / no / no |
-| Prototype page on load (signed out) | demo mode, no live request, no scheduling request, no console errors |
+| Scheduler page on load (signed out) | demo mode, no live request, no scheduling request, no console errors |
 | Signed-in flows on the public site (`scripts/staging-check.mjs`, run by the owner on `b36d846`) | **22/22** (sign-in, admin account creation, scheduling with 5 policies and explanation, ownership 404, HTML report, simulated dispatch, second dispatch 409, results, model status, password change, logout) |
 | GitHub Pages (after PR #29, `main` `82f36c5`) | Pages workflow succeeded; site and bundle 200; bundle uses the Render API, base path `/CarbonRoute-AS/`, no retired host; CORS allows `https://aaneyasabharwal.github.io`; Dashboard shows backend data; Prototype lists 351 zones; deep links work through `404.html` (reported as HTTP 404 by the browser, all assets 200) |
 | Signed-in flows on the new build (`2152b01`) | verified locally in production mode (same commands); a public re-run needs the admin password (owner) |

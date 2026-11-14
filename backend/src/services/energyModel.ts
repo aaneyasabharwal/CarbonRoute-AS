@@ -14,6 +14,6 @@ export function energyAssumption(cpu: number, durationHours: number) {
   return {
     powerKw,
     energyKwh: Number((durationHours * powerKw).toFixed(3)),
-    basis: 'Prototype assumption: 0.125 kW per requested vCPU (minimum 0.1 kW). Not measured.',
+    basis: 'Assumption: 0.125 kW per requested vCPU (minimum 0.1 kW). Not measured.',
   };
 }

@@ -67,7 +67,7 @@ provider's hourly timestamps, so daylight-saving changes cannot shift a window (
 
 - `GET /api/carbon/catalogue` (public, static, rate limited, no provider call) returns the
   catalogue, its sources and counts, and `liveConfigured` for this server.
-- The Prototype page's **zone selector** lists every zone, grouped by continent and area, with
+- The Scheduler page's **zone selector** (formerly called Prototype) lists every zone, grouped by continent and area, with
   search (id, name, country, continent, area) and filters (continent; live verified; synthetic demo).
   A panel shows the availability facts for the selected zone and whether it can be scheduled in
   the chosen data mode on this server, with the reason when it cannot. Evaluate is then disabled

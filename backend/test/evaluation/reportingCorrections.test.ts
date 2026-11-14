@@ -22,7 +22,7 @@ import type { Observation } from '../../src/carbon/types';
 
 const REC = { startUtc: '2026-11-12T20:00:00.000Z', endUtc: '2026-11-12T21:00:00.000Z' };
 const IMM = { startUtc: '2026-11-12T19:49:57.531Z', endUtc: '2026-11-12T20:49:57.531Z' };
-const ENERGY = { powerKw: 0.25, energyKwh: 0.25, basis: 'Prototype assumption: 0.125 kW per requested vCPU (minimum 0.1 kW). Not measured.' };
+const ENERGY = { powerKw: 0.25, energyKwh: 0.25, basis: 'Assumption: 0.125 kW per requested vCPU (minimum 0.1 kW). Not measured.' };
 
 const obs = (datetime: string, value: number, opts: { estimated?: boolean; factor?: 'lifecycle' | 'direct' } = {}): Observation => ({
   zone: 'US-CAL-CISO',

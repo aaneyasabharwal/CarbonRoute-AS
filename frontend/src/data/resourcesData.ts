@@ -57,7 +57,8 @@ export const RESOURCE_CATEGORIES: { id: string; name: string; category?: Resourc
   { id: 'testing', name: 'Testing', category: 'Testing' },
   { id: 'dataset_ml', name: 'Dataset / ML', category: 'Dataset / ML' },
   { id: 'reports', name: 'Reports', category: 'Reports' },
-  { id: 'prototype', name: 'Prototype', category: 'Prototype' },
+  // P14: shown as "Software Releases"; the stored category value stays 'Prototype' for existing uploads.
+  { id: 'prototype', name: 'Software Releases', category: 'Prototype' },
   { id: 'final', name: 'Final Deliverables', category: 'Final Deliverables' },
 ];
 

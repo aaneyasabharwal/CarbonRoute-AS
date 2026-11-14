@@ -134,7 +134,7 @@ export const ResourcesPage: React.FC = () => {
           Project Deliverables Repository
         </h1>
         <p className="text-sm sm:text-base text-slate-300 max-w-3xl leading-relaxed">
-          Central repository for all CarbonRoute academic deliverables, project proposals, planning presentations, research formulations, system designs, dataset specifications, testing reports, and prototype releases.
+          Central repository for all CarbonRoute academic deliverables, project proposals, planning presentations, research formulations, system designs, dataset specifications, testing reports, and software releases.
         </p>
       </div>
 

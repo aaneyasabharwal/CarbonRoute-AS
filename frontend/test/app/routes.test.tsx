@@ -13,7 +13,7 @@ const ROUTES = [
   '/project',
   '/how-it-works',
   '/architecture',
-  '/prototype',
+  '/scheduler',
   '/jobs',
   '/results',
   '/experiments',
@@ -50,6 +50,23 @@ describe('App routes render without crashing (backend unreachable)', () => {
       /The above error occurred|Uncaught|is not a function|Cannot read properties/.test(String(c[0]))
     );
     expect(renderErrors).toEqual([]);
+  });
+
+  // P14: the page was renamed from Prototype to Scheduler; old links keep working.
+  it('/prototype redirects to /scheduler', async () => {
+    window.history.pushState({}, '', '/prototype');
+    render(<App />);
+    await waitFor(() => expect(window.location.pathname).toBe('/scheduler'));
+  });
+
+  // P14: the word "prototype" is no longer shown anywhere in the application.
+  it.each(ROUTES)('%s shows no "prototype" wording', async (route) => {
+    window.history.pushState({}, '', route);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector('main')!.textContent!.trim().length).toBeGreaterThan(0));
+    expect(container.textContent).not.toMatch(/prototype/i);
   });
 
   it('unknown routes redirect to the home page', async () => {

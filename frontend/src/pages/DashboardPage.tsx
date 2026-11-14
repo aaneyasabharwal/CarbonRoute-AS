@@ -81,7 +81,7 @@ export const DashboardPage: React.FC = () => {
           <p className="text-sm text-slate-400 mt-1">Current state of your jobs, the latest experiment results and the platform, from the backend.</p>
         </div>
         <div className="flex gap-2 text-xs">
-          <Link to="/prototype" className="px-3 py-2 rounded-lg bg-emerald-500 text-slate-950 font-bold hover:bg-emerald-400">Schedule a job</Link>
+          <Link to="/scheduler" className="px-3 py-2 rounded-lg bg-emerald-500 text-slate-950 font-bold hover:bg-emerald-400">Schedule a job</Link>
           <Link to="/jobs" className="px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800">My jobs</Link>
           <Link to="/results" className="px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800">Results</Link>
         </div>
@@ -133,7 +133,7 @@ export const DashboardPage: React.FC = () => {
             ) : jobs.state === 'empty' ? (
               <EmptyState title="No jobs yet">
                 <p>
-                  <Link to="/prototype" className="text-emerald-300 underline">Schedule a job</Link> to see it here.
+                  <Link to="/scheduler" className="text-emerald-300 underline">Schedule a job</Link> to see it here.
                 </p>
               </EmptyState>
             ) : jobs.state === 'ok' ? (
