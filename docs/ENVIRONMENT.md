@@ -38,11 +38,11 @@ printed.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `VITE_API_URL` | `http://localhost:5000` on localhost, otherwise `https://carbonroute.onrender.com` | Backend base URL (with or without `/api`). Set `/api` for same-origin deployments behind a proxy (the Docker image does). |
+| `VITE_API_URL` | none. Without it: `http://localhost:5000` on localhost, otherwise the **same origin** (`/api`) | Backend base URL (with or without `/api`). **Required for the GitHub Pages build**, which fails without it, with a non-https URL, or with a retired backend (`carbonroute.onrender.com`). For Pages it comes from the repository *variable* `VITE_API_URL`. The Docker image sets `/api` (same origin through nginx). (P8) |
 | `GITHUB_PAGES` | unset | `true` builds for GitHub Pages under `/<repository>/` (from `GITHUB_REPOSITORY`, default `CarbonRoute-AS`). |
 | `PAGES_BASE_PATH` | unset | Overrides the Pages base path (e.g. `/` for a custom domain). |
 
-The hosted frontend's default backend (`https://carbonroute.onrender.com`) must list the frontend's
+There is no default remote backend (P8). Whatever backend `VITE_API_URL` names must list the frontend's
 origin in its `CORS_ORIGIN`.
 
 ## FastAPI service (`fastapi_service/`, optional)
