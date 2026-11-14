@@ -47,6 +47,12 @@ function backend(scheduleData: unknown) {
   });
 }
 
+/** Scheduling runs only on request (P9): press the button once the zones have loaded. */
+async function evaluate() {
+  await screen.findByRole("option", { name: /DE — Germany/ });
+  fireEvent.click(screen.getByRole("button", { name: /Evaluate 5 Schedulers/ }));
+}
+
 const renderPage = () =>
   render(
     <MemoryRouter>
@@ -65,6 +71,20 @@ describe('PrototypePage (M5 real-data workflow)', () => {
     expect(screen.getByText(/The provider gives no forecast uncertainty/)).toBeInTheDocument();
   });
 
+  // P9 regression: opening the page used to schedule a job at once (a stored job the user never
+  // submitted, and live provider calls on every visit).
+  it("does not schedule anything until the user presses Evaluate", async () => {
+    const fetchMock = backend({ status: "INFEASIBLE", reason: "x", recommendation: null });
+    renderPage();
+    await screen.findByRole("option", { name: /DE — Germany/ });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(fetchMock.mock.calls.some((c) => String(c[0]) === `${API_BASE}/schedule`)).toBe(false);
+    expect(screen.getByTestId("evaluate-hint")).toHaveTextContent(/nothing is scheduled until you press it/);
+    fireEvent.click(screen.getByRole("button", { name: /Evaluate 5 Schedulers/ }));
+    await waitFor(() => expect(fetchMock.mock.calls.filter((c) => String(c[0]) === `${API_BASE}/schedule`)).toHaveLength(1));
+    expect(screen.queryByTestId("evaluate-hint")).toBeNull();
+  });
+
   it('filters the zone list by search text', async () => {
     backend({ status: 'INFEASIBLE', reason: 'x', recommendation: null });
     renderPage();
@@ -76,6 +96,7 @@ describe('PrototypePage (M5 real-data workflow)', () => {
   it('sends an absolute UTC deadline and shows an explicit infeasible result instead of a recommendation', async () => {
     const fetchMock = backend({ status: 'INFEASIBLE', reason: 'A 2 h job cannot finish before the deadline.', recommendation: null });
     renderPage();
+    await evaluate();
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('No feasible execution window');
     expect(alert).toHaveTextContent('A 2 h job cannot finish before the deadline.');
@@ -91,6 +112,7 @@ describe('PrototypePage (M5 real-data workflow)', () => {
   it('sends the declared runtime variability (0 by default, the selected value after a change)', async () => {
     const fetchMock = backend({ status: 'INFEASIBLE', reason: 'too late', recommendation: null });
     renderPage();
+    await evaluate();
     await screen.findByRole('alert');
     const calls = () => fetchMock.mock.calls.filter((c) => String(c[0]) === `${API_BASE}/schedule`);
     expect(bodyOf(calls()[0]).runtimeCv).toBe(0);
@@ -127,6 +149,7 @@ describe('PrototypePage (M5 real-data workflow)', () => {
       timeWeightedForecast: { recommendedIntensity: 117, immediateIntensity: 117.33, savingsVsImmediatePct: 0.28, basis: 'time-weighted' },
     });
     renderPage();
+    await evaluate();
     expect(await screen.findByText('CarbonRoute Recommendation')).toBeInTheDocument();
     expect(screen.getByText(/Forecast: 0.28% vs Immediate \(time-weighted; predicted, not observed\)/)).toBeInTheDocument();
     expect(screen.queryByText(/Forecast: 1.7% vs Immediate/)).toBeNull();
