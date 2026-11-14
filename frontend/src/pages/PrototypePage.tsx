@@ -429,7 +429,7 @@ export const PrototypePage: React.FC = () => {
               }`}
             >
               K8s Cluster:{' '}
-              <strong>{clusterHealth?.isAvailable ? 'Minikube Live' : 'Sandbox Fallback'}</strong>
+              <strong>{clusterHealth?.isAvailable ? 'Minikube Live' : 'Not connected (simulated)'}</strong>
             </span>
           </div>
         </div>
@@ -439,8 +439,8 @@ export const PrototypePage: React.FC = () => {
         </h1>
         <p className="text-sm text-slate-400 max-w-4xl leading-relaxed">
           Demonstrates one complete software vertical slice: from job submission through Electricity Maps carbon
-          forecasting, horizon uncertainty modeling, evaluation of 5 scheduling policies, CarbonRoute
-          deadline-risk decision, to containerized Kubernetes dispatch and results collection.
+          forecasting, evaluation of 5 scheduling policies, the CarbonRoute deadline-risk decision, and dispatch
+          (Kubernetes when a cluster is connected, otherwise a labelled simulation) to results collection.
         </p>
       </div>
 

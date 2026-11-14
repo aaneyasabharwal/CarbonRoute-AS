@@ -74,12 +74,12 @@ export const HomePage: React.FC = () => {
     },
     {
       id: 3,
-      name: 'Horizon Uncertainty',
+      name: 'Deadline Risk',
       badge: 'Step 3',
       icon: GitBranch,
-      title: 'Uncertainty & Risk Modeling',
-      summary: 'Forecast variance widens over look-ahead horizon.',
-      details: 'Applies dispersion equation sigma(t) = sigma_0 * (1 + beta * (t - t_0)^gamma). Computes deadline violation probability P(violation) = 0.5 * erfc(Slack / (sqrt(2) * sigma)) for every candidate slot.',
+      title: 'Deadline-Miss Risk',
+      summary: 'Estimates the probability that a job started in each slot misses its deadline.',
+      details: 'Runtime R ~ Normal(d, (cv * d)^2) with a runtime variability cv declared by the user (not learned). For every candidate start t: P(miss) = 1 - Phi((D - t - d) / (cv * d)). With cv = 0 this reduces to "ends by the deadline".',
       output: 'Hourly uncertainty standard deviation vector and 95% confidence bands.',
     },
     {
@@ -117,19 +117,19 @@ export const HomePage: React.FC = () => {
       name: 'Live Execution',
       badge: 'Step 7',
       icon: Terminal,
-      title: 'Resilient Pod Execution & Streaming',
+      title: 'Kubernetes Dispatch or Simulated Execution',
       summary: 'Submits a Kubernetes Job when a cluster is reachable; otherwise the execution is simulated (no workload runs).',
-      details: 'If cluster is online: dispatches to carbonroute-jobs namespace. If cluster is offline: gracefully executes in local process sandbox, streaming real stdout epochs [Epoch 1/5] to terminal.',
-      output: 'Live streamed execution log buffer with progress epochs.',
+      details: 'If a cluster is reachable: creates the Job in the carbonroute-jobs namespace. If not (as on the public demo): the dispatch is recorded as a labelled simulation; no workload process is started and no output is produced.',
+      output: 'Execution record (Kubernetes or simulated) with its log lines.',
     },
     {
       id: 8,
       name: 'Results Dashboard',
       badge: 'Step 8',
       icon: TrendingDown,
-      title: 'Carbon Accounting & Telemetry',
-      summary: 'Calculates realized emissions vs immediate baseline.',
-      details: 'Pulls realized grid intensity during the actual execution window. Computes true empirical carbon savings vs what would have been emitted under immediate baseline dispatch.',
+      title: 'Forecast vs Observed Comparison',
+      summary: 'Compares the carbon intensity of the scheduled window with the Immediate window.',
+      details: 'After the window has passed, collects the observed grid intensity for the scheduled and Immediate windows and compares it with the forecast. Emissions use an assumed energy model, so they are estimates, not measured savings.',
       output: 'Forecast vs observed intensity for the scheduled and Immediate windows (assumed energy model).',
     },
   ];
@@ -161,7 +161,7 @@ export const HomePage: React.FC = () => {
 
           {/* Short description */}
           <p className="text-base sm:text-lg text-slate-300 max-w-3xl mx-auto leading-relaxed">
-            CarbonRoute is an uncertainty-aware scheduling framework that evaluates carbon intensity forecasts, estimates deadline violation risk, and dispatches batch workloads across Kubernetes clusters or local sandboxes to minimize realized carbon emissions.
+            CarbonRoute is an uncertainty-aware scheduling framework that evaluates carbon intensity forecasts, estimates deadline-miss risk, and recommends a start time for batch jobs that lowers the carbon intensity of their run window while keeping that risk within a limit. Jobs are dispatched to Kubernetes when a cluster is connected; otherwise the execution is a labelled simulation.
           </p>
 
           {/* 3 CTAs */}
@@ -497,7 +497,7 @@ export const HomePage: React.FC = () => {
               Try the Scheduler Live
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Submit custom batch jobs or preloaded presets, observe live carbon intensity envelopes with horizon uncertainty, compare all 5 scheduling policies, and execute real container workloads.
+              Submit custom batch jobs or preloaded presets, view the carbon intensity forecast (labelled demo data on the public site), compare all 5 scheduling policies with their deadline-miss risk, and dispatch the job (Kubernetes when a cluster is connected, otherwise a labelled simulation).
             </p>
           </div>
 

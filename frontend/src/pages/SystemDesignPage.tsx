@@ -57,9 +57,8 @@ export const SystemDesignPage: React.FC = () => {
         'CarbonService queries Electricity Maps API endpoint /v3/carbon-intensity/forecast.',
         'If the API key is missing or the quota is exceeded, the request fails with a clear error (no silent synthetic substitute).',
         'Extracts hourly forecast points: I_forecast(t) in gCO2eq/kWh.',
-        'UncertaintyService applies horizon error scaling: sigma(t) = sigma_0 * (1 + beta * (t - t_0)^gamma).',
-        'Computes 95% confidence intervals [mu(t) - 1.96*sigma(t), mu(t) + 1.96*sigma(t)].',
-        'Returns calibrated forecast envelope { dataMode, points: [HourlyCarbonPoint] } to Decision Engine.',
+        'The provider gives no forecast uncertainty, so none is invented (forecast error is measured separately in the research pipeline).',
+        'Returns the forecast { dataMode, points: [HourlyCarbonPoint] } to the Decision Engine; demo data is labelled synthetic.',
       ],
       exceptions: [
         'E1: Grid API rate-limit/timeout -> error returned (QUOTA_GUARD / provider error); the user may switch to demo mode, labelled synthetic.',
@@ -90,23 +89,21 @@ export const SystemDesignPage: React.FC = () => {
     },
     {
       id: 'UC-04',
-      title: 'Kubernetes Job Dispatch, Sandbox Execution & Telemetry',
-      actor: 'K8s Connector / Execution Worker Sandbox',
-      goal: 'Translate scheduling decision into container execution, stream live logs, and collect empirical carbon accounting.',
+      title: 'Kubernetes Job Dispatch or Simulated Execution',
+      actor: 'K8s Connector',
+      goal: 'Translate the scheduling decision into a Kubernetes Job when a cluster is connected, otherwise record a labelled simulation.',
       preconditions: 'Job reaches scheduled start time t* and dispatch is triggered.',
       trigger: 'POST /api/jobs/:id/dispatch',
       mainFlow: [
         'K8sConnector renders Kubernetes batch/v1 Job specification with resource limits and environment variables.',
         'Probes Kubernetes cluster connection via client / kubectl.',
         'If cluster is online: dispatches Job to carbonroute-jobs namespace in Minikube/K8s.',
-        'If cluster is offline: gracefully falls back to local isolated process sandbox runner.',
-        'Streams container execution epochs: [Epoch 1/5], [Epoch 2/5] ... to live log buffer.',
-        'Tracks actual execution duration and computes realized carbon emissions.',
-        'Calculates true empirical savings vs Immediate baseline and updates job state to COMPLETED.',
-        'Emits execution metrics to Results Dashboard.',
+        'If no cluster is reachable: records a simulated execution (clusterMode = "offline_fallback"); no workload process is started.',
+        'Stores the execution record and its log lines.',
+        'After the window has passed, the user can compare forecast and observed intensity for the scheduled and Immediate windows (emissions are estimates from an assumed energy model).',
       ],
       exceptions: [
-        'E1: Cluster unavailable -> Explicitly sets clusterMode = "offline_fallback" and executes via local runner without failure.',
+        'E1: Cluster unavailable -> sets clusterMode = "offline_fallback" and records a labelled simulation (no workload runs).',
       ],
       postconditions: 'Execution recorded (Kubernetes or simulated); forecast vs observed intensity available after collection.',
     },
@@ -123,30 +120,28 @@ export const SystemDesignPage: React.FC = () => {
         { from: 'API Controller', to: 'CarbonService', label: '2. fetchForecast(region, horizon=24h)', type: 'req' },
         { from: 'CarbonService', to: 'ElectricityMaps / Trace', label: '3. Query Live Grid / Fallback Calibrated Trace', type: 'req' },
         { from: 'ElectricityMaps / Trace', to: 'CarbonService', label: '4. Raw Forecast Array I(t)', type: 'res' },
-        { from: 'CarbonService', to: 'UncertaintyService', label: '5. calibrateUncertainty(I(t), horizon)', type: 'req' },
-        { from: 'UncertaintyService', to: 'API Controller', label: '6. Calibrated Forecast + Sigma(t) Envelope', type: 'res' },
+        { from: 'CarbonService', to: 'CarbonService', label: '5. Label data mode (live or synthetic demo)', type: 'internal' },
+        { from: 'CarbonService', to: 'API Controller', label: '6. Hourly forecast points I(t)', type: 'res' },
         { from: 'API Controller', to: 'SchedulerService', label: '7. evaluateAllPolicies(job, forecastEnvelope)', type: 'req' },
         { from: 'SchedulerService', to: 'API Controller', label: '8. 5-Policy Comparison + CarbonRoute Decision', type: 'res' },
         { from: 'API Controller', to: 'User / Web UI', label: '9. Render Forecast Bar Chart + Policy Comparison Table', type: 'res' },
         { from: 'User / Web UI', to: 'API Controller', label: '10. POST /api/jobs/:id/dispatch (Trigger Execution)', type: 'req' },
         { from: 'API Controller', to: 'K8sConnector', label: '11. dispatchJob(jobSpec, decision)', type: 'req' },
-        { from: 'K8sConnector', to: 'K8s Cluster / Sandbox', label: '12. Execute Workload Pod & Stream Epoch Logs', type: 'req' },
-        { from: 'K8s Cluster / Sandbox', to: 'K8sConnector', label: '13. Final Exit Code 0 + Realized Duration', type: 'res' },
-        { from: 'K8sConnector', to: 'API Controller', label: '14. Execution Record + Realized Carbon Accounting', type: 'res' },
-        { from: 'API Controller', to: 'User / Web UI', label: '15. Render Real-Time Terminal Logs & Final Results', type: 'res' },
+        { from: 'K8sConnector', to: 'K8s Cluster / Simulation', label: '12. Create Job (or record a simulation)', type: 'req' },
+        { from: 'K8s Cluster / Simulation', to: 'K8sConnector', label: '13. Job status (or simulated status)', type: 'res' },
+        { from: 'K8sConnector', to: 'API Controller', label: '14. Execution Record', type: 'res' },
+        { from: 'API Controller', to: 'User / Web UI', label: '15. Render Execution Record & Logs', type: 'res' },
       ],
     },
     {
       id: 'SQ-02',
-      title: 'Horizon Uncertainty Calibration & Risk Modeling',
-      description: 'How uncertainty standard deviation grows with forecast horizon and how deadline violation probability is computed.',
+      title: 'Deadline-Miss Risk Computation',
+      description: 'How the deadline-miss probability of each candidate start slot is computed from the declared runtime variability.',
       steps: [
-        { from: 'SchedulerService', to: 'UncertaintyService', label: '1. Request uncertainty model for region', type: 'req' },
-        { from: 'UncertaintyService', to: 'UncertaintyService', label: '2. Compute sigma(t) = sigma_0 * (1 + beta * (t - t_0)^gamma)', type: 'internal' },
-        { from: 'UncertaintyService', to: 'UncertaintyService', label: '3. Calculate 95% Confidence Bounds: mu +/- 1.96*sigma', type: 'internal' },
-        { from: 'SchedulerService', to: 'UncertaintyService', label: '4. computeRisk(startSlot, duration, deadline, sigma)', type: 'req' },
-        { from: 'UncertaintyService', to: 'UncertaintyService', label: '5. P(violation) = 0.5 * erfc(Slack / (sqrt(2) * sigma_eff))', type: 'internal' },
-        { from: 'UncertaintyService', to: 'SchedulerService', label: '6. Return Risk Probability P(violation) in [0, 1]', type: 'res' },
+        { from: 'SchedulerService', to: 'RiskModel', label: '1. computeRisk(startSlot t, duration d, deadline D, declared cv)', type: 'req' },
+        { from: 'RiskModel', to: 'RiskModel', label: '2. Runtime R ~ Normal(d, (cv * d)^2)', type: 'internal' },
+        { from: 'RiskModel', to: 'RiskModel', label: '3. P(miss) = 1 - Phi((D - t - d) / (cv * d)); cv = 0 -> 0 or 1', type: 'internal' },
+        { from: 'RiskModel', to: 'SchedulerService', label: '4. Return P(miss) in [0, 1] (model-based, not calibrated)', type: 'res' },
       ],
     },
     {
@@ -163,35 +158,30 @@ export const SystemDesignPage: React.FC = () => {
         { from: 'SchedulerService', to: 'CarbonAwareBaseline', label: '7. evaluate(job): heuristic threshold shift', type: 'req' },
         { from: 'CarbonAwareBaseline', to: 'SchedulerService', label: '8. Baseline Result Record', type: 'res' },
         { from: 'SchedulerService', to: 'CarbonRoutePolicy', label: '9. evaluate(job): min E[C(t)] s.t. Risk <= tau', type: 'req' },
-        { from: 'CarbonRoutePolicy', to: 'SchedulerService', label: '10. Optimal Feasible Decision + Savings %', type: 'res' },
+        { from: 'CarbonRoutePolicy', to: 'SchedulerService', label: '10. Feasible Decision + forecast intensity difference', type: 'res' },
       ],
     },
     {
       id: 'SQ-04',
-      title: 'Kubernetes Dispatch & Resilient Sandbox Fallback',
-      description: 'Connector checks for Minikube/Docker cluster; falls back cleanly to local sandbox if cluster is offline.',
+      title: 'Kubernetes Dispatch or Simulated Execution',
+      description: 'Connector checks for a Minikube/Kubernetes cluster; without one the execution is a labelled simulation (no workload runs).',
       steps: [
         { from: 'API Controller', to: 'K8sConnector', label: '1. dispatch(jobRecord, decision)', type: 'req' },
         { from: 'K8sConnector', to: 'K8sConnector', label: '2. probeCluster(): check kubectl / API socket', type: 'internal' },
-        { from: 'K8sConnector', to: 'K8sConnector', label: '3. Cluster Offline detected -> fallback mode', type: 'internal' },
-        { from: 'K8sConnector', to: 'LocalSandboxRunner', label: '4. spawnLocalProcess(docker/workload/workload.py)', type: 'req' },
-        { from: 'LocalSandboxRunner', to: 'K8sConnector', label: '5. Stream stdout: [Epoch 1/5] Running batch...', type: 'stream' },
-        { from: 'LocalSandboxRunner', to: 'K8sConnector', label: '6. Stream stdout: [Epoch 5/5] Workload Complete', type: 'stream' },
-        { from: 'LocalSandboxRunner', to: 'K8sConnector', label: '7. Process exit code: 0', type: 'res' },
-        { from: 'K8sConnector', to: 'API Controller', label: '8. Final Execution Record (mode: offline_fallback)', type: 'res' },
+        { from: 'K8sConnector', to: 'K8sConnector', label: '3. No cluster reachable -> simulated mode', type: 'internal' },
+        { from: 'K8sConnector', to: 'K8sConnector', label: '4. Record simulated execution (no process started)', type: 'internal' },
+        { from: 'K8sConnector', to: 'API Controller', label: '5. Execution Record (mode: offline_fallback, simulated)', type: 'res' },
       ],
     },
     {
       id: 'SQ-05',
-      title: 'Telemetry Collection & Carbon Accounting',
-      description: 'Calculation of realized vs baseline emissions and dashboard metric updates.',
+      title: 'Forecast vs Observed Comparison',
+      description: 'After the window has passed: observed intensity for the scheduled and Immediate windows vs the forecast.',
       steps: [
-        { from: 'K8sConnector', to: 'API Controller', label: '1. Emit completion event with durationSec', type: 'req' },
-        { from: 'API Controller', to: 'API Controller', label: '2. Compute Realized Carbon = sum(I_actual * kWh)', type: 'internal' },
-        { from: 'API Controller', to: 'API Controller', label: '3. Compute Savings % = (Baseline - Realized) / Baseline', type: 'internal' },
-        { from: 'API Controller', to: 'ExperimentStore', label: '4. Persist run to experiments benchmark log', type: 'req' },
-        { from: 'ExperimentStore', to: 'API Controller', label: '5. Acknowledged', type: 'res' },
-        { from: 'API Controller', to: 'Web UI', label: '6. Push results to UI Dashboard', type: 'res' },
+        { from: 'Web UI', to: 'API Controller', label: '1. Request observations for the job', type: 'req' },
+        { from: 'API Controller', to: 'CarbonService', label: '2. Fetch observed intensity (measured or provider estimate)', type: 'req' },
+        { from: 'API Controller', to: 'API Controller', label: '3. Compare scheduled vs Immediate window; emissions = assumed kWh x intensity (estimate)', type: 'internal' },
+        { from: 'API Controller', to: 'Web UI', label: '4. Forecast-vs-observed report', type: 'res' },
       ],
     },
   ];
@@ -500,29 +490,25 @@ export const SystemDesignPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Class 2: CarbonForecast & UncertaintyModel */}
+              {/* Class 2: CarbonForecast & RiskModel */}
               <div className="rounded-xl bg-slate-950 border border-slate-800 overflow-hidden text-xs font-mono">
                 <div className="bg-slate-900 px-4 py-2.5 border-b border-slate-800 flex items-center justify-between">
                   <div className="flex items-center space-x-1.5">
                     <Activity className="w-3.5 h-3.5 text-sky-400" />
-                    <span className="font-bold text-white">UncertaintyModel</span>
+                    <span className="font-bold text-white">RiskModel</span>
                   </div>
                   <span className="text-[10px] text-slate-500">&laquo;Service&raquo;</span>
                 </div>
                 <div className="p-4 space-y-3">
                   <div className="space-y-1 text-slate-300">
                     <div className="text-[10px] text-slate-500 uppercase font-bold">Attributes</div>
-                    <div>+ baseStdDev: number (sigma_0)</div>
-                    <div>+ horizonGrowthBeta: number</div>
-                    <div>+ horizonGrowthGamma: number</div>
-                    <div>+ confidenceZ: number = 1.96</div>
+                    <div>+ runtimeCv: number (declared, not learned)</div>
+                    <div>+ riskTolerance: number (tau)</div>
                   </div>
                   <div className="pt-2 border-t border-slate-800/80 space-y-1 text-sky-300">
                     <div className="text-[10px] text-slate-500 uppercase font-bold">Methods</div>
-                    <div>+ computeStdDev(horizonHours): number</div>
-                    <div>+ computeBounds(mu, sigma): [low, high]</div>
-                    <div>+ computeDeadlineRisk(slack, sigma): number</div>
-                    <div>+ erfcChebyshev(x): number</div>
+                    <div>+ deadlineMissProbability(t, d, D, cv): number</div>
+                    <div>+ normalCdf(x): number</div>
                   </div>
                 </div>
               </div>
@@ -616,7 +602,7 @@ export const SystemDesignPage: React.FC = () => {
                     <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Implementations</div>
                     <div className="space-y-0.5 text-[10px]">
                       <div className="text-slate-300">&bull; KubernetesClusterConnector (Minikube)</div>
-                      <div className="text-amber-400">&bull; LocalSandboxConnector (Offline Fallback)</div>
+                      <div className="text-amber-400">&bull; Simulated execution (no cluster connected)</div>
                     </div>
                   </div>
                 </div>
