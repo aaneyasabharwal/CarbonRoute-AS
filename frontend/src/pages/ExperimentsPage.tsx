@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import {
   FlaskConical,
   BarChart3,
@@ -44,23 +45,23 @@ export const ExperimentsPage: React.FC = () => {
     {
       category: 'Carbon Performance',
       items: [
-        { name: 'Total Carbon Emissions', unit: 'kg CO2eq', desc: 'Absolute emissions accumulated across all batch workload executions.' },
-        { name: 'Carbon Reduction Percentage', unit: '% vs Immediate', desc: 'Relative savings compared to naive immediate arrival dispatch.' },
+        { name: 'Total Carbon Emissions', unit: 'kg CO2eq', desc: 'Absolute emissions accumulated across all batch workload executions.', status: 'qualified', note: 'Reported as ESTIMATED emissions (realized intensity x assumed energy, 0.125 kW per vCPU). No energy is measured, so realized emissions are never reported.' },
+        { name: 'Carbon Reduction Percentage', unit: '% vs Immediate', desc: 'Relative savings compared to naive immediate arrival dispatch.', status: 'qualified', note: 'Reported as the paired difference in realized carbon intensity vs Immediate (gCO2eq/kWh) with a snapshot-cluster 95% interval; not yet conclusive.' },
       ],
     },
     {
       category: 'Scheduling & Deadline Performance',
       items: [
-        { name: 'Deadline Violation Rate', unit: '% of jobs', desc: 'Empirical fraction of jobs that failed to finish before their designated deadline.' },
-        { name: 'Average Slack Consumption', unit: 'hours', desc: 'Proportion of available flexibility window utilized before execution started.' },
+        { name: 'Deadline Violation Rate', unit: '% of jobs', desc: 'Empirical fraction of jobs that failed to finish before their designated deadline.', status: 'qualified', note: 'Implemented with SIMULATED runtimes Normal(d, (cv d)^2); no recorded runtimes exist yet.' },
+        { name: 'Average Slack Consumption', unit: 'hours', desc: 'Proportion of available flexibility window utilized before execution started.', status: 'implemented', note: 'Reported as mean scheduling delay (hours from arrival to start) per policy.' },
       ],
     },
     {
       category: 'Probability Calibration',
       items: [
-        { name: 'Brier Score', unit: 'Score [0, 1]', desc: 'Mean squared error between predicted violation probabilities and binary realized outcomes.' },
-        { name: 'Expected Calibration Error (ECE)', unit: 'Weighted Delta', desc: 'Average difference between binned predicted confidence and actual empirical frequency.' },
-        { name: 'Reliability Curve Slopes', unit: 'Calibration Slope', desc: 'Diagnostic alignment against the ideal 45-degree perfect calibration line.' },
+        { name: 'Brier Score', unit: 'Score [0, 1]', desc: 'Mean squared error between predicted violation probabilities and binary realized outcomes.', status: 'planned', note: 'Needs recorded runtimes and deadline outcomes from real executions.' },
+        { name: 'Expected Calibration Error (ECE)', unit: 'Weighted Delta', desc: 'Average difference between binned predicted confidence and actual empirical frequency.', status: 'planned', note: 'Needs recorded runtimes and deadline outcomes from real executions.' },
+        { name: 'Reliability Curve Slopes', unit: 'Calibration Slope', desc: 'Diagnostic alignment against the ideal 45-degree perfect calibration line.', status: 'planned', note: 'Needs recorded runtimes and deadline outcomes from real executions.' },
       ],
     },
   ];
@@ -86,10 +87,12 @@ export const ExperimentsPage: React.FC = () => {
         <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
         <div className="space-y-1">
           <span className="font-bold font-mono text-amber-300 block text-sm">
-            Research Integrity Notice: Empirical Results Pending Benchmark Execution
+            Research Integrity Notice: what exists today
           </span>
           <p className="text-slate-300 leading-relaxed">
-            In strict compliance with academic standards, no fabricated numerical percentages or benchmark graphs are presented. Results will be populated directly from reproducible simulation runs in Phase 7.
+            This page describes the evaluation design. Actual results from the replay benchmark (real Electricity Maps forecasts and realized values, synthetic workloads) are on the{' '}
+            <Link to="/results" className="underline text-amber-100">Results page</Link>, with sample counts and 95% intervals. The data so far covers less than a day, so no result is
+            statistically conclusive yet. Each metric below is marked implemented, implemented with a qualification, or planned. No number on this page is a result.
           </p>
         </div>
       </div>
@@ -155,6 +158,12 @@ export const ExperimentsPage: React.FC = () => {
                     <p className="text-slate-400 leading-relaxed text-[11px]">
                       {item.desc}
                     </p>
+                    <p className="text-[11px] leading-relaxed" data-testid={`metric-status-${item.status}`}>
+                      <span className={item.status === 'planned' ? 'text-slate-500 font-mono' : item.status === 'qualified' ? 'text-amber-300 font-mono' : 'text-emerald-300 font-mono'}>
+                        {item.status === 'planned' ? 'Planned' : item.status === 'qualified' ? 'Implemented (qualified)' : 'Implemented'}
+                      </span>
+                      : <span className="text-slate-400">{item.note}</span>
+                    </p>
                   </div>
                 ))}
               </div>
@@ -170,15 +179,16 @@ export const ExperimentsPage: React.FC = () => {
         </div>
         <div className="space-y-1 max-w-md mx-auto">
           <h3 className="text-base font-bold text-white font-mono">
-            Benchmark Results Execution Pending
+            Where the results are
           </h3>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Statistical tables, paired comparisons, and reliability plots will be dynamically connected to the interactive experiment dashboard upon completion of Phase 7 benchmark runs.
+            Paired policy comparisons with snapshot-cluster intervals, forecast accuracy by zone and the forecast-error model status are on the Results page;
+            `npm run report` produces the full research report from the saved results. Reliability plots need real runtime outcomes and are not produced.
           </p>
         </div>
-        <span className="inline-flex items-center px-3 py-1 rounded bg-slate-900 text-slate-400 border border-slate-800 text-xs font-mono">
-          Status: Trace schemas &amp; baseline harness under construction
-        </span>
+        <Link to="/results" className="inline-flex items-center px-3 py-1.5 rounded bg-emerald-500 text-slate-950 font-bold text-xs font-mono">
+          Open Results
+        </Link>
       </section>
     </div>
   );
