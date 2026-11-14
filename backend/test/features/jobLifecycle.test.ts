@@ -13,7 +13,8 @@ import type { Express } from 'express';
 
 vi.mock('child_process', () => ({
   exec: (_c: string, cb: (e: Error) => void) => cb(new Error('exec must not be used')),
-  execFile: (_f: string, _a: string[], _o: unknown, cb: (e: Error) => void) => cb(new Error('no cluster')),
+  // Asynchronous like the real kubectl probe (which takes up to 2 s), so concurrent requests interleave.
+  execFile: (_f: string, _a: string[], _o: unknown, cb: (e: Error) => void) => setTimeout(() => cb(new Error('no cluster')), 50),
 }));
 
 const H = 3600_000;
@@ -148,4 +149,33 @@ describe('L3: no dispatch without a recommended window', () => {
     expect(r.status).toBe(409);
     expect(r.body.code).toBe('NO_RECOMMENDATION');
   });
+});
+
+describe('P8 review: concurrent dispatch and older stored executions', () => {
+  it('two dispatch requests sent at the same time start exactly one run', async () => {
+    const id = (await schedule({ name: 'double click' })).body.data.job.id;
+    const send = () => request(app).post(`/api/jobs/${id}/dispatch`).set(owner).send({ simulatedDurationSec: 120 });
+    const results = await Promise.all([send(), send(), send()]);
+    expect(results.map((r) => r.status).sort()).toEqual([200, 409, 409]);
+    expect(results.filter((r) => r.status === 409).every((r) => r.body.code === 'JOB_ALREADY_DISPATCHED')).toBe(true);
+    expect((store() as any).data.executions.filter((e: any) => e.jobId === id)).toHaveLength(1);
+    await request(app).post(`/api/jobs/${id}/cancel`).set(owner);
+  });
+
+  it('an older stored execution without a status (pre-P8 data) is closed as interrupted, not overwritten by the new run', async () => {
+    const id = (await schedule({ name: 'legacy execution' })).body.data.job.id;
+    await request(app).post(`/api/jobs/${id}/dispatch`).set(owner).send({ simulatedDurationSec: 1 });
+    await waitForStatus(id, 'completed');
+    K8s.forgetExecutionsForTests();
+    const legacy = store().latestExecutionForJob(id)! as any;
+    delete legacy.status; // as written before P8
+    delete legacy.finishedAt;
+    const again = await request(app).post(`/api/jobs/${id}/dispatch`).set(owner).send({ simulatedDurationSec: 1 });
+    expect(again.status).toBe(200);
+    const execs = (store() as any).data.executions.filter((e: any) => e.jobId === id);
+    expect(execs).toHaveLength(2);
+    expect(execs[0].status).toBe('interrupted'); // outcome unknown; never relabelled with the new run's status
+    await waitForStatus(id, 'completed');
+    expect(execs[0].status).toBe('interrupted');
+  }, 30_000);
 });

@@ -4,7 +4,7 @@ import { CarbonService } from '../services/carbonService';
 import { WorkloadJob } from '../services/schedulerService';
 import { scheduleWorkflow, collectObservations, evaluateJob, WorkflowError } from '../services/schedulingWorkflow';
 import { buildReport, renderReportHtml } from '../services/reportService';
-import { schedulingStore } from '../models/schedulingStore';
+import { schedulingStore, FINAL_EXECUTION_STATUSES } from '../models/schedulingStore';
 import { electricityMaps } from '../carbon/electricityMaps';
 import { ProviderError } from '../carbon/types';
 import { K8sConnector } from '../services/k8sConnector';
@@ -190,10 +190,21 @@ export const scheduleJob = async (req: AuthRequest, res: Response) => {
     return sendError(res, error, 503);
   }
 };
+/**
+ * Jobs whose dispatch is in progress (P8 review). The executor registers a run only after an
+ * asynchronous cluster probe, so without this two concurrent requests could both pass the
+ * "already dispatched" check and start two runs.
+ */
+const dispatchesInProgress = new Set<string>();
+
 export const dispatchJobToExecution = async (req: JobRequest, res: Response) => {
+  const jobId = req.job!.id;
+  if (dispatchesInProgress.has(jobId)) {
+    return res.status(409).json({ success: false, code: 'JOB_ALREADY_DISPATCHED', message: 'This job is already being dispatched.' });
+  }
+  dispatchesInProgress.add(jobId);
   try {
     const ref = req.job!;
-    const jobId = ref.id;
     if (ref.cancelled) return res.status(409).json(JOB_CANCELLED);
     auditAdminOverride(req.user!, ref, 'dispatched');
     const job: any = jobAsWorkload(ref);
@@ -215,8 +226,13 @@ export const dispatchJobToExecution = async (req: JobRequest, res: Response) => 
     if (current === 'running' || current === 'completed') {
       return res.status(409).json({ success: false, code: 'JOB_ALREADY_DISPATCHED', message: `This job has already been dispatched (${current}).` });
     }
-    // A run cut off by a restart is closed as 'interrupted' before the new run starts.
-    if (current === 'interrupted') schedulingStore().updateExecutionStatus(jobId, 'interrupted');
+    // An earlier stored run that is not finished and has no live executor (cut off by a restart, or
+    // written before statuses were stored) is closed as 'interrupted' before the new run starts, so
+    // the new run's status updates cannot be recorded on it.
+    const previous = schedulingStore().latestExecutionForJob(jobId);
+    if (previous && !(previous.status && FINAL_EXECUTION_STATUSES.includes(previous.status))) {
+      schedulingStore().updateExecutionStatus(jobId, 'interrupted');
+    }
     const { simulatedDurationSec = 6 } = req.body || {};
     const predictedCarbon = Number(recommended?.predictedCarbonIntensity ?? req.body?.predictedCarbon ?? 0);
 
@@ -256,6 +272,8 @@ export const dispatchJobToExecution = async (req: JobRequest, res: Response) => 
     });
   } catch (error: any) {
     return sendError(res, error);
+  } finally {
+    dispatchesInProgress.delete(jobId);
   }
 };
 
