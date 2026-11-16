@@ -10,7 +10,10 @@ that model was dimensionally invalid (audit C1) and was removed in P1.
 
 - One batch job: duration $d$ (whole hours), arrival slot $a$, absolute deadline $D$ (converted to
   hours after the forecast start), requested vCPUs, risk tolerance $\tau \in (0,1)$, and an optional
-  **declared** runtime coefficient of variation $cv \in [0, 1]$.
+  **declared** runtime coefficient of variation $cv$. Through the API and the Scheduler page a user
+  picks one of $cv \in \{0, 0.1, 0.2, \dots, 1.0\}$ (default 0; any other value is rejected with 400).
+  The engine itself accepts any $cv \in [0, 1]$, which the built-in feasibility demo (0.05 / 0.25)
+  and the research replay use.
 - One forecast snapshot $\hat{C}(0), \dots, \hat{C}(H-1)$ in gCO2eq/kWh, hourly, from Electricity Maps
   (real) or the built-in synthetic demo trace (labelled `synthetic`). The snapshot is stored with the
   decision so it can be replayed.

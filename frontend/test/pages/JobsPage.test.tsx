@@ -136,6 +136,8 @@ describe('JobsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Nightly ETL/ }));
 
     expect(await screen.findByTestId('decision-explanation')).toHaveTextContent('lowest forecast intensity (100 gCO2eq/kWh)');
+    // P17: the declared runtime CV of the saved decision is shown.
+    expect(screen.getByTestId('job-runtime-cv')).toHaveTextContent('Declared runtime variability (CV): 0 (deterministic runtime)');
     const table = screen.getByRole('table', { name: 'Policy comparison' });
     const rows = within(table).getAllByRole('row').slice(1);
     expect(rows).toHaveLength(3);

@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, LoadingState, SignInRequired } from '../compone
 import { DataQualityBadge } from '../components/DataQualityBadge';
 import { DecisionExplanationPanel } from '../components/DecisionExplanationPanel';
 import { PolicyComparisonTable } from '../components/PolicyComparisonTable';
+import { describeRuntimeCv } from '../lib/runtimeCv';
 
 const STATUSES = ['', 'pending', 'scheduled', 'infeasible', 'running', 'completed', 'failed', 'cancelled', 'interrupted'] as const;
 const FINISHED = new Set(['completed', 'failed', 'cancelled']);
@@ -224,6 +225,7 @@ const Details: React.FC<{
               </div>
             )}
             <div>Energy: {dec.energyAssumption.basis}</div>
+            <div data-testid="job-runtime-cv">Declared runtime variability (CV): {describeRuntimeCv(dec.runtimeCv)}</div>
           </div>
           {dec.status === 'INFEASIBLE' && <ErrorState message={`No recommendation: ${dec.infeasibilityReason || 'infeasible'}`} />}
           {dec.explanation && <DecisionExplanationPanel explanation={dec.explanation} policyNames={names} />}
