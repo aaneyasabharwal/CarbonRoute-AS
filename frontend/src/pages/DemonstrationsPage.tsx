@@ -65,7 +65,7 @@ export const DemonstrationsPage: React.FC = () => {
           <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-300 space-y-1">
             <span className="font-bold text-white font-mono block">Experiment Objective:</span>
             <p className="leading-relaxed">
-              Demonstrate that CarbonRoute makes <em>different</em> scheduling decisions when forecast uncertainty changes, even when the underlying point-predicted carbon intensity profile is 100% identical.
+              Demonstrate that CarbonRoute makes <em>different</em> scheduling decisions when the declared runtime variability (CV) changes, even when the carbon forecast is identical. Synthetic data.
             </p>
           </div>
 

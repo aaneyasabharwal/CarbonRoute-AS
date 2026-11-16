@@ -80,13 +80,18 @@ export const PrototypePage: React.FC = () => {
   // the page starts on the labelled synthetic demo trace instead of opening with an error, and no
   // live request is made. Nothing is loaded until this check has finished.
   const [modeReady, setModeReady] = useState<boolean>(false);
+  // P18: whether live data can be used here at all (signed in AND a provider key on the server).
+  // When it cannot, the Live option is disabled with the reason instead of leading to a disabled Evaluate.
+  const [liveAvailable, setLiveAvailable] = useState<boolean>(false);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const signedIn = api.hasSession();
       const provider = signedIn ? await api.getProviderStatus() : null;
       if (cancelled) return;
-      if (!signedIn || !(provider?.success && provider.data?.configured)) {
+      const live = Boolean(signedIn && provider?.success && provider.data?.configured);
+      setLiveAvailable(live);
+      if (!live) {
         setDataSourceMode('demo');
         setRegion('BENCHMARK-RESEARCH');
       }
@@ -429,7 +434,7 @@ export const PrototypePage: React.FC = () => {
               }`}
             >
               K8s Cluster:{' '}
-              <strong>{clusterHealth?.isAvailable ? 'Minikube Live' : 'Sandbox Fallback'}</strong>
+              <strong>{clusterHealth?.isAvailable ? 'Minikube Live' : 'Not connected (simulated)'}</strong>
             </span>
           </div>
         </div>
@@ -439,8 +444,8 @@ export const PrototypePage: React.FC = () => {
         </h1>
         <p className="text-sm text-slate-400 max-w-4xl leading-relaxed">
           Demonstrates one complete software vertical slice: from job submission through Electricity Maps carbon
-          forecasting, horizon uncertainty modeling, evaluation of 5 scheduling policies, CarbonRoute
-          deadline-risk decision, to containerized Kubernetes dispatch and results collection.
+          forecasting, evaluation of 5 scheduling policies, the CarbonRoute deadline-risk decision, and dispatch
+          (Kubernetes when a cluster is connected, otherwise a labelled simulation) to results collection.
         </p>
       </div>
 
@@ -537,12 +542,13 @@ export const PrototypePage: React.FC = () => {
                     : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                 }`}
               >
-                {dataSourceMode === 'live' ? 'DEFAULT: LIVE' : 'DEMO BENCHMARK'}
+                {!modeReady ? 'CHECKING…' : dataSourceMode === 'live' ? 'DEFAULT: LIVE' : 'DEMO DATA'}
               </span>
             </div>
             <select
               aria-label="Carbon data source"
               value={dataSourceMode}
+              disabled={!modeReady}
               onChange={(e) => {
                 const newMode = e.target.value as 'live' | 'demo';
                 // P11: the selected zone is kept; if it cannot be used in the new mode the panel says
@@ -551,13 +557,25 @@ export const PrototypePage: React.FC = () => {
               }}
               className="w-full px-3.5 py-2.5 rounded-lg bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-emerald-500"
             >
-              <option value="live">Live Electricity Maps API (Production)</option>
+              <option value="live" disabled={!liveAvailable}>
+                {liveAvailable
+                  ? 'Live Electricity Maps API (Production)'
+                  : api.hasSession()
+                    ? 'Live Electricity Maps API (not configured on this server)'
+                    : 'Live Electricity Maps API (sign in required)'}
+              </option>
               <option value="demo">Controlled Research Benchmark / Demo Trace</option>
             </select>
             <span className="text-[10px] text-slate-500 block">
-              {dataSourceMode === 'live'
-                ? 'Queries live forecast from Electricity Maps API v3'
-                : 'Uses the synthetic demo trace (labelled synthetic, not real data)'}
+              {!modeReady
+                ? 'Checking whether live data is available…'
+                : dataSourceMode === 'live'
+                  ? 'Queries live forecast from Electricity Maps API v3'
+                  : liveAvailable
+                    ? 'Uses the synthetic demo trace (labelled synthetic, not real data)'
+                    : api.hasSession()
+                      ? 'Uses the synthetic demo trace (labelled synthetic, not real data). Live data needs an Electricity Maps key on the server (owner setting).'
+                      : 'Uses the synthetic demo trace (labelled synthetic, not real data). Sign in for live data.'}
             </span>
           </div>
 
@@ -1265,8 +1283,8 @@ export const PrototypePage: React.FC = () => {
                     </div>
                     <div className="pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 leading-relaxed">
                       {(detPol?.estimatedDeadlineRisk || 0) > riskTolerance
-                        ? `Greedily chases lowest point forecast, but uncertainty pushes risk to ${((detPol?.estimatedDeadlineRisk || 0) * 100).toFixed(1)}%, exceeding safety threshold.`
-                        : 'Selects the lowest point forecast window without accounting for forecast uncertainty variance.'}
+                        ? `Chases the lowest point forecast; with the declared runtime variability its deadline-miss risk is ${((detPol?.estimatedDeadlineRisk || 0) * 100).toFixed(1)}%, above the tolerance.`
+                        : 'Selects the lowest point-forecast window without checking deadline-miss risk.'}
                     </div>
                   </div>
 
@@ -1754,7 +1772,7 @@ export const PrototypePage: React.FC = () => {
         </section>
       )}
 
-      {/* 7. SECTION G: KEY FEASIBILITY DEMO (SAME FORECAST, DIFFERENT UNCERTAINTY) */}
+      {/* 7. SECTION G: KEY FEASIBILITY DEMO (SAME FORECAST, DIFFERENT RUNTIME CV) */}
       <section className="space-y-4">
         <div className="pb-2 border-b border-slate-800 space-y-1">
           <div className="inline-flex items-center space-x-2 px-3 py-1 rounded bg-teal-500/10 border border-teal-500/30 text-teal-300 text-xs font-mono">
@@ -1762,12 +1780,12 @@ export const PrototypePage: React.FC = () => {
             <span>Key Research Question Demonstration</span>
           </div>
           <h2 className="text-2xl font-bold text-white font-mono">
-            Same Forecast, Different Uncertainty Demonstration
+            Same Forecast, Different Runtime Variability
           </h2>
           <p className="text-xs text-slate-400 max-w-3xl leading-relaxed font-mono">
-            Proves that CarbonRoute does not simply select the lowest predicted carbon window. When forecast uncertainty
-            rises, CarbonRoute adapts by choosing an earlier, risk-calibrated start window even when the predicted carbon
-            intensity curve is 100% identical.
+            Shows that CarbonRoute does not simply select the lowest predicted carbon window. When the declared runtime
+            variability (CV) rises, CarbonRoute moves to an earlier window that keeps the deadline-miss risk within tolerance,
+            even though the carbon forecast is identical. Synthetic data.
           </p>
         </div>
 

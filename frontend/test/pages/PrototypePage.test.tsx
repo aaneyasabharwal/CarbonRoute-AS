@@ -97,6 +97,38 @@ describe("PrototypePage: which data source it starts with (P9, public staging)",
     await waitFor(() => expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("mode=demo"))).toBe(true));
     expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("mode=live"))).toBe(false);
   });
+
+  // P18 (screenshot): an admin could pick Live although the server has no provider key, and then
+  // every zone showed "Evaluation is disabled". Live is now disabled with the reason.
+  it("signed in, no provider key: the Live option is disabled and says why", async () => {
+    backend({ status: "INFEASIBLE", reason: "x", recommendation: null }, false);
+    renderPage();
+    const live = (await screen.findByRole("option", { name: /not configured on this server/ })) as HTMLOptionElement;
+    expect(live.disabled).toBe(true);
+    const select = screen.getByLabelText("Carbon data source") as HTMLSelectElement;
+    await waitFor(() => expect(select.disabled).toBe(false));
+    expect(select.value).toBe("demo");
+    expect(screen.getByText(/needs an Electricity Maps key on the server/)).toBeInTheDocument();
+    expect(screen.getByText("DEMO DATA")).toBeInTheDocument();
+  });
+
+  it("signed out: the Live option is disabled and asks for sign-in", async () => {
+    localStorage.removeItem("carbonroute_token");
+    backend({ status: "INFEASIBLE", reason: "x", recommendation: null });
+    renderPage();
+    const live = (await screen.findByRole("option", { name: /sign in required/ })) as HTMLOptionElement;
+    expect(live.disabled).toBe(true);
+  });
+
+  it("signed in with a provider key: Live stays selectable and is the default", async () => {
+    backend({ status: "INFEASIBLE", reason: "x", recommendation: null }, true);
+    renderPage();
+    const select = screen.getByLabelText("Carbon data source") as HTMLSelectElement;
+    await waitFor(() => expect(select.disabled).toBe(false));
+    const live = screen.getByRole("option", { name: "Live Electricity Maps API (Production)" }) as HTMLOptionElement;
+    expect(live.disabled).toBe(false);
+    expect(select.value).toBe("live");
+  });
 });
 
 describe('PrototypePage (M5 real-data workflow)', () => {

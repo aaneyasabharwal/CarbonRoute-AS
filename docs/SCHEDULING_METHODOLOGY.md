@@ -46,6 +46,14 @@ $$P_{\text{miss}}(t) = P(t + R > D) = 1 - \Phi\!\left(\frac{D - t - d}{cv \cdot 
 - $cv$ is **declared by the user**; it is not learned. Empirical runtime distributions need recorded
   executions (roadmap M9.1). Start delays are not modelled.
 - $\Phi$ is computed with the Numerical Recipes `erfc` approximation (fractional error < 1.2e-7).
+- **Edge cases** (`backend/test/scheduling/riskEdgeCases.test.ts`): $cv = 0$ is a separate branch
+  (no division); slack $= 0$ gives 0 when deterministic and exactly 0.5 when $cv > 0$; slack $< 0$
+  gives 1 when deterministic and $> 0.5$ when $cv > 0$; a start at or after the deadline
+  ($D - t \le 0$) gives 1 for every $cv$ (the Normal model puts mass on runtimes $\le 0$, so the bare
+  formula would give $< 1$ there; candidates satisfy $t + d \le D$, so scheduler outputs are
+  unaffected); $cv$ outside $[0, 1]$ is rejected by validation.
+- This formula models **runtime** variability only. It does **not** model carbon forecast
+  uncertainty, which affects which window is cleanest, not whether the job meets its deadline.
 
 A window is **feasible** when it has no data gap and $P_{\text{miss}}(t) \le \tau$.
 

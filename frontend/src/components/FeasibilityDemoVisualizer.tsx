@@ -204,15 +204,15 @@ export const FeasibilityDemoVisualizer: React.FC = () => {
             <div className="flex items-center space-x-4">
               <span className="flex items-center">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 mr-1.5" />
-                Scenario A Dispatch Window (Low Uncertainty)
+                Scenario A Dispatch Window (Low Runtime Variability)
               </span>
               <span className="flex items-center">
                 <span className="w-2.5 h-2.5 rounded-full bg-teal-400 mr-1.5" />
-                Scenario B Dispatch Window (High Uncertainty)
+                Scenario B Dispatch Window (High Runtime Variability)
               </span>
             </div>
             <div className="text-slate-500">
-              L = Low-variance risk &bull; H = High-variance risk
+              L = risk at low runtime CV &bull; H = risk at high runtime CV
             </div>
           </div>
         </div>
@@ -227,7 +227,7 @@ export const FeasibilityDemoVisualizer: React.FC = () => {
               <span className="px-2.5 py-1 rounded text-xs font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                 SCENARIO A
               </span>
-              <span className="text-xs text-emerald-400 font-mono font-semibold">Low Uncertainty</span>
+              <span className="text-xs text-emerald-400 font-mono font-semibold">Low Runtime Variability</span>
             </div>
             <h4 className="text-base font-bold text-white font-mono">
               Dispatch: {data.scenarios.scenarioA.selectedWindow}
@@ -259,7 +259,7 @@ export const FeasibilityDemoVisualizer: React.FC = () => {
               <span className="px-2.5 py-1 rounded text-xs font-mono font-bold bg-teal-500/20 text-teal-300 border border-teal-500/40">
                 SCENARIO B
               </span>
-              <span className="text-xs text-teal-400 font-mono font-semibold">High Uncertainty</span>
+              <span className="text-xs text-teal-400 font-mono font-semibold">High Runtime Variability</span>
             </div>
             <h4 className="text-base font-bold text-white font-mono">
               Dispatch: {data.scenarios.scenarioB.selectedWindow}

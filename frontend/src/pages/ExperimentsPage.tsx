@@ -31,8 +31,8 @@ export const ExperimentsPage: React.FC = () => {
     },
     {
       name: 'Forecast Error Levels',
-      spec: 'Low Uncertainty (&sigma;=10) &bull; Medium Uncertainty (&sigma;=30) &bull; High Uncertainty (&sigma;=70)',
-      desc: 'Synthetic noise injections on top of ground-truth traces to stress-test risk models.',
+      spec: 'Planned forecast noise: low (&sigma;=10) &bull; medium (&sigma;=30) &bull; high (&sigma;=70) gCO2eq/kWh',
+      desc: 'Planned: synthetic noise on traces to test how forecast error changes which window is chosen (forecast error does not enter the deadline risk).',
     },
     {
       name: 'Statistical Seeds',
