@@ -18,7 +18,7 @@ import { timeWeightedAverage, parseZonedTimestamp } from '../evaluation/timeWeig
 import { validateWorkloadSpec } from './workloadSpec';
 import { energyAssumption } from './energyModel';
 import { explainDecision } from './explain';
-import { MAX_RUNTIME_CV } from './uncertaintyService';
+import { RUNTIME_CV_OPTIONS, toRuntimeCvOption } from './uncertaintyService';
 
 export const ENGINE_VERSION = 'carbonroute-engine-2026-11-p1';
 const HOUR = 3600_000;
@@ -86,10 +86,16 @@ function validate(input: ScheduleInput, now: number) {
   const tau = Number(input.riskTolerance);
   if (!(tau > 0 && tau < 1)) throw new WorkflowError(400, 'riskTolerance must be between 0 and 1 (exclusive).');
   if (!(Number(input.cpu) > 0)) throw new WorkflowError(400, 'cpu must be greater than 0.');
-  const runtimeCv = input.runtimeCv === undefined || input.runtimeCv === null || (input.runtimeCv as unknown) === '' ? 0 : Number(input.runtimeCv);
-  if (!(Number.isFinite(runtimeCv) && runtimeCv >= 0 && runtimeCv <= MAX_RUNTIME_CV)) {
-    throw new WorkflowError(400, `runtimeCv must be between 0 and ${MAX_RUNTIME_CV} (declared runtime coefficient of variation).`);
+  // P17: not given -> 0 (deterministic, unchanged default); otherwise one of the 11 options.
+  const cvGiven = !(input.runtimeCv === undefined || input.runtimeCv === null || (input.runtimeCv as unknown) === '');
+  const cvOption = cvGiven ? toRuntimeCvOption(input.runtimeCv) : 0;
+  if (cvOption === null) {
+    throw new WorkflowError(
+      400,
+      `runtimeCv must be one of ${RUNTIME_CV_OPTIONS.join(', ')} (declared runtime coefficient of variation; 0 = deterministic).`,
+    );
   }
+  const runtimeCv = cvOption;
 
   let deadline: number;
   if (input.deadlineAt !== undefined && input.deadlineAt !== null && input.deadlineAt !== '') {

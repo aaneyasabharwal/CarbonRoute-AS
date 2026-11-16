@@ -21,7 +21,7 @@ export function buildReport(jobId: string, store: SchedulingStore = schedulingSt
 
   const limitations = [
     'Energy use is an assumption (see energyAssumption), not a measurement; all emissions figures inherit this assumption.',
-    'Electricity Maps forecasts carry no uncertainty estimate, so live deadline risk is deterministic (the window either fits before the deadline or it does not).',
+    'Deadline risk comes only from the runtime variability (CV) declared by the user; CV is an assumption, not learned from data. Carbon forecast uncertainty is not modelled (Electricity Maps forecasts carry no uncertainty estimate).',
     'Only the last 24 hours of Electricity Maps history are available on the current plan; observations not collected within that window are unavailable.',
   ];
   if (synthetic) limitations.unshift('SYNTHETIC DATA: this decision used the built-in demo trace, not real carbon data. No real-world conclusions can be drawn.');
@@ -102,6 +102,8 @@ export function buildReport(jobId: string, store: SchedulingStore = schedulingSt
       engineVersion: decision.engineVersion,
       createdAt: decision.createdAt,
       riskModel: decision.riskModel,
+      /** Declared runtime coefficient of variation used for the deadline risk (0 = deterministic). */
+      runtimeCv: typeof result.runtimeCv === 'number' ? result.runtimeCv : 0,
       infeasibilityReason: decision.infeasibilityReason ?? null,
       recommendedPolicy: result.recommendedDecision?.policyName ?? null,
       recommendedWindow: decision.recommendedWindow,
@@ -238,7 +240,7 @@ ${r.dataProvenance ? Object.entries(r.dataProvenance).map(([k, v]) => row([k, v]
 ${row(['Status', r.decision.status])}${row(['Recommended policy', r.decision.recommendedPolicy])}
 ${row(['Recommended window (UTC)', r.decision.recommendedWindow ? `${r.decision.recommendedWindow.startUtc} to ${r.decision.recommendedWindow.endUtc}` : 'none'])}
 ${row(['Deadline compliance', r.decision.deadlineCompliance ? (r.decision.deadlineCompliance.meetsDeadline ? 'Meets deadline' : 'MISSES deadline') : 'n/a'])}
-${row(['Risk model', r.decision.riskModel])}${row(['Infeasibility reason', r.decision.infeasibilityReason])}
+${row(['Risk model', r.decision.riskModel])}${row(['Declared runtime CV', r.decision.runtimeCv === 0 ? '0 (deterministic runtime)' : `${r.decision.runtimeCv} (declared, not learned)`])}${row(['Infeasibility reason', r.decision.infeasibilityReason])}
 ${row(['Rationale', r.decision.rationale])}
 ${row(['Predicted saving vs Immediate (time-weighted forecast)', r.decision.predictedSavingsVsImmediatePct === null ? 'n/a' : `${r.decision.predictedSavingsVsImmediatePct}% (${r.decision.predictedSavingsBasis})`])}
 ${row(['Engine hourly-slot saving (recorded at scheduling time)', r.decision.engineSlotSavingsVsImmediatePct === null ? 'n/a' : `${r.decision.engineSlotSavingsVsImmediatePct}%`])}
