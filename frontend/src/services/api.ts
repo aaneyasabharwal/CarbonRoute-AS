@@ -1216,7 +1216,9 @@ export const api = {
   /** P11: the global zone catalogue (static, public; every provider zone with availability levels). */
   async getZoneCatalogue(): Promise<ApiResponse<ZoneCatalogue>> {
     try {
-      const res = await fetch(`${API_BASE}/carbon/catalogue`);
+      // P20: always revalidate. A copy cached under the old `max-age=3600` header could otherwise keep
+      // "no provider key" for up to an hour after the key was added on the server.
+      const res = await fetch(`${API_BASE}/carbon/catalogue`, { cache: 'no-cache' });
       const json = await res.json().catch(() => null);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Zone catalogue unavailable (${res.status})` };
@@ -1334,7 +1336,8 @@ export const api = {
   /** Public provider status: whether live data is configured and the server's call budget (no secrets). */
   async getProviderStatus(): Promise<ApiResponse<{ configured: boolean; historyWindowHours: number; pastRangeAvailable: boolean; callBudget?: { lastHour: number; lastDay: number; maxPerHour: number; maxPerDay: number } }>> {
     try {
-      const res = await fetch(`${API_BASE}/carbon/provider`);
+      // P20: live availability is never taken from the browser cache.
+      const res = await fetch(`${API_BASE}/carbon/provider`, { cache: 'no-store' });
       const json = await res.json().catch(() => null);
       if (res.ok && json && json.success) return json;
       return { success: false, message: json?.message || `Provider status failed (${res.status})` };
