@@ -28,6 +28,8 @@ const FORBIDDEN: RegExp[] = [
   /models forecast error variance/i,
   /erfc\(slack/i,
   /calibrated violation probability/i,
+  // P21: the deadline risk does not depend on forecast variance
+  /forecast (and|&) runtime variance/i,
 ];
 
 describe('no overstated claims in the site text', () => {

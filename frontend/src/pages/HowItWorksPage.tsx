@@ -93,7 +93,7 @@ export const HowItWorksPage: React.FC = () => {
     {
       step: '05',
       title: 'Tail Probability Deadline Violation Risk',
-      subtitle: 'Estimating SLA failure probability under forecast and runtime variance',
+      subtitle: 'Estimating deadline-miss probability from declared runtime variability (not forecast uncertainty)',
       icon: Shield,
       badge: 'Risk Quantification',
       color: 'text-rose-400',
