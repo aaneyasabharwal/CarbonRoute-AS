@@ -516,11 +516,17 @@ export const getCarbonPowerBreakdown = async (req: Request, res: Response) => {
  * no provider call, no sign-in, no quota. `liveConfigured` says whether this server has a key.
  */
 export const getZoneCatalogue = (_req: Request, res: Response) => {
-  res.set('Cache-Control', 'public, max-age=3600');
+  // P19: the response carries `liveConfigured`, which changes when the provider key is added or
+  // removed. `max-age=3600` let browsers keep "no provider key" for up to an hour after the key was
+  // set. `no-cache` makes the browser revalidate on every load; the ETag keeps that a cheap 304 while
+  // nothing has changed.
+  res.set('Cache-Control', 'no-cache');
   return res.json({ success: true, data: { meta: catalogueMeta(), liveConfigured: electricityMaps.isConfigured(), zones: catalogueZones() } });
 };
 
 export const getCarbonProviderStatus = (_req: Request, res: Response) => {
+  // P19: live status, never cached (the Scheduler decides from it whether Live can be chosen).
+  res.set('Cache-Control', 'no-store');
   return res.json({
     success: true,
     data: {
