@@ -78,6 +78,8 @@ export function rateLimitConfig() {
     publicWindowMs: intFromEnv('RATE_LIMIT_PUBLIC_WINDOW_MIN', 10) * 60_000,
     // P8: password changes per user (each costs two bcrypt operations).
     passwordChange: intFromEnv('RATE_LIMIT_PASSWORD_MAX', 5),
+    // P22: email-code requests and confirmations per address (per-account limits are in otpService).
+    otpPerIp: intFromEnv('RATE_LIMIT_OTP_MAX', 20),
   };
 }
 
@@ -119,6 +121,13 @@ export function buildRateLimiters() {
       max: c.passwordChange,
       key: userKey,
       message: `Too many password-change attempts. Try again in up to ${minutes(c.loginWindowMs)} minutes.`,
+    }),
+    otpPerIp: rateLimit({
+      name: 'email-otp-ip',
+      windowMs: c.loginWindowMs,
+      max: c.otpPerIp,
+      key: (req) => `ip:${clientIp(req)}`,
+      message: `Too many verification requests from this address. Try again in up to ${minutes(c.loginWindowMs)} minutes.`,
     }),
     carbonLive: rateLimit({
       name: 'carbon-live',

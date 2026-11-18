@@ -3,6 +3,34 @@ export interface User {
   username: string;
   email: string;
   role: 'admin' | 'student' | 'evaluator';
+  /** P22: true once the address was confirmed (emailed code, or a documented exception). */
+  emailVerified?: boolean;
+  createdAt?: string;
+  emailVerificationMethod?: 'otp' | 'admin-bootstrap' | 'admin-attested' | 'operator-cli';
+  lastCodeDelivery?: { delivery: CodeDelivery; at: string } | null;
+}
+
+/**
+ * P22: what happened to a verification code. `sent` means a real provider accepted the email;
+ * `simulated` means development mode (nothing was emailed).
+ */
+export type CodeDelivery = 'pending' | 'sent' | 'simulated' | 'failed' | 'not-configured' | 'rate-limited' | 'already-verified';
+
+/** P22: returned when a correct password is entered for an account whose email is not verified. */
+export interface EmailVerificationChallenge {
+  verificationTicket: string;
+  maskedEmail: string;
+  delivery: CodeDelivery;
+  detail?: string;
+  retryAfterSeconds?: number;
+}
+
+/** P22: /api/health persistence block. */
+export interface PersistenceStatus {
+  mode: 'postgres' | 'local-file';
+  durable: boolean;
+  startedAt: string;
+  note: string;
 }
 
 export type DeliverableType = 'software_grid' | 'planning' | 'midterm' | 'final' | 'other';
@@ -496,6 +524,15 @@ export interface ApiResponse<T> {
   user?: User;
   /** True when the backend answered 401: the user must sign in (again). */
   authRequired?: boolean;
+  /** Machine-readable error code from the backend (e.g. EMAIL_NOT_VERIFIED, OTP_EXPIRED). */
+  code?: string;
+  /** P22: set when sign-in needs email verification first. */
+  verification?: EmailVerificationChallenge;
+  /** P22: what happened to a requested code. */
+  delivery?: CodeDelivery;
+  detail?: string;
+  retryAfterSeconds?: number;
+  attemptsLeft?: number;
 }
 
 // ==========================================

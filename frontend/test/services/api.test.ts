@@ -132,8 +132,11 @@ describe('scheduling API calls', () => {
     expect(String(fetchMock.mock.calls[0][0])).toBe(`${API_BASE}/jobs/job%2F..%2Fx/status`);
   });
 
-  it('getResources returns an empty list, not invented items, when the backend is unreachable', async () => {
-    expect(await api.getResources()).toEqual({ success: true, data: [] });
+  it('getResources reports a failure, never an empty or invented list, when the backend is unreachable (P22)', async () => {
+    const r = await api.getResources();
+    expect(r.success).toBe(false);
+    expect(r.data).toBeUndefined();
+    expect(r.message).toMatch(/not reachable/);
   });
 });
 

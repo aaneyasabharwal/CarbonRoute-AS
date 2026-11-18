@@ -5,13 +5,21 @@
  *   NEW_USER_USERNAME=alice NEW_USER_EMAIL=alice@example.org NEW_USER_ROLE=student \
  *   NEW_USER_PASSWORD='<password>' npm run user:create
  *
+ * P22: the account is unverified until its owner enters the emailed code. The server operator may
+ * set NEW_USER_EMAIL_VERIFIED=true to create it as verified (documented exception, method
+ * "operator-cli"), e.g. on a server without an email provider.
+ *
  * Roles: student, evaluator, admin. The password is read from an environment variable
  * (never a command-line argument) and is never printed. Run it while the server is stopped.
  */
 import type { User, UserRole } from '../models/db';
 
 export interface UserStore {
-  createUser(input: { username: string; email: string; password: string; role: UserRole }, performedBy?: string): User;
+  createUser(
+    input: { username: string; email: string; password: string; role: UserRole },
+    performedBy?: string,
+    options?: { verifiedBy?: 'operator-cli' }
+  ): User;
 }
 
 export function runCreateUser(env: NodeJS.ProcessEnv, store: UserStore, log: (msg: string) => void = console.log): number {
@@ -24,8 +32,12 @@ export function runCreateUser(env: NodeJS.ProcessEnv, store: UserStore, log: (ms
     return 2;
   }
   try {
-    const user = store.createUser({ username, email, password, role }, 'user:create');
-    log(`Created user "${user.username}" with role ${user.role}.`);
+    const verified = env.NEW_USER_EMAIL_VERIFIED?.trim() === 'true';
+    const user = store.createUser({ username, email, password, role }, 'user:create', verified ? { verifiedBy: 'operator-cli' } : {});
+    log(
+      `Created user "${user.username}" with role ${user.role}` +
+        (verified ? ' (email marked verified by the operator).' : '. The email must be verified with a code at first sign-in.')
+    );
     return 0;
   } catch (err: any) {
     log(`User not created: ${err?.message || 'unknown error'}`);

@@ -8,6 +8,7 @@
  * A relational database is planned (remediation milestone M4); this keeps the same records.
  */
 import fs from 'fs';
+import { scheduleDocumentWrite } from '../persistence/durableStore';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import type { ForecastSnapshot, Observation } from '../carbon/types';
@@ -135,8 +136,23 @@ const EMPTY: StoreData = { jobs: [], forecastSnapshots: [], decisions: [], execu
 export class SchedulingStore {
   private data: StoreData;
 
-  constructor(private readonly filePath: string) {
+  /**
+   * @param durableKey P22: when set (the shared API store), every save is also queued to the
+   * durable store under this key. Other instances (scripts, tests) stay file-only.
+   */
+  constructor(private readonly filePath: string, private readonly durableKey?: string) {
     this.data = this.load();
+  }
+
+  /** P22: replaces the data with the copy loaded from the durable store at start-up. */
+  replaceAll(doc: Partial<StoreData>): void {
+    this.data = { ...structuredClone(EMPTY), ...doc };
+    this.save();
+  }
+
+  /** P22: writes the current data again (first copy to a new durable store). */
+  persistAll(): void {
+    this.save();
   }
 
   static defaultPath(): string {
@@ -169,6 +185,7 @@ export class SchedulingStore {
     const tmp = `${this.filePath}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(this.data, null, 2), 'utf8');
     fs.renameSync(tmp, this.filePath);
+    if (this.durableKey) scheduleDocumentWrite(this.durableKey, () => this.data);
   }
 
   // Jobs
@@ -252,9 +269,12 @@ export class SchedulingStore {
   }
 }
 
+/** Key of the scheduling store in the durable store (P22). */
+export const SCHEDULING_DOCUMENT_KEY = 'scheduling-store';
+
 let shared: SchedulingStore | null = null;
 /** Store shared by the API (created on first use so tests can set paths first). */
 export function schedulingStore(): SchedulingStore {
-  if (!shared) shared = new SchedulingStore(SchedulingStore.defaultPath());
+  if (!shared) shared = new SchedulingStore(SchedulingStore.defaultPath(), SCHEDULING_DOCUMENT_KEY);
   return shared;
 }

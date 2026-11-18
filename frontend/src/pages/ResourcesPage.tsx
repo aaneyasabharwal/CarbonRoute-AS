@@ -32,6 +32,8 @@ export const ResourcesPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
+  // P22: a failed load is shown instead of an empty or out-of-date list.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [previewResource, setPreviewResource] = useState<Resource | null>(null);
 
   const fetchResources = async (cat: string) => {
@@ -40,6 +42,10 @@ export const ResourcesPage: React.FC = () => {
       const res = await api.getResources(cat);
       if (res.success && res.data) {
         setResources(res.data);
+        setLoadError(null);
+      } else {
+        setResources([]);
+        setLoadError(res.message || 'Could not load resources from the server.');
       }
     } catch (err) {
       console.error('Failed to load resources:', err);
@@ -205,6 +211,13 @@ export const ResourcesPage: React.FC = () => {
         <div className="p-16 text-center text-slate-400 font-mono text-xs flex flex-col items-center justify-center space-y-3 glass-card rounded-2xl border border-slate-800">
           <RefreshCw className="w-6 h-6 animate-spin text-emerald-400" />
           <span>Loading project deliverables library...</span>
+        </div>
+      ) : loadError ? (
+        <div role="alert" data-testid="resources-error" className="p-8 text-center text-rose-300 font-mono text-xs glass-card rounded-2xl border border-rose-800/70 space-y-3">
+          <p>{loadError}</p>
+          <button type="button" onClick={() => fetchResources(selectedCategory)} className="px-3 py-1.5 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-900">
+            Try again
+          </button>
         </div>
       ) : resources.length === 0 ? (
         <div className="p-16 text-center text-slate-400 font-mono glass-card rounded-2xl border border-slate-800 space-y-4">

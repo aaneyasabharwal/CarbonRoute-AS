@@ -10,6 +10,7 @@ import {
   FeasibilityResult,
   TimeSlotCarbon,
   User,
+  PersistenceStatus,
   WorkloadJob,
   CarbonForecastData,
   SchedulingDecisionResponse,
@@ -595,7 +596,8 @@ function authFailure(
 /** GET with the sign-in token; 401 becomes a sign-in prompt; failures are returned, never replaced. */
 async function authedGet<T>(url: string, failText: string): Promise<ApiResponse<T>> {
   try {
-    const res = await fetch(url, { headers: getHeaders() });
+    // P22: authenticated data is always read fresh from the server.
+    const res = await fetch(url, { headers: getHeaders(), cache: 'no-store' });
     const json = await res.json().catch(() => null);
     if (res.status === 401) return authFailure(res, json);
     if (res.ok && json?.success) return json;
@@ -624,6 +626,21 @@ export const api = {
         localStorage.setItem('carbonroute_token', json.token);
         return json;
       }
+      // P22: correct password, but the email address is not verified yet.
+      if (res.status === 403 && json?.code === 'EMAIL_NOT_VERIFIED' && json.verificationTicket) {
+        return {
+          success: false,
+          code: json.code,
+          message: json.message,
+          verification: {
+            verificationTicket: json.verificationTicket,
+            maskedEmail: json.maskedEmail,
+            delivery: json.delivery,
+            detail: json.detail,
+            retryAfterSeconds: json.retryAfterSeconds,
+          },
+        };
+      }
       return {
         success: false,
         message: json?.message || `Authentication failed (HTTP ${res.status}: ${res.statusText})`,
@@ -643,7 +660,7 @@ export const api = {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/auth/me`, { headers: getHeaders() });
+      const res = await fetch(`${API_BASE}/auth/me`, { headers: getHeaders(), cache: 'no-store' });
       const json = await res.json().catch(() => null);
       if (res.ok && json && json.success && json.user) {
         return {
@@ -652,10 +669,16 @@ export const api = {
           data: json.user,
         };
       }
-    } catch {}
-
-    localStorage.removeItem('carbonroute_token');
-    return { success: false, message: 'Session expired. Please log in again.' };
+      // P22: only an answer from the server that rejects the token ends the session.
+      if (res.status === 401 || res.status === 403) {
+        localStorage.removeItem('carbonroute_token');
+        return { success: false, authRequired: true, message: json?.message || 'Session expired. Please log in again.' };
+      }
+      return { success: false, message: json?.message || `Could not check the session (HTTP ${res.status}).` };
+    } catch {
+      // P22: a slow or unreachable server (e.g. a Render cold start) is not a sign-out.
+      return { success: false, message: 'The server is not reachable right now. Your session was kept; try again shortly.' };
+    }
   },
 
   async logout(): Promise<ApiResponse<void>> {
@@ -808,44 +831,43 @@ export const api = {
   async getResources(category?: string): Promise<ApiResponse<Resource[]>> {
     try {
       const query = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
-      const res = await fetch(`${API_BASE}/resources${query}`, { headers: getHeaders() });
-      if (res.ok) {
-        const json = await res.json().catch(() => null);
-        if (json && json.success && Array.isArray(json.data)) {
-          const apiItems: Resource[] = json.data.map((r: Resource) => ({
-            ...r,
-            fileUrl: resolveFileUrl(r.fileUrl, r.filePath, r.fileName),
-          }));
-          return {
-            success: true,
-            data: apiItems,
-          };
-        }
+      const res = await fetch(`${API_BASE}/resources${query}`, { headers: getHeaders(), cache: 'no-store' });
+      const json = await res.json().catch(() => null);
+      if (res.ok && json && json.success && Array.isArray(json.data)) {
+        const apiItems: Resource[] = json.data.map((r: Resource) => ({
+          ...r,
+          fileUrl: resolveFileUrl(r.fileUrl, r.filePath, r.fileName),
+        }));
+        return {
+          success: true,
+          data: apiItems,
+        };
       }
-      return { success: true, data: [] };
+      // P22: a failed load is reported, never shown as an empty (or old) list.
+      return { success: false, message: json?.message || `Could not load resources (HTTP ${res.status}).` };
     } catch (err: any) {
-      console.warn('Could not fetch resources from backend:', err?.message);
-      return { success: true, data: [] };
+      return { success: false, message: `Could not load resources: the backend is not reachable (${err?.message || 'network error'}).` };
     }
   },
 
   async getAllResourcesAdmin(): Promise<ApiResponse<Resource[]>> {
     try {
-      const res = await fetch(`${API_BASE}/resources/all`, { headers: getHeaders() });
-      if (res.ok) {
-        const json = await res.json().catch(() => null);
-        if (json && json.success && Array.isArray(json.data)) {
-          return {
-            ...json,
-            data: json.data.map((r: Resource) => ({
-              ...r,
-              fileUrl: resolveFileUrl(r.fileUrl, r.filePath, r.fileName),
-            })),
-          };
-        }
+      const res = await fetch(`${API_BASE}/resources/all`, { headers: getHeaders(), cache: 'no-store' });
+      const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
+      if (res.ok && json && json.success && Array.isArray(json.data)) {
+        return {
+          ...json,
+          data: json.data.map((r: Resource) => ({
+            ...r,
+            fileUrl: resolveFileUrl(r.fileUrl, r.filePath, r.fileName),
+          })),
+        };
       }
-    } catch {}
-    return { success: true, data: [] };
+      return { success: false, message: json?.message || `Could not load resources (HTTP ${res.status}).` };
+    } catch (err: any) {
+      return { success: false, message: `Could not load resources: the backend is not reachable (${err?.message || 'network error'}).` };
+    }
   },
 
   async uploadResource(formData: FormData): Promise<ApiResponse<Resource>> {
@@ -1320,13 +1342,114 @@ export const api = {
     return authedGet<User[]>(`${API_BASE}/admin/users`, 'Could not load accounts');
   },
 
+  /** P22: send a new verification code (needs the ticket from a sign-in with the correct password). */
+  async resendVerificationCode(verificationTicket: string): Promise<ApiResponse<void>> {
+    try {
+      const res = await fetch(`${API_BASE}/auth/verify-email/resend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verificationTicket }),
+      });
+      const json = await res.json().catch(() => null);
+      return {
+        success: Boolean(res.ok && json?.success),
+        code: json?.code,
+        message: json?.message || `Could not send a new code (HTTP ${res.status}).`,
+        delivery: json?.delivery,
+        detail: json?.detail,
+        retryAfterSeconds: json?.retryAfterSeconds,
+      };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Network error requesting a new code.' };
+    }
+  },
+
+  /** P22: confirm the emailed code. On success the account is verified and signed in. */
+  async confirmVerificationCode(verificationTicket: string, code: string): Promise<ApiResponse<{ token: string; user: User }>> {
+    try {
+      const res = await fetch(`${API_BASE}/auth/verify-email/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verificationTicket, code }),
+      });
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success && json.token) {
+        localStorage.setItem('carbonroute_token', json.token);
+        return json;
+      }
+      if (res.ok && json?.alreadyVerified) return { success: false, code: 'ALREADY_VERIFIED', message: json.message };
+      return {
+        success: false,
+        code: json?.code,
+        message: json?.message || `Verification failed (HTTP ${res.status}).`,
+        attemptsLeft: json?.attemptsLeft,
+      };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Network error verifying the code.' };
+    }
+  },
+
+  /** P22: whether this server can email codes. */
+  async getVerificationConfig(): Promise<ApiResponse<{ emailDelivery: 'configured' | 'development-console' | 'not-configured'; codeTtlMinutes: number }>> {
+    try {
+      const res = await fetch(`${API_BASE}/auth/verification-config`, { cache: 'no-store' });
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success) return json;
+      return { success: false, message: json?.message || `HTTP ${res.status}` };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Network error.' };
+    }
+  },
+
+  /** P22: whether the server stores data durably (from /api/health). */
+  async getPersistenceStatus(): Promise<ApiResponse<PersistenceStatus>> {
+    try {
+      const res = await fetch(`${API_BASE}/health`, { cache: 'no-store' });
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.persistence) return { success: true, data: json.persistence };
+      return { success: false, message: `Could not read the server status (HTTP ${res.status}).` };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Network error.' };
+    }
+  },
+
+  /** P22, administrators: send a new code to an unverified account. */
+  async adminSendVerificationCode(userId: string): Promise<ApiResponse<void>> {
+    try {
+      const res = await fetch(`${API_BASE}/admin/users/${encodeURIComponent(userId)}/verification-code`, { method: 'POST', headers: getHeaders() });
+      const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
+      return { success: Boolean(res.ok && json?.success), message: json?.message || `HTTP ${res.status}`, delivery: json?.delivery };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Network error.' };
+    }
+  },
+
+  /** P22, administrators: confirm an address manually (audited exception). */
+  async adminAttestEmail(userId: string): Promise<ApiResponse<User>> {
+    try {
+      const res = await fetch(`${API_BASE}/admin/users/${encodeURIComponent(userId)}/verify-email`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ confirm: true }),
+      });
+      const json = await res.json().catch(() => null);
+      if (res.status === 401) return authFailure(res, json);
+      if (res.ok && json?.success) return json;
+      return { success: false, message: json?.message || `HTTP ${res.status}` };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Network error.' };
+    }
+  },
+
   /** P8, administrators: create an account. Validation messages come from the backend. */
   async createUser(input: { username: string; email: string; password: string; role: string }): Promise<ApiResponse<User>> {
     try {
       const res = await fetch(`${API_BASE}/admin/users`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(input) });
       const json = await res.json().catch(() => null);
       if (res.status === 401) return authFailure(res, json);
-      if (res.ok && json?.success) return json;
+      // P22: the new account is unverified; say what happened to its first code.
+      if (res.ok && json?.success) return { ...json, delivery: json.verification?.delivery, detail: json.verification?.detail };
       return { success: false, message: json?.message || `Could not create the account (${res.status})` };
     } catch (err: any) {
       return { success: false, message: err.message || 'Network error creating the account.' };

@@ -4,6 +4,8 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
 import { adminPasswordProblem, ConfigError, MIN_ADMIN_PASSWORD_LENGTH } from '../config/secrets';
+import { scheduleDocumentWrite } from '../persistence/durableStore';
+import { emailSyntaxProblem } from '../services/emailValidation';
 
 export interface User {
   id: string;
@@ -17,6 +19,42 @@ export interface User {
    * a rotation also ends every existing session.
    */
   tokensValidAfter?: string;
+  /**
+   * P22: email ownership. Only true after a one-time code sent to the address was entered, or
+   * through one of the documented exceptions in `emailVerificationMethod`. Missing means false.
+   */
+  emailVerified?: boolean;
+  emailVerifiedAt?: string;
+  emailVerificationMethod?: EmailVerificationMethod;
+}
+
+/**
+ * How an address came to count as verified (P22):
+ * - otp: the user entered the code emailed to the address (the normal path);
+ * - admin-bootstrap: the initial administrator configured by the server operator (ADMIN_USERNAME /
+ *   ADMIN_PASSWORD), so the operator cannot be locked out of their own server;
+ * - admin-attested: an administrator confirmed the address manually (audited exception, for servers
+ *   without an email provider);
+ * - operator-cli: created by the operator with `npm run user:create` and NEW_USER_EMAIL_VERIFIED=true.
+ */
+export type EmailVerificationMethod = 'otp' | 'admin-bootstrap' | 'admin-attested' | 'operator-cli';
+
+/** A one-time email code (P22). Only an HMAC of the code is stored, never the code. */
+export interface EmailOtp {
+  id: string;
+  userId: string;
+  purpose: 'verify-email';
+  codeHash: string;
+  createdAt: string;
+  expiresAt: string;
+  failedAttempts: number;
+  /** Set when used, superseded by a newer code, or locked after too many wrong attempts. */
+  consumedAt?: string;
+  closedReason?: 'used' | 'superseded' | 'too-many-attempts';
+  /** sent: accepted by a real provider; simulated: development console only, nothing was emailed. */
+  delivery: 'pending' | 'sent' | 'simulated' | 'failed' | 'not-configured';
+  deliveryProvider?: string;
+  deliveryError?: string;
 }
 
 export type UserRole = 'admin' | 'student' | 'evaluator';
@@ -130,7 +168,12 @@ export interface DatabaseSchema {
   activityLogs: ActivityLog[];
   /** Only written once a token has been revoked, so older files are left as they were. */
   revokedTokens?: RevokedToken[];
+  /** P22: one-time email codes (hashes only). */
+  emailOtps?: EmailOtp[];
 }
+
+/** Key of the main database document in the durable store (P22). */
+export const DB_DOCUMENT_KEY = 'main-database';
 
 class JsonDatabase {
   private dbPath: string;
@@ -162,9 +205,18 @@ class JsonDatabase {
           roadmapMilestones: parsed.roadmapMilestones || [],
           activityLogs: parsed.activityLogs || parsed.auditLogs || [],
           ...(Array.isArray(parsed.revokedTokens) ? { revokedTokens: parsed.revokedTokens } : {}),
+          ...(Array.isArray(parsed.emailOtps) ? { emailOtps: parsed.emailOtps } : {}),
         };
       } catch (err) {
-        console.error('Failed to parse database file, initializing default schema:', err);
+        // P22: never overwrite an unreadable database with the seed data. Keep it aside for recovery.
+        const aside = `${this.dbPath}.unreadable-${Date.now()}`;
+        try {
+          fs.renameSync(this.dbPath, aside);
+        } catch {
+          console.error('[db] The database file could not be parsed or moved aside:', err);
+          throw err;
+        }
+        console.error(`[db] The database file could not be parsed; it was moved to ${aside} and an empty database was started.`, err);
       }
     }
     return {
@@ -177,8 +229,44 @@ class JsonDatabase {
     };
   }
 
+  /**
+   * Writes the whole database. P22: atomic on disk (temporary file, then rename), so a crash
+   * mid-write cannot leave a truncated file, and queued to the durable store when one is configured.
+   */
   private saveDatabase(): void {
-    fs.writeFileSync(this.dbPath, JSON.stringify(this.data, null, 2), 'utf8');
+    const tmp = `${this.dbPath}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(this.data, null, 2), 'utf8');
+    fs.renameSync(tmp, this.dbPath);
+    scheduleDocumentWrite(DB_DOCUMENT_KEY, () => this.data);
+  }
+
+  /** A copy of the whole database (start-up sync to the durable store). */
+  snapshot(): DatabaseSchema {
+    return structuredClone(this.data);
+  }
+
+  /** Writes the current data again (start-up: first copy to a new durable store). */
+  persistAll(): void {
+    this.saveDatabase();
+  }
+
+  /**
+   * P22: replaces the in-memory data with the copy loaded from the durable store at start-up, then
+   * re-applies the seeding rules (which only fill empty collections and never delete records).
+   */
+  replaceAll(doc: Partial<DatabaseSchema>): void {
+    this.data = {
+      users: doc.users || [],
+      presentations: doc.presentations || [],
+      resources: doc.resources || [],
+      teamMembers: doc.teamMembers || [],
+      roadmapMilestones: doc.roadmapMilestones || [],
+      activityLogs: doc.activityLogs || [],
+      ...(Array.isArray(doc.revokedTokens) ? { revokedTokens: doc.revokedTokens } : {}),
+      ...(Array.isArray(doc.emailOtps) ? { emailOtps: doc.emailOtps } : {}),
+    };
+    this.seedDefaultsIfEmpty();
+    this.saveDatabase();
   }
 
   private seedDefaultsIfEmpty(): void {
@@ -203,9 +291,25 @@ class JsonDatabase {
           passwordHash: bcrypt.hashSync(password as string, bcrypt.genSaltSync(10)),
           role: 'admin',
           createdAt: new Date().toISOString(),
+          emailVerified: true,
+          emailVerifiedAt: new Date().toISOString(),
+          emailVerificationMethod: 'admin-bootstrap',
         });
         changed = true;
       }
+    }
+
+    // P22: the operator-configured administrator (ADMIN_USERNAME) is the one documented exception
+    // to email verification, so an existing server is not locked out after this change. Only that
+    // single admin account is affected; every other account keeps its verification state.
+    const configuredAdmin = this.data.users.find(
+      (u) => u.role === 'admin' && u.username.toLowerCase() === String(config.initialAdmin.username).toLowerCase()
+    );
+    if (configuredAdmin && !configuredAdmin.emailVerified) {
+      configuredAdmin.emailVerified = true;
+      configuredAdmin.emailVerifiedAt = new Date().toISOString();
+      configuredAdmin.emailVerificationMethod = 'admin-bootstrap';
+      changed = true;
     }
 
     // Seed Team Members strictly matching prompt:
@@ -535,13 +639,18 @@ class JsonDatabase {
    * Creates a user account (M1.2: jobs are owned by users, so non-admin accounts must exist).
    * The password must meet the same strength rules as ADMIN_PASSWORD and is never logged.
    */
-  createUser(input: { username: string; email: string; password: string; role: UserRole }, performedBy = 'System'): User {
+  createUser(
+    input: { username: string; email: string; password: string; role: UserRole },
+    performedBy = 'System',
+    options: { verifiedBy?: Extract<EmailVerificationMethod, 'operator-cli'> } = {}
+  ): User {
     const username = String(input.username || '').trim();
     const email = String(input.email || '').trim();
     if (!/^[A-Za-z0-9._-]{3,40}$/.test(username)) {
       throw new ConfigError('Username must be 3-40 characters: letters, digits, ".", "_" or "-".');
     }
-    if (!/^[^\s@]+@[^\s@]+$/.test(email)) throw new ConfigError('A valid email address is required.');
+    const emailProblem = emailSyntaxProblem(email);
+    if (emailProblem) throw new ConfigError(emailProblem);
     if (!USER_ROLES.includes(input.role)) throw new ConfigError(`Role must be one of: ${USER_ROLES.join(', ')}.`);
     const problem = adminPasswordProblem(input.password);
     if (problem) throw new ConfigError(problem.replace('ADMIN_PASSWORD', 'The password'));
@@ -555,10 +664,36 @@ class JsonDatabase {
       passwordHash: bcrypt.hashSync(input.password, bcrypt.genSaltSync(10)),
       role: input.role,
       createdAt: new Date().toISOString(),
+      // P22: a new account is unverified until its owner enters the emailed code.
+      emailVerified: Boolean(options.verifiedBy),
+      ...(options.verifiedBy ? { emailVerifiedAt: new Date().toISOString(), emailVerificationMethod: options.verifiedBy } : {}),
     };
     this.data.users.push(user);
     this.addAuditLog('USER_CREATED', 'User', user.id, `User ${username} created with role ${input.role}`, performedBy);
     return user;
+  }
+
+  /** P22: marks an address as verified. Audited; `method` says how. */
+  markEmailVerified(userId: string, method: EmailVerificationMethod, performedBy: string): User | null {
+    const user = this.getUserById(userId);
+    if (!user) return null;
+    user.emailVerified = true;
+    user.emailVerifiedAt = new Date().toISOString();
+    user.emailVerificationMethod = method;
+    this.addAuditLog('EMAIL_VERIFIED', 'User', user.id, `Email of ${user.username} verified (${method})`, performedBy);
+    return user;
+  }
+
+  // One-time email codes (P22). The rules live in services/otpService.ts.
+  getEmailOtps(): EmailOtp[] {
+    if (!this.data.emailOtps) this.data.emailOtps = [];
+    return this.data.emailOtps;
+  }
+
+  /** Persists changes made to code records (and drops records older than a day). */
+  saveEmailOtps(now = Date.now()): void {
+    this.data.emailOtps = this.getEmailOtps().filter((o) => now - Date.parse(o.createdAt) < 24 * 3600_000);
+    this.saveDatabase();
   }
 
   // Token revocation (M1.2)

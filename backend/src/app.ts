@@ -10,6 +10,7 @@ import morgan from 'morgan';
 import path from 'path';
 import fs from 'fs';
 import { config } from './config';
+import { durableStore, flushDurableWrites } from './persistence/durableStore';
 import apiRouter from './routes/api';
 
 const app = express();
@@ -72,6 +73,37 @@ app.use(
 app.use(morgan('dev'));
 app.use(express.json({ limit: '1mb' })); // P8: JSON bodies are small; uploads use multipart
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// P22: API answers describe live server state, so browsers must not reuse them on a refresh.
+// Routes that may be cached (stored files, the zone catalogue) set their own Cache-Control.
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
+// P22: a change is only reported as done once it is stored. With a durable store configured, a
+// mutating request waits until its writes have reached the database before the answer is sent; if
+// they fail, the client is told the change was not saved instead of receiving a success.
+app.use('/api', (req, res, next) => {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS' || !durableStore()) return next();
+  const send = res.json.bind(res);
+  res.json = ((body: unknown) => {
+    flushDurableWrites().then(
+      () => send(body),
+      (err) => {
+        console.error('[persistence] change not saved:', err?.message || err);
+        res.status(503);
+        send({
+          success: false,
+          code: 'NOT_PERSISTED',
+          message: 'The change could not be saved to the database. It may be lost when the server restarts; please try again.',
+        });
+      }
+    );
+    return res;
+  }) as typeof res.json;
+  next();
+});
 
 // Serve API Routes
 app.use('/api', apiRouter);

@@ -129,7 +129,7 @@ describe('S7: password change', () => {
   it('requires the current password, enforces strength, and signs out every older token', async () => {
     const username = `pw-${crypto.randomBytes(4).toString('hex')}`;
     const original = crypto.randomBytes(18).toString('base64url');
-    db.createUser({ username, email: `${username}@example.invalid`, password: original, role: 'student' });
+    db.createUser({ username, email: `${username}@example.invalid`, password: original, role: 'student' }, 'test', { verifiedBy: 'operator-cli' });
     const login = async (password: string) => request(app).post('/api/auth/login').send({ username, password });
     const t1 = (await login(original)).body.token;
     const t2 = (await login(original)).body.token; // a second device
@@ -171,6 +171,14 @@ describe('S8: administrator-only account management', () => {
     const list = await request(app).get('/api/admin/users').set(A);
     expect(list.body.data.some((u: any) => u.username === username)).toBe(true);
     expect(JSON.stringify([created.body, list.body])).not.toMatch(/passwordHash|\$2[aby]\$/);
+    // P22: the new account is unverified and cannot sign in until its email is verified (here by the
+    // documented administrator exception, since tests have no email provider).
+    expect(created.body.data.emailVerified).toBe(false);
+    const blocked = await request(app).post('/api/auth/login').send({ username, password });
+    expect(blocked.status).toBe(403);
+    expect(blocked.body.code).toBe('EMAIL_NOT_VERIFIED');
+    expect(blocked.body.token).toBeUndefined();
+    expect((await request(app).post(`/api/admin/users/${created.body.data.id}/verify-email`).set(A).send({ confirm: true })).status).toBe(200);
     expect((await request(app).post('/api/auth/login').send({ username, password })).status).toBe(200);
     // Duplicates, weak passwords, invalid roles and non-text input are refused.
     expect((await request(app).post('/api/admin/users').set(A).send({ username, email: `${username}@example.invalid`, password })).status).toBe(400);

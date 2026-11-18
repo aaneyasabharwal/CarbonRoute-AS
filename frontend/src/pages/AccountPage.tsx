@@ -94,6 +94,19 @@ const ChangePassword: React.FC = () => {
   );
 };
 
+const METHOD_LABEL: Record<string, string> = {
+  'admin-bootstrap': 'server administrator',
+  'admin-attested': 'confirmed by an administrator',
+  'operator-cli': 'created by the operator',
+};
+const DELIVERY_LABEL: Record<string, string> = {
+  sent: 'emailed',
+  simulated: 'printed to the dev console (not emailed)',
+  failed: 'could not be emailed',
+  'not-configured': 'not sent (no email provider)',
+  pending: 'being sent',
+};
+
 const Accounts: React.FC = () => {
   const [load, setLoad] = useState<{ state: 'loading' } | { state: 'ok'; users: User[] } | { state: 'error'; message: string }>({ state: 'loading' });
   const [form, setForm] = useState({ username: '', email: '', password: '', role: 'student' });
@@ -108,6 +121,16 @@ const Accounts: React.FC = () => {
     refresh();
   }, [refresh]);
 
+  // P22: resend a code, or confirm an address manually (audited administrator exception).
+  const act = async (u: User, what: 'resend' | 'attest') => {
+    if (what === 'attest' && !confirm(`Confirm that ${u.email} belongs to ${u.username}? This is recorded in the audit log.`)) return;
+    setBusy(true);
+    const r = what === 'resend' ? await api.adminSendVerificationCode(u.id) : await api.adminAttestEmail(u.id);
+    setBusy(false);
+    setResult({ ok: r.success, message: r.message || (r.success ? 'Done.' : 'The request failed.') });
+    refresh();
+  };
+
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -115,7 +138,12 @@ const Accounts: React.FC = () => {
     const r = await api.createUser(form);
     setBusy(false);
     if (r.success && r.data) {
-      setResult({ ok: true, message: `Account ${r.data.username} created (${r.data.role}). Give the password to its owner through a private channel.` });
+      setResult({
+        ok: true,
+        message:
+          `Account ${r.data.username} created (${r.data.role}). Give the password to its owner through a private channel. ` +
+          `Email verification: ${r.detail || 'pending'}`,
+      });
       setForm({ username: '', email: '', password: '', role: 'student' });
       refresh();
     } else {
@@ -140,7 +168,9 @@ const Accounts: React.FC = () => {
             <tr>
               <th className="py-1 pr-2">Username</th>
               <th className="py-1 pr-2">Email</th>
-              <th className="py-1">Role</th>
+              <th className="py-1 pr-2">Role</th>
+              <th className="py-1 pr-2">Email verified</th>
+              <th className="py-1">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -148,7 +178,28 @@ const Accounts: React.FC = () => {
               <tr key={u.id} className="border-t border-slate-800 text-slate-300">
                 <td className="py-1 pr-2">{u.username}</td>
                 <td className="py-1 pr-2">{u.email}</td>
-                <td className="py-1">{u.role}</td>
+                <td className="py-1 pr-2">{u.role}</td>
+                <td className="py-1 pr-2" data-testid={`verified-${u.username}`}>
+                  {u.emailVerified ? (
+                    <span className="text-emerald-300">yes{u.emailVerificationMethod && u.emailVerificationMethod !== 'otp' ? ` (${METHOD_LABEL[u.emailVerificationMethod]})` : ''}</span>
+                  ) : (
+                    <span className="text-amber-300">
+                      no{u.lastCodeDelivery ? `, last code ${DELIVERY_LABEL[u.lastCodeDelivery.delivery] || u.lastCodeDelivery.delivery}` : ''}
+                    </span>
+                  )}
+                </td>
+                <td className="py-1">
+                  {!u.emailVerified && (
+                    <span className="flex flex-wrap gap-1">
+                      <button type="button" disabled={busy} onClick={() => act(u, 'resend')} className="px-2 py-0.5 rounded border border-slate-700 hover:bg-slate-900 disabled:opacity-50">
+                        Send code
+                      </button>
+                      <button type="button" disabled={busy} onClick={() => act(u, 'attest')} className="px-2 py-0.5 rounded border border-amber-700 text-amber-200 hover:bg-slate-900 disabled:opacity-50">
+                        Confirm manually
+                      </button>
+                    </span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
