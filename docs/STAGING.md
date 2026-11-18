@@ -38,7 +38,9 @@ A fresh clone of `task/p9-staging-readiness` was built and run exactly as `rende
 ## 2. Hosting options (prices checked 2026-11-14; confirm before paying)
 
 The backend keeps users, sessions' revocation list, jobs and decisions in JSON files in one process,
-so **persistence needs a persistent disk** (or a database layer, which does not exist).
+so **persistence needs a persistent disk or a database**. Since P22 a database layer exists: set
+`DATABASE_URL` to a free Neon PostgreSQL project (no card) and data and uploads survive restarts and
+deploys on the free plan too. See [PERSISTENCE_AND_EMAIL.md](PERSISTENCE_AND_EMAIL.md).
 
 | Option | Monthly cost | Data survives restarts/deploys | Limits | Verdict |
 |---|---|---|---|---|
@@ -107,6 +109,12 @@ git-ignored.
   latest commit (auto-deploy is off on purpose).
 - **Data (option B)**: `runtime-data/` in the service checkout, ephemeral: lost on every deploy,
   restart and spin-down. Nothing to back up; research data never goes to staging.
+  This is the root cause of the "accounts and resources revert after a refresh" report (P22):
+  writes were committed to a disk that Render wipes. `GET /api/health` shows `persistence.durable`
+  and `startedAt`; the admin page warns while storage is temporary. Fix at $0: `DATABASE_URL` (Neon).
+- **Email verification (P22)**: new accounts must verify their email with a 6-digit code before
+  signing in. Without an email provider (`EMAIL_PROVIDER` unset) no code can be emailed; an
+  administrator then uses "Confirm manually" on the Account page (audited).
 - **Data (option A)**: `/var/data/carbonroute.db.json` (users, audit log), `/var/data/carbonroute.scheduling.db.json`
   (jobs, decisions, executions), `/var/data/uploads` (PDFs). A Render disk is snapshotted daily by
   Render; for a manual copy use the service Shell (paid instances) or download through the app.

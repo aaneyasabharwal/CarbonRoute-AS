@@ -34,7 +34,9 @@ export async function createAndLoginUser(
 ): Promise<{ user: User; token: string; auth: { Authorization: string } }> {
   const username = `user-${crypto.randomBytes(5).toString('hex')}`;
   const password = crypto.randomBytes(18).toString('base64url');
-  const user = db.createUser({ username, email: `${username}@example.invalid`, password, role });
+  // P22: test accounts are created verified (as the operator CLI can); verification itself is
+  // covered by test/security/emailOtp.test.ts.
+  const user = db.createUser({ username, email: `${username}@example.org`, password, role }, 'test', { verifiedBy: 'operator-cli' });
   const res = await request(app).post('/api/auth/login').send({ username, password });
   if (res.status !== 200 || !res.body.token) throw new Error(`Test user login failed with HTTP ${res.status}`);
   return { user, token: res.body.token, auth: { Authorization: `Bearer ${res.body.token}` } };

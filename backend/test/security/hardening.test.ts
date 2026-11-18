@@ -45,7 +45,7 @@ let safeStorageRef: typeof import('../../src/storage/storageProvider').safeStora
 async function newUser(): Promise<{ Authorization: string }> {
   const username = `hard-${crypto.randomBytes(4).toString('hex')}`;
   const password = crypto.randomBytes(18).toString('base64url');
-  db.createUser({ username, email: `${username}@example.invalid`, password, role: 'student' });
+  db.createUser({ username, email: `${username}@example.invalid`, password, role: 'student' }, 'test', { verifiedBy: 'operator-cli' });
   const res = await request(app).post('/api/auth/login').set('X-Test-Client', username).send({ username, password });
   expect(res.status).toBe(200);
   return { Authorization: `Bearer ${res.body.token}` };

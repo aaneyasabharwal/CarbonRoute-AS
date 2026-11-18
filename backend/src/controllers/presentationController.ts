@@ -187,6 +187,14 @@ export const deletePresentationVersion = (req: AuthRequest, res: Response) => {
     });
   }
 
+  // P22: the baseline planning presentation is protected; say so instead of reporting a server error.
+  if (target.versionTag.toLowerCase() === 'v1' && target.deliverableType === 'planning') {
+    return res.status(409).json({
+      success: false,
+      message: 'The baseline planning presentation (v1) cannot be deleted. Archive it instead.',
+    });
+  }
+
   const deleted = db.deletePresentation(id);
   if (!deleted) {
     return res.status(500).json({

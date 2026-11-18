@@ -5,6 +5,7 @@ import { Readable } from 'stream';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { config } from '../config';
+import { durableStore, DurableStore } from '../persistence/durableStore';
 
 export interface StoredFileResult {
   fileName: string;
@@ -218,7 +219,70 @@ export class S3StorageProvider implements IStorageProvider {
   }
 }
 
-export const storageProvider: IStorageProvider =
-  config.storageType === 's3' && config.s3.accessKeyId
-    ? new S3StorageProvider()
-    : new LocalStorageProvider();
+/**
+ * P22: uploaded files kept in the durable PostgreSQL store (DATABASE_URL), so they survive restarts
+ * on hosts whose disk is ephemeral. Files that are not in the database (the presentation PDFs
+ * committed to the repository and copied to the disk at start-up) are read from the local disk.
+ */
+export class DatabaseStorageProvider implements IStorageProvider {
+  constructor(private readonly store: () => DurableStore | null, private readonly local: LocalStorageProvider) {}
+
+  private db(): DurableStore {
+    const s = this.store();
+    if (!s) throw new Error('Database storage is not available.');
+    return s;
+  }
+
+  async saveFile(file: Express.Multer.File, category: 'presentations' | 'resources'): Promise<StoredFileResult> {
+    const cleanOriginalName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const fileName = `${Date.now()}-${cleanOriginalName}`;
+    const ref = safeStorageRef(category, fileName);
+    const hash = crypto.createHash('sha256').update(file.buffer).digest('hex');
+    const mimeType = file.mimetype || 'application/octet-stream';
+    await this.db().putBlob(`${ref.category}/${ref.fileName}`, { content: file.buffer, mimeType, size: file.size });
+    return {
+      fileName,
+      originalName: file.originalname,
+      filePath: path.posix.join('uploads', category, fileName),
+      fileSize: file.size,
+      mimeType,
+      fileUrl: `/api/storage/${category}/${fileName}`,
+      sha256Checksum: hash,
+    };
+  }
+
+  async getFileStream(category: string, fileName: string): Promise<{ stream: NodeJS.ReadableStream; mimeType?: string; fileSize?: number }> {
+    const ref = safeStorageRef(category, fileName);
+    const blob = await this.db().getBlob(`${ref.category}/${ref.fileName}`);
+    if (blob) return { stream: Readable.from(blob.content), mimeType: blob.mimeType, fileSize: blob.size };
+    return this.local.getFileStream(category, fileName);
+  }
+
+  async deleteFile(category: string, fileName: string): Promise<boolean> {
+    const ref = safeStorageRef(category, fileName);
+    const removed = await this.db().deleteBlob(`${ref.category}/${ref.fileName}`);
+    return removed || this.local.deleteFile(category, fileName);
+  }
+
+  async getDownloadUrl(category: string, fileName: string): Promise<string> {
+    return this.local.getDownloadUrl(category, fileName);
+  }
+}
+
+const localProvider = new LocalStorageProvider();
+const s3Provider = config.storageType === 's3' && config.s3.accessKeyId ? new S3StorageProvider() : null;
+const databaseProvider = new DatabaseStorageProvider(durableStore, localProvider);
+
+/** S3 when configured; otherwise the database when a durable store is connected (P22); else the local disk. */
+function activeProvider(): IStorageProvider {
+  if (s3Provider) return s3Provider;
+  if (durableStore()) return databaseProvider;
+  return localProvider;
+}
+
+export const storageProvider: IStorageProvider = {
+  saveFile: (file, category) => activeProvider().saveFile(file, category),
+  getFileStream: (category, fileName) => activeProvider().getFileStream(category, fileName),
+  deleteFile: (category, fileName) => activeProvider().deleteFile(category, fileName),
+  getDownloadUrl: (category, fileName) => activeProvider().getDownloadUrl(category, fileName),
+};

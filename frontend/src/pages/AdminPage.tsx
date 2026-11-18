@@ -26,15 +26,21 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api, resolveFileUrl } from '../services/api';
-import { PresentationItem, Resource } from '../types';
+import { EmailVerificationChallenge, PresentationItem, Resource } from '../types';
 import { AdminUploadModal } from '../components/AdminUploadModal';
+import { EmailVerification } from '../components/EmailVerification';
+import { PersistenceNotice } from '../components/PersistenceNotice';
 
 export const AdminPage: React.FC = () => {
-  const { isAuthenticated, isAdmin, user, login, logout, loading: authLoading } = useAuth();
+  const { isAuthenticated, isAdmin, user, login, completeSignIn, logout, loading: authLoading } = useAuth();
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginLoading, setLoginLoading] = useState<boolean>(false);
+  // P22: set when the password was right but the email address still needs verifying.
+  const [challenge, setChallenge] = useState<EmailVerificationChallenge | null>(null);
+  // P22: a failed load is shown, never replaced by an empty list.
+  const [dataError, setDataError] = useState<string | null>(null);
 
   // Admin State
   const [presentations, setPresentations] = useState<PresentationItem[]>([]);
@@ -74,6 +80,8 @@ export const AdminPage: React.FC = () => {
       if (resRes.success && resRes.data) {
         setResources(resRes.data);
       }
+      const failed = [presRes, resRes].filter((r) => !r.success).map((r) => r.message || 'Request failed.');
+      setDataError(failed.length ? `Could not load the latest data from the server: ${failed.join(' ')}` : null);
     } catch (err) {
       console.error('Failed to load admin data:', err);
     } finally {
@@ -93,7 +101,10 @@ export const AdminPage: React.FC = () => {
     setLoginLoading(true);
     setLoginError(null);
     const res = await login(username, password);
-    if (!res.success) {
+    if (!res.success && res.verification) {
+      setChallenge(res.verification);
+      setPassword('');
+    } else if (!res.success) {
       setLoginError(res.message || 'Invalid username or password.');
     }
     setLoginLoading(false);
@@ -197,6 +208,24 @@ export const AdminPage: React.FC = () => {
       console.error('Failed to update metadata:', err);
     }
   };
+
+  // P22: email verification step
+  if (!isAuthenticated && challenge) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-16">
+        <div className="glass-card rounded-2xl p-8 border border-slate-800 shadow-2xl">
+          <EmailVerification
+            challenge={challenge}
+            onVerified={(token, verifiedUser) => {
+              setChallenge(null);
+              completeSignIn(token, verifiedUser);
+            }}
+            onCancel={() => setChallenge(null)}
+          />
+        </div>
+      </div>
+    );
+  }
 
   // Login Interface
   if (!isAuthenticated) {
@@ -334,6 +363,15 @@ export const AdminPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      <PersistenceNotice />
+
+      {dataError && (
+        <div role="alert" data-testid="admin-data-error" className="p-3.5 rounded-xl bg-rose-950/50 border border-rose-800/80 text-rose-300 text-xs flex items-start gap-2 font-mono">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>{dataError}</span>
+        </div>
+      )}
 
       {statusMessage && (
         <div className="p-3.5 rounded-xl bg-emerald-950/60 border border-emerald-800/80 text-emerald-300 text-xs flex items-center justify-between font-mono">

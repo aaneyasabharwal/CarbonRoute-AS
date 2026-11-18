@@ -39,6 +39,12 @@ export const ISOLATED_ENV_VARS = [
   'TRUST_PROXY',
   'CARBONROUTE_TEST_ADMIN_USERNAME',
   'CARBONROUTE_TEST_ADMIN_PASSWORD',
+  'RATE_LIMIT_OTP_MAX',
+  'DATABASE_URL',
+  'EMAIL_PROVIDER',
+  'BREVO_API_KEY',
+  'EMAIL_FROM',
+  'EMAIL_DNS_CHECK',
 ] as const;
 
 export const TEMP_DIR_PREFIX = 'carbonroute-test-';
@@ -77,6 +83,8 @@ export function createTestEnv(): TestEnv {
           passwordHash: bcrypt.hashSync(admin.password, 4),
           role: 'admin',
           createdAt: new Date().toISOString(),
+          emailVerified: true,
+          emailVerificationMethod: 'operator-cli',
         },
       ],
     }),
@@ -105,6 +113,13 @@ export function createTestEnv(): TestEnv {
   process.env.RATE_LIMIT_CARBON_MAX = '100000';
   process.env.RATE_LIMIT_PUBLIC_MAX = '100000';
   process.env.RATE_LIMIT_PASSWORD_MAX = '100000';
+  process.env.RATE_LIMIT_OTP_MAX = '100000';
+  // P22: no real database or email provider ever reaches the tests (empty values block .env).
+  process.env.DATABASE_URL = '';
+  process.env.EMAIL_PROVIDER = '';
+  process.env.BREVO_API_KEY = '';
+  process.env.EMAIL_FROM = '';
+  process.env.EMAIL_DNS_CHECK = 'false';
   process.env.CORS_ORIGIN = '';
   // Benchmark results are read from a per-file temporary folder, never the real results.
   process.env.BENCHMARK_RESULTS_DIR = path.join(root, 'benchmark-results');

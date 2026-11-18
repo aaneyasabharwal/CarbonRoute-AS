@@ -1,5 +1,18 @@
 import { Router } from 'express';
-import { login, getMe, logout, changePassword, listUsers, createUserAccount } from '../controllers/authController';
+import {
+  login,
+  getMe,
+  logout,
+  changePassword,
+  listUsers,
+  createUserAccount,
+  resendVerificationCode,
+  confirmVerificationCode,
+  verificationConfig,
+  adminSendVerificationCode,
+  adminAttestEmail,
+} from '../controllers/authController';
+import { persistenceStatus } from '../persistence/durableStore';
 import {
   getPresentations,
   getAllVersions,
@@ -84,6 +97,8 @@ router.get('/health', (_req, res) => {
     timestamp: new Date().toISOString(),
     version: '1.0.0',
     service: 'CarbonRoute Platform Backend',
+    // P22: whether data survives a restart, and when this process started (no secrets).
+    persistence: persistenceStatus(),
   });
 });
 
@@ -95,10 +110,16 @@ router.post('/auth/login', limit.loginPerIp, limit.loginPerAccount, login);
 router.post('/auth/logout', optionalAuth, logout);
 router.get('/auth/me', authenticateToken, getMe);
 router.post('/auth/password', authenticateToken, limit.passwordChange, changePassword);
+// Email verification (P22). Both need the ticket from a sign-in with the correct password.
+router.get('/auth/verification-config', verificationConfig);
+router.post('/auth/verify-email/resend', limit.otpPerIp, resendVerificationCode);
+router.post('/auth/verify-email/confirm', limit.otpPerIp, confirmVerificationCode);
 
 // Accounts (P8): created by administrators only; there is no public self-registration.
 router.get('/admin/users', authenticateToken, requireAdmin, listUsers);
 router.post('/admin/users', authenticateToken, requireAdmin, limit.jobWrites, createUserAccount);
+router.post('/admin/users/:id/verification-code', authenticateToken, requireAdmin, limit.jobWrites, adminSendVerificationCode);
+router.post('/admin/users/:id/verify-email', authenticateToken, requireAdmin, adminAttestEmail);
 
 // Presentations & Versioning Routes
 router.get('/presentations', getPresentations);
