@@ -14,6 +14,14 @@ npm run collect -- --out ../../CarbonRoute-AS-data/em-collection --zones DE,GB,U
 
 - Every run makes 2 calls per zone (24 h forecast, last 24 h of history): 10 calls per run for 5 zones,
   well under the server-wide budget (`EM_MAX_CALLS_PER_HOUR=120`, `EM_MAX_CALLS_PER_DAY=1500`).
+- **Retries (P23).** Calls that fail for a temporary reason (no network, timeout, provider 5xx, rate
+  limit) are tried again after 2, 5, 10, 10 and 10 minutes (37 minutes in total, always before the
+  next hourly run). Only the failed calls are repeated; every attempt is written (failed attempts stay
+  in the file) and retried records carry `"attempt": 2..6`. Permanent errors (bad key, not in plan,
+  unknown zone) are not retried. Worst case 60 calls per hour. `--retry-delays-min none` turns retries
+  off; `--retry-delays-min 1,3` sets other delays. Reason: on 2026-11-18 six hourly runs in a row
+  failed with `NETWORK` while the laptop moved between Wi-Fi networks; one retry a few minutes later
+  would have saved most of them.
 - One JSON line per call is **appended** to `collection-<UTC date>.jsonl`. Failed calls are recorded as
   failures (`ok: false`, error code); nothing is filled in.
 - The API key is read from the repository-root `.env` (`ELECTRICITY_MAPS_API_KEY`) and is never written
