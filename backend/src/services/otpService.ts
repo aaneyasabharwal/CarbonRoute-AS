@@ -73,7 +73,10 @@ function escapeHtml(s: string): string {
 export async function issueVerificationCode(user: User, now = Date.now()): Promise<IssueResult> {
   if (user.emailVerified) return { status: 'already-verified' };
   const mine = forUser(user.id);
-  const last = mine.reduce<EmailOtp | null>((a, o) => (!a || o.createdAt > a.createdAt ? o : a), null);
+  // Attempts made while no email provider was configured never reached anyone and called no
+  // provider, so they count towards neither the cooldown nor the hourly limit.
+  const attempts = mine.filter((o) => o.delivery !== 'not-configured');
+  const last = attempts.reduce<EmailOtp | null>((a, o) => (!a || o.createdAt > a.createdAt ? o : a), null);
   if (last) {
     const wait = Date.parse(last.createdAt) + OTP_RESEND_COOLDOWN_MS - now;
     if (wait > 0) {
@@ -81,11 +84,14 @@ export async function issueVerificationCode(user: User, now = Date.now()): Promi
       return {
         status: 'rate-limited',
         retryAfterSeconds: s,
-        message: `A code was sent less than a minute ago: check your inbox (and spam folder). You can request a new code in ${s} seconds.`,
+        message:
+          last.delivery === 'failed'
+            ? `The last attempt to send a code failed less than a minute ago. You can try again in ${s} seconds.`
+            : `A code was sent less than a minute ago: check your inbox (and spam folder). You can request a new code in ${s} seconds.`,
       };
     }
   }
-  const lastHour = mine.filter((o) => now - Date.parse(o.createdAt) < 3600_000).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const lastHour = attempts.filter((o) => now - Date.parse(o.createdAt) < 3600_000).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   if (lastHour.length >= OTP_MAX_PER_HOUR) {
     const s = Math.ceil((Date.parse(lastHour[0].createdAt) + 3600_000 - now) / 1000);
     return { status: 'rate-limited', retryAfterSeconds: s, message: `Too many codes requested. Try again in ${Math.ceil(s / 60)} minutes.` };
