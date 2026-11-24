@@ -4,6 +4,7 @@
  *
  * - brevo: Brevo transactional email over HTTPS (free plan, 300 emails/day, no card). Render Free
  *   blocks outbound SMTP ports 25/465/587, so an HTTPS API is required there.
+ * - gmail-script: Gmail through the owner's Google Apps Script web app over HTTPS (free, no card).
  * - console: development only. Nothing is sent; the message is printed to the server console with a
  *   clear label. Refused when NODE_ENV=production, so it can never be a production bypass.
  * - none: no provider; every send reports `not-configured` (never "sent").
@@ -96,6 +97,50 @@ export class BrevoEmailProvider implements EmailProvider {
   }
 }
 
+/**
+ * Gmail through a Google Apps Script web app that the account owner deploys under their own Google
+ * account (see docs/gmail-apps-script.gs). Free (about 100 recipients a day on a personal Gmail),
+ * HTTPS only, and mail comes from a real Gmail address, so it reaches inboxes well. The script refuses
+ * any request without the shared secret. Apps Script answers a POST with a redirect to the result,
+ * which fetch follows.
+ */
+export class GmailScriptEmailProvider implements EmailProvider {
+  readonly name = 'gmail-script';
+  readonly delivers = true;
+  constructor(
+    private readonly scriptUrl: string,
+    private readonly secret: string,
+    private readonly fromName: string,
+    private readonly fetchImpl: FetchLike = fetch as unknown as FetchLike,
+    private readonly timeoutMs = 20_000
+  ) {}
+
+  async send(message: EmailMessage): Promise<SendResult> {
+    try {
+      const res = await this.fetchImpl(this.scriptUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          secret: this.secret,
+          to: message.to,
+          subject: message.subject,
+          text: message.text,
+          html: message.html,
+          fromName: this.fromName,
+        }),
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+      const body = await res.json().catch(() => null);
+      if (res.ok && body?.ok === true) return { status: 'sent', provider: this.name };
+      // The script's own error code only (e.g. "unauthorized", "quota"); never the request.
+      const code = typeof body?.code === 'string' ? body.code.slice(0, 40) : body ? 'error' : 'not_json (is the web app deployed with access "Anyone"?)';
+      return { status: 'failed', provider: this.name, error: `Gmail script refused the message (HTTP ${res.status}, ${code}).` };
+    } catch (err: any) {
+      return { status: 'failed', provider: this.name, error: err?.name === 'TimeoutError' ? 'Gmail script timed out.' : 'Gmail script not reachable.' };
+    }
+  }
+}
+
 /** Builds the provider from the environment. Never throws; misconfiguration means "none". */
 export function emailProviderFromEnv(env: NodeJS.ProcessEnv = process.env): EmailProvider {
   const kind = (env.EMAIL_PROVIDER || '').trim().toLowerCase();
@@ -109,6 +154,17 @@ export function emailProviderFromEnv(env: NodeJS.ProcessEnv = process.env): Emai
     }
     return new BrevoEmailProvider(key, from, env.EMAIL_FROM_NAME?.trim() || 'CarbonRoute');
   }
+  if (kind === 'gmail-script' || kind === 'gmail') {
+    const url = env.GMAIL_SCRIPT_URL?.trim();
+    const secret = env.GMAIL_SCRIPT_SECRET?.trim();
+    if (!url || !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url) || !secret || secret.length < 16) {
+      console.warn(
+        '[email] EMAIL_PROVIDER=gmail-script but GMAIL_SCRIPT_URL (https://script.google.com/macros/s/.../exec) or GMAIL_SCRIPT_SECRET (16+ characters) is missing or malformed. Email delivery is OFF.'
+      );
+      return new NoEmailProvider('Email delivery is not configured on this server (Gmail script settings missing).');
+    }
+    return new GmailScriptEmailProvider(url, secret, env.EMAIL_FROM_NAME?.trim() || 'CarbonRoute');
+  }
   if (kind === 'console') {
     if (production) {
       console.warn('[email] EMAIL_PROVIDER=console is not allowed in production. Email delivery is OFF.');
@@ -116,6 +172,7 @@ export function emailProviderFromEnv(env: NodeJS.ProcessEnv = process.env): Emai
     }
     return new ConsoleEmailProvider(env.NODE_ENV !== 'test');
   }
+  if (kind) console.warn(`[email] Unknown EMAIL_PROVIDER "${kind.slice(0, 30)}". Use gmail-script or brevo. Email delivery is OFF.`);
   return new NoEmailProvider();
 }
 

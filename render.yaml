@@ -64,9 +64,14 @@ services:
       - key: DATABASE_URL
         sync: false
       # P22: email verification codes. Render Free blocks SMTP, so only an HTTPS provider works:
-      # EMAIL_PROVIDER=brevo with BREVO_API_KEY and EMAIL_FROM (a Brevo-verified sender). Unset means
-      # no delivery; administrators then confirm addresses manually on the Account page.
+      # EMAIL_PROVIDER=gmail-script with GMAIL_SCRIPT_URL and GMAIL_SCRIPT_SECRET (your own Google Apps
+      # Script, docs/gmail-apps-script.gs), or EMAIL_PROVIDER=brevo with BREVO_API_KEY and EMAIL_FROM.
+      # Unset means no delivery; administrators then confirm addresses manually.
       - key: EMAIL_PROVIDER
+        sync: false
+      - key: GMAIL_SCRIPT_URL
+        sync: false
+      - key: GMAIL_SCRIPT_SECRET
         sync: false
       - key: BREVO_API_KEY
         sync: false
