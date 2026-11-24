@@ -1,0 +1,359 @@
+{
+  "kind": "carbonroute-ml-evaluation",
+  "createdAt": "2026-11-24T22:26:34.088Z",
+  "dataset": {
+    "sha256": "0713ffc55f0dda7b310392d5d0440038c8bef0c0739a2e5aa4404f35f86ffe45",
+    "rows": 6880,
+    "measuredRows": 4346,
+    "zones": [
+      "DE",
+      "FR",
+      "GB",
+      "IN-NO",
+      "US-CAL-CISO"
+    ],
+    "firstIssue": "2026-11-13T13:32:30.748Z",
+    "lastIssue": "2026-11-24T22:05:58.606Z",
+    "spanDays": 11.36,
+    "leadHours": {
+      "min": 0,
+      "max": 24
+    }
+  },
+  "thresholds": {
+    "minTrainRows": 500,
+    "minValidationRows": 100,
+    "minTestRows": 200,
+    "minSpanDays": 7
+  },
+  "promotionRule": {
+    "maxMaeRatio": 0.95,
+    "requireCiBelowZero": true,
+    "clusterBy": "target-hour",
+    "minTestClusters": 30,
+    "measuredCheckMinRows": 30,
+    "bootstrapIterations": 2000,
+    "seed": 20261113
+  },
+  "providerErrorAllRows": {
+    "all": {
+      "n": 6880,
+      "mae": 21.833575581395348,
+      "rmse": 30.235454411805556,
+      "bias": -2.13125
+    },
+    "measuredOnly": {
+      "n": 4346,
+      "mae": 19.800966405890474,
+      "rmse": 28.94236699814186,
+      "bias": -2.160377358490566
+    }
+  },
+  "anomalies": {
+    "method": "robust-z of forecast error per zone (median / MAD), unsupervised",
+    "interpretation": "Unsupervised statistical screening flags for manual review. They are NOT confirmed provider failures or data errors, and no detection accuracy is claimed.",
+    "threshold": 3.5,
+    "zones": [
+      {
+        "zone": "DE",
+        "rows": 1376,
+        "status": "ok",
+        "flagged": [
+          {
+            "targetTime": "2026-11-14T11:00:00.000Z",
+            "leadHours": 22,
+            "error": 88,
+            "z": 3.71,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T12:00:00.000Z",
+            "leadHours": 23,
+            "error": 84,
+            "z": 3.54,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T11:00:00.000Z",
+            "leadHours": 21,
+            "error": 89,
+            "z": 3.75,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T12:00:00.000Z",
+            "leadHours": 22,
+            "error": 86,
+            "z": 3.63,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T11:00:00.000Z",
+            "leadHours": 20,
+            "error": 89,
+            "z": 3.75,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T12:00:00.000Z",
+            "leadHours": 21,
+            "error": 86,
+            "z": 3.63,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T11:00:00.000Z",
+            "leadHours": 19,
+            "error": 90,
+            "z": 3.79,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-14T12:00:00.000Z",
+            "leadHours": 20,
+            "error": 86,
+            "z": 3.63,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-19T23:00:00.000Z",
+            "leadHours": 24,
+            "error": -94,
+            "z": -3.96,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-19T23:00:00.000Z",
+            "leadHours": 23,
+            "error": -97,
+            "z": -4.09,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-19T23:00:00.000Z",
+            "leadHours": 22,
+            "error": -96,
+            "z": -4.05,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-20T00:00:00.000Z",
+            "leadHours": 23,
+            "error": -87,
+            "z": -3.67,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-19T23:00:00.000Z",
+            "leadHours": 21,
+            "error": -95,
+            "z": -4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-20T00:00:00.000Z",
+            "leadHours": 22,
+            "error": -86,
+            "z": -3.63,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-19T23:00:00.000Z",
+            "leadHours": 20,
+            "error": -95,
+            "z": -4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-20T00:00:00.000Z",
+            "leadHours": 21,
+            "error": -86,
+            "z": -3.63,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-19T23:00:00.000Z",
+            "leadHours": 19,
+            "error": -95,
+            "z": -4,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-20T00:00:00.000Z",
+            "leadHours": 20,
+            "error": -86,
+            "z": -3.63,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-19T23:00:00.000Z",
+            "leadHours": 18,
+            "error": -89,
+            "z": -3.75,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-20T00:00:00.000Z",
+            "leadHours": 19,
+            "error": -86,
+            "z": -3.63,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-19T23:00:00.000Z",
+            "leadHours": 17,
+            "error": -85,
+            "z": -3.58,
+            "quality": "measured"
+          },
+          {
+            "targetTime": "2026-11-20T00:00:00.000Z",
+            "leadHours": 18,
+            "error": -91,
+            "z": -3.84,
+            "quality": "measured"
+          }
+        ]
+      },
+      {
+        "zone": "FR",
+        "rows": 1376,
+        "status": "ok",
+        "flagged": []
+      },
+      {
+        "zone": "GB",
+        "rows": 1376,
+        "status": "ok",
+        "flagged": []
+      },
+      {
+        "zone": "IN-NO",
+        "rows": 1376,
+        "status": "ok",
+        "flagged": []
+      },
+      {
+        "zone": "US-CAL-CISO",
+        "rows": 1376,
+        "status": "ok",
+        "flagged": []
+      }
+    ]
+  },
+  "notes": [
+    "Targets are realized values from Electricity Maps history; provider estimates are included and reported separately (measuredOnly).",
+    "Features use only information available when the forecast was fetched (leakage-checked).",
+    "Splits are chronological with a gap: no target hour of an earlier split overlaps a later split.",
+    "Thresholds and the promotion rule were fixed in code before evaluation.",
+    "Anomaly flags are unsupervised screening flags, not a validated detector."
+  ],
+  "status": "evaluated-not-promoted",
+  "statusReasons": [
+    "Not promoted: test MAE is 100.0% of the best baseline (provider-as-is); required <= 95%; only 18 independent target hours in the test period; at least 30 are required; the 95% cluster-bootstrap CI of the paired error difference [-1.33, 1.82] is not below 0."
+  ],
+  "split": {
+    "train": 4365,
+    "validation": 405,
+    "test": 801,
+    "measured": {
+      "train": 2730,
+      "validation": 231,
+      "test": 531
+    },
+    "droppedForGap": 1309,
+    "validationStart": "2026-11-20T12:17:55.924Z",
+    "testStart": "2026-11-24T05:04:14.771Z"
+  },
+  "candidate": {
+    "model": "ridge-error-correction",
+    "lambda": 1000,
+    "validationMae": {
+      "1": 24.294783110222777,
+      "10": 24.28427463501909,
+      "100": 24.120707591863027,
+      "1000": 22.514250235534323,
+      "0.1": 24.29572911772171
+    }
+  },
+  "testScores": [
+    {
+      "model": "provider-as-is",
+      "all": {
+        "n": 801,
+        "mae": 20.823970037453183,
+        "rmse": 34.19171914261683,
+        "bias": -19.850187265917604
+      },
+      "measuredOnly": {
+        "n": 531,
+        "mae": 22.45386064030132,
+        "rmse": 36.9192889734497,
+        "bias": -21.380414312617702
+      }
+    },
+    {
+      "model": "bias-corrected",
+      "all": {
+        "n": 801,
+        "mae": 23.641985032485373,
+        "rmse": 29.709988042603566,
+        "bias": -22.76660434031381
+      },
+      "measuredOnly": {
+        "n": 531,
+        "mae": 20.996986348708944,
+        "rmse": 28.793831061427227,
+        "bias": -19.676496830009494
+      }
+    },
+    {
+      "model": "persistence",
+      "all": {
+        "n": 801,
+        "mae": 63.22097378277154,
+        "rmse": 103.65761608913932,
+        "bias": -16.164794007490638
+      },
+      "measuredOnly": {
+        "n": 531,
+        "mae": 44.4482109227872,
+        "rmse": 70.62953400275502,
+        "bias": 22.384180790960453
+      }
+    },
+    {
+      "model": "ridge-error-correction",
+      "all": {
+        "n": 801,
+        "mae": 20.81861712906831,
+        "rmse": 27.67257922355401,
+        "bias": -18.009294651837397
+      },
+      "measuredOnly": {
+        "n": 531,
+        "mae": 19.160338372740018,
+        "rmse": 27.838283455616168,
+        "bias": -14.922546839290026
+      }
+    }
+  ],
+  "promotion": {
+    "bestBaseline": "provider-as-is",
+    "maeRatio": 0.9997,
+    "diffCI": {
+      "n": 801,
+      "estimate": -0.0053529083848995376,
+      "low": -1.3262206946151585,
+      "high": 1.8215431921337188,
+      "level": 0.95,
+      "method": "percentile-bootstrap",
+      "iterations": 2000,
+      "seed": 20261113,
+      "clusters": 18,
+      "note": "Only 18 independent clusters: the interval is unreliable."
+    },
+    "measuredTestRows": 531
+  },
+  "gitCommit": "a487c47708c105e3c702421de338f2d966b05c14"
+}
