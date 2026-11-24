@@ -200,6 +200,14 @@ describe('sign-in and verification flow (API)', () => {
     expect(soon).toMatchObject({ status: 'rate-limited' });
     expect((soon as any).message).toMatch(/attempt to send a code failed/);
     expect((soon as any).message).not.toMatch(/was sent/);
+    // Failed sends do not use up the hourly allowance: after six failures a working provider still sends.
+    for (let i = 0; i < 6; i++) {
+      advance(OTP_RESEND_COOLDOWN_MS + 1);
+      expect(await issueVerificationCode(u)).toMatchObject({ status: 'issued', delivery: 'failed' });
+    }
+    setEmailProvider(outbox);
+    advance(OTP_RESEND_COOLDOWN_MS + 1);
+    expect(await issueVerificationCode(u)).toMatchObject({ status: 'issued', delivery: 'simulated' });
   });
 });
 
