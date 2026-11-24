@@ -177,6 +177,29 @@ describe('sign-in and verification flow (API)', () => {
     const ok = await request(app).post('/api/auth/verify-email/confirm').send({ verificationTicket, code: codeIn() });
     expect(ok.status).toBe(200);
   });
+
+  it('an attempt with no provider configured does not start a cooldown or claim a code was sent', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const u = newUser();
+    setEmailProvider(new NoEmailProvider());
+    for (let i = 0; i < 6; i++) expect(await issueVerificationCode(u)).toMatchObject({ status: 'issued', delivery: 'not-configured' });
+    // Once delivery works, a code goes out at once.
+    setEmailProvider(outbox);
+    const before = outbox.outbox.length;
+    expect(await issueVerificationCode(u)).toMatchObject({ status: 'issued', delivery: 'simulated' });
+    expect(outbox.outbox.length).toBe(before + 1);
+  });
+
+  it('after a failed send the cooldown message says the attempt failed, not that a code was sent', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const u = newUser();
+    setEmailProvider({ name: 'broken', send: async () => ({ status: 'failed', provider: 'broken', error: 'Provider not reachable.' }) } as any);
+    expect(await issueVerificationCode(u)).toMatchObject({ status: 'issued', delivery: 'failed' });
+    const soon = await issueVerificationCode(u);
+    expect(soon).toMatchObject({ status: 'rate-limited' });
+    expect((soon as any).message).toMatch(/attempt to send a code failed/);
+    expect((soon as any).message).not.toMatch(/was sent/);
+  });
 });
 
 describe('security boundaries', () => {
