@@ -12,6 +12,7 @@ import { db } from '../../src/models/db';
 import { loginAsTestAdmin } from '../support/auth';
 import {
   BrevoEmailProvider,
+  GmailScriptEmailProvider,
   ConsoleEmailProvider,
   NoEmailProvider,
   emailProviderFromEnv,
@@ -325,6 +326,42 @@ describe('delivery providers', () => {
     const brevo = emailProviderFromEnv({ NODE_ENV: 'production', EMAIL_PROVIDER: 'brevo', BREVO_API_KEY: 'k', EMAIL_FROM: 'f@example.org' } as never);
     expect(brevo).toMatchObject({ name: 'brevo', delivers: true });
     expect(emailProviderFromEnv({} as never).name).toBe('none');
+  });
+
+  it('Gmail script: called over HTTPS with the secret in the body; only ok:true counts as sent', async () => {
+    const calls: { url: string; init: { method: string; body: string } }[] = [];
+    const url = 'https://script.google.com/macros/s/AKfy-abc_123/exec';
+    const ok = new GmailScriptEmailProvider(url, 'a-long-shared-secret', 'CarbonRoute', async (u, init) => {
+      calls.push({ url: u, init });
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    });
+    expect(await ok.send({ to: 'a@example.org', subject: 'S', text: 'T', html: 'H' })).toEqual({ status: 'sent', provider: 'gmail-script' });
+    expect(calls[0].url).toBe(url);
+    expect(calls[0].init.method).toBe('POST');
+    expect(JSON.parse(calls[0].init.body)).toMatchObject({ secret: 'a-long-shared-secret', to: 'a@example.org', subject: 'S' });
+
+    const refused = new GmailScriptEmailProvider(url, 's'.repeat(16), 'CR', async () => ({ ok: true, status: 200, json: async () => ({ ok: false, code: 'unauthorized' }) }));
+    const r = await refused.send({ to: 'a@example.org', subject: 'S', text: 'T', html: 'H' });
+    expect(r).toMatchObject({ status: 'failed', provider: 'gmail-script' });
+    expect((r as { error: string }).error).toContain('unauthorized');
+    expect((r as { error: string }).error).not.toContain('s'.repeat(16));
+
+    // A Google sign-in or error page (HTML, not JSON) is a failure, not a send.
+    const html = new GmailScriptEmailProvider(url, 's'.repeat(16), 'CR', async () => ({ ok: true, status: 200, json: async () => { throw new Error('not json'); } }));
+    expect(await html.send({ to: 'a@example.org', subject: 'S', text: 'T', html: 'H' })).toMatchObject({ status: 'failed' });
+    const down = new GmailScriptEmailProvider(url, 's'.repeat(16), 'CR', async () => { throw new Error('ECONNRESET'); });
+    expect(await down.send({ to: 'a@example.org', subject: 'S', text: 'T', html: 'H' })).toMatchObject({ status: 'failed', error: 'Gmail script not reachable.' });
+  });
+
+  it('Gmail script is configured only with an Apps Script /exec URL and a 16+ character secret', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const env = (o: object) => ({ NODE_ENV: 'production', EMAIL_PROVIDER: 'gmail-script', ...o }) as never;
+    const good = 'https://script.google.com/macros/s/AKfycbx-Ab_12/exec';
+    expect(emailProviderFromEnv(env({ GMAIL_SCRIPT_URL: good, GMAIL_SCRIPT_SECRET: 'x'.repeat(16) }))).toMatchObject({ name: 'gmail-script', delivers: true });
+    expect(emailProviderFromEnv(env({ GMAIL_SCRIPT_URL: good, GMAIL_SCRIPT_SECRET: 'short' })).name).toBe('none');
+    expect(emailProviderFromEnv(env({ GMAIL_SCRIPT_URL: 'https://evil.example/exec', GMAIL_SCRIPT_SECRET: 'x'.repeat(16) })).name).toBe('none');
+    expect(emailProviderFromEnv(env({ GMAIL_SCRIPT_URL: good.replace('/exec', '/dev'), GMAIL_SCRIPT_SECRET: 'x'.repeat(16) })).name).toBe('none');
+    expect(emailProviderFromEnv({ NODE_ENV: 'production', EMAIL_PROVIDER: 'Brevoo' } as never).name).toBe('none');
   });
 
   it('GET /api/auth/verification-config tells the client whether codes can be emailed', async () => {

@@ -120,6 +120,7 @@ Codes never appear in API responses, in the database or in production logs.
 
 | `EMAIL_PROVIDER` | Behaviour |
 |---|---|
+| `gmail-script` | **Recommended.** Real email from your own Gmail through a Google Apps Script web app over HTTPS. Needs `GMAIL_SCRIPT_URL` and `GMAIL_SCRIPT_SECRET`. |
 | `brevo` | Real email through Brevo's HTTPS API. Needs `BREVO_API_KEY` and `EMAIL_FROM`. |
 | `console` | **Development only.** Nothing is sent; the message is printed to the server console as `[DEV EMAIL - NOT SENT]` and reported as `simulated`. Refused when `NODE_ENV=production`. |
 | unset / `none` | No delivery. Codes are reported as `not-configured` (never "sent") and closed at once. |
@@ -146,6 +147,34 @@ address may land in spam or be rejected by strict receivers. Brevo adds its bran
 The provider is behind a small interface (`backend/src/services/emailProvider.ts`); another HTTPS
 provider can be added without changing the verification logic.
 
+### Gmail through Apps Script (recommended, P26)
+
+On staging, Brevo accepted one message and then refused later ones: Brevo blocks API keys used from
+IP addresses it has not seen, and Render's outbound addresses vary; new Brevo accounts can also be
+held for review. The Gmail script avoids both: Google runs the script under the owner's own account,
+so there is no API key, no IP check and no sender verification, and mail comes from a real Gmail
+address. Limit: about 100 recipients a day on a personal Gmail account.
+
+The script (`docs/gmail-apps-script.gs`) sends only when the request carries the shared secret, and
+only the CarbonRoute verification email (fixed subject, bounded size, one recipient).
+
+**Owner setup (about 5 minutes):**
+
+1. Open https://script.google.com signed in with the Gmail that should send the codes, click
+   **New project**, replace everything in `Code.gs` with `docs/gmail-apps-script.gs`, and save.
+2. **Project Settings** (gear) > **Script Properties** > **Add script property**: name `SECRET`, value a
+   long random string (20+ characters). Keep a copy for step 5.
+3. In the editor, choose the function `testSend` and click **Run**. Approve the permission (on
+   "Google hasn't verified this app" click Advanced > Go to project). You receive a test email.
+4. **Deploy > New deployment** > gear > **Web app**. Execute as: **Me**. Who has access: **Anyone**.
+   Click **Deploy** and copy the **Web app URL** (ends in `/exec`).
+5. In Render, API service > Environment: `EMAIL_PROVIDER=gmail-script`, `GMAIL_SCRIPT_URL=<the /exec URL>`,
+   `GMAIL_SCRIPT_SECRET=<the same value as SECRET>`. Save, rebuild and deploy.
+6. The startup log should read `Email delivery: gmail-script`.
+
+If the script is edited later, use **Deploy > Manage deployments > Edit > New version** so the URL
+stays the same.
+
 ### Email address checks
 
 - Syntax: a practical RFC 5321 subset (length limits, dot-atom local part, hostname labels, letter TLD).
@@ -160,7 +189,9 @@ provider can be added without changing the verification logic.
 |---|---|---|
 | `DATABASE_URL` | PostgreSQL connection string; enables durable storage | Yes |
 | `DATABASE_SSL` | `false` only for a local database without TLS | No |
-| `EMAIL_PROVIDER` | `brevo`, `console` (development only) or unset | No |
+| `EMAIL_PROVIDER` | `gmail-script`, `brevo`, `console` (development only) or unset | No |
+| `GMAIL_SCRIPT_URL` | Apps Script web app URL (`https://script.google.com/macros/s/.../exec`) | No |
+| `GMAIL_SCRIPT_SECRET` | Shared secret, same as the script's `SECRET` property (16+ characters) | Yes |
 | `BREVO_API_KEY` | Brevo API key | Yes |
 | `EMAIL_FROM` / `EMAIL_FROM_NAME` | Verified sender address and display name | No |
 | `EMAIL_DNS_CHECK` | `false` to turn the DNS check off | No |
