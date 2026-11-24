@@ -79,6 +79,31 @@ npm run ml -- --data ../../CarbonRoute-AS-data/em-collection
 Results are written outside the repository (default `../CarbonRoute-AS-data/ml-results`) and shown on
 the Results page (`GET /api/results/ml`).
 
+## Latest result (2026-11-24 22:26 UTC, interim)
+
+Status: **evaluated-not-promoted**. A model was fitted and evaluated; it did not beat the provider
+forecast, so it is not promoted (and the scheduler never uses it in any case).
+
+- Data: 6,880 forecast/realized pairs (4,346 measured), zones DE, FR, GB, IN-NO, US-CAL-CISO,
+  11.36 days, lead 0–24 h. Chronological split train 4,365 / validation 405 / test 801
+  (1,309 dropped by the leakage gap). Commit a487c47, dataset hash 0713ffc55f0d.
+- Test period (held out), gCO2eq/kWh:
+
+  | Model | MAE | RMSE | Bias | MAE measured only (n = 531) |
+  |---|---|---|---|---|
+  | provider-as-is | 20.82 | 34.19 | −19.85 | 22.45 |
+  | bias-corrected | 23.64 | 29.71 | −22.77 | 21.00 |
+  | persistence | 63.22 | 103.66 | −16.16 | 44.45 |
+  | ridge-error-correction | 20.82 | 27.67 | −18.01 | 19.16 |
+
+- Why not promoted: test MAE is 100.0 % of the best baseline (≤ 95 % required); only 18 independent
+  target hours in the test period (≥ 30 required); the 95 % cluster-bootstrap interval of the paired
+  difference, [−1.33, 1.82], includes 0.
+- Reading: the model ties the provider on MAE and has a lower RMSE and lower measured-only MAE, but
+  with 18 test hours these differences are not statistically supported. No improvement is claimed.
+- Interim: collection continues until about 2026-11-26 22:00 UTC; the final run will replace this
+  section. Files: `results/published/ml-results/ml-2026-11-24T22-26-34-088Z.{json,md}`.
+
 ## Status on the collected data (2026-11-13)
 
 First real run (4 hourly collection runs, 5 zones): **insufficient-data**. 50 forecast/realized pairs
