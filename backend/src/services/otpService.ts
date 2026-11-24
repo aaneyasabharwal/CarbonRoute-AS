@@ -91,7 +91,10 @@ export async function issueVerificationCode(user: User, now = Date.now()): Promi
       };
     }
   }
-  const lastHour = attempts.filter((o) => now - Date.parse(o.createdAt) < 3600_000).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  // The hourly limit counts only codes that went out: a server-side delivery failure (provider
+  // misconfigured or down) must not lock the user out for an hour. The 60 s cooldown above and the
+  // per-IP limit still bound retries against a failing provider.
+  const lastHour = attempts.filter((o) => o.delivery !== 'failed' && now - Date.parse(o.createdAt) < 3600_000).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   if (lastHour.length >= OTP_MAX_PER_HOUR) {
     const s = Math.ceil((Date.parse(lastHour[0].createdAt) + 3600_000 - now) / 1000);
     return { status: 'rate-limited', retryAfterSeconds: s, message: `Too many codes requested. Try again in ${Math.ceil(s / 60)} minutes.` };
